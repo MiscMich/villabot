@@ -107,16 +107,21 @@ CREATE TABLE documents (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Document chunks with embeddings
+-- Document chunks with embeddings + full-text search
 CREATE TABLE document_chunks (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   document_id UUID REFERENCES documents(id) ON DELETE CASCADE,
   chunk_index INTEGER NOT NULL,
   content TEXT NOT NULL,
-  embedding VECTOR(768), -- Gemini embedding dimension
+  embedding VECTOR(768), -- Gemini text-embedding-004 dimension
+  -- Auto-generated full-text search column for BM25/hybrid search
+  fts tsvector GENERATED ALWAYS AS (to_tsvector('english', content)) STORED,
   metadata JSONB DEFAULT '{}',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Full-text search index for BM25 keyword matching
+CREATE INDEX idx_chunks_fts ON document_chunks USING GIN (fts);
 
 -- Thread sessions for multi-turn conversations
 CREATE TABLE thread_sessions (
@@ -263,41 +268,359 @@ const keywordIndex = {
 - Per-channel enable/disable
 - Topics to ignore (configurable blocklist)
 
-### 4. RAG Pipeline
+### 4. RAG Pipeline (Research-Backed Implementation)
 
-**Query Flow:**
+Based on industry research and benchmarks from [Anthropic](https://www.anthropic.com/news/contextual-retrieval), [NVIDIA](https://stackoverflow.blog/2024/12/27/breaking-up-is-hard-to-do-chunking-in-rag-applications/), and [LangChain](https://python.langchain.com/v0.1/docs/modules/data_connection/document_transformers/recursive_text_splitter/).
+
+---
+
+#### 4.1 Document Chunking Strategy
+
+**Recommended: RecursiveCharacterTextSplitter**
+
+Per [Databricks research](https://community.databricks.com/t5/technical-blog/the-ultimate-guide-to-chunking-strategies-for-rag-applications/ba-p/113089), this is the default choice for 80% of RAG applications.
+
+```typescript
+// Chunking configuration
+const CHUNK_CONFIG = {
+  chunkSize: 512,        // tokens (sweet spot for most queries)
+  chunkOverlap: 50,      // ~10% overlap to preserve context
+  separators: ['\n\n', '\n', '. ', ' ', ''],  // Split order: paragraph → sentence → word
+};
 ```
-User Question
+
+**Why These Settings?**
+| Setting | Value | Reasoning |
+|---------|-------|-----------|
+| Chunk size | 512 tokens | NVIDIA benchmark: factoid queries work best at 256-512 tokens |
+| Overlap | 50 tokens (~10%) | Preserves context across chunk boundaries |
+| Separators | Hierarchical | Keeps paragraphs/sentences together when possible |
+
+**Chunk Size by Query Type:**
+- **Factoid questions** ("What's the check-in time?"): 256-512 tokens optimal
+- **Analytical questions** ("Explain the maintenance process"): 1024+ tokens optimal
+- **Our default**: 512 tokens (most SOP questions are factoid-style)
+
+---
+
+#### 4.2 Contextual Embeddings (Anthropic's Method)
+
+Problem: A chunk saying "The check-in time is 3 PM" loses context about *which property* or *which document* it came from.
+
+**Solution: Prepend context to each chunk before embedding**
+
+```typescript
+// Before embedding, add context to each chunk
+function addContextToChunk(chunk: string, document: Document): string {
+  const context = `
+<context>
+Document: ${document.title}
+Source: ${document.source_type} (${document.file_type})
+Last Updated: ${document.last_modified}
+</context>
+
+${chunk}
+`;
+  return context;
+}
+
+// Example transformation:
+// BEFORE: "The check-in time is 3 PM. Early check-in available upon request."
+// AFTER:
+// <context>
+// Document: Guest Check-in SOP v2.3
+// Source: google_drive (docx)
+// Last Updated: 2024-12-10
+// </context>
+//
+// The check-in time is 3 PM. Early check-in available upon request.
+```
+
+**Impact:** [Anthropic's research](https://www.anthropic.com/news/contextual-retrieval) shows:
+- 35% reduction in retrieval failures with contextual embeddings alone
+- 49% reduction when combined with BM25
+- 67% reduction when adding reranking
+
+---
+
+#### 4.3 Hybrid Search (Vector + BM25)
+
+Pure vector search misses exact keyword matches. Pure keyword search misses semantic meaning. **Hybrid search combines both.**
+
+```
+User Query: "Casa Luna pool cleaning schedule"
+                    │
+        ┌───────────┴───────────┐
+        ▼                       ▼
+┌───────────────┐       ┌───────────────┐
+│ Vector Search │       │  BM25 Search  │
+│ (Semantic)    │       │  (Keywords)   │
+└───────┬───────┘       └───────┬───────┘
+        │                       │
+        │ Top 20 results        │ Top 20 results
+        │                       │
+        └───────────┬───────────┘
+                    ▼
+        ┌───────────────────────┐
+        │  Reciprocal Rank      │
+        │  Fusion (RRF)         │
+        │  Merge & Deduplicate  │
+        └───────────┬───────────┘
+                    │
+                    ▼ Top 10 merged
+        ┌───────────────────────┐
+        │  Reranker (Optional)  │
+        │  Cross-encoder model  │
+        └───────────┬───────────┘
+                    │
+                    ▼ Top 5 final
+                 To LLM
+```
+
+**Supabase Implementation:**
+
+```sql
+-- Enable full-text search for BM25
+ALTER TABLE document_chunks ADD COLUMN fts tsvector
+  GENERATED ALWAYS AS (to_tsvector('english', content)) STORED;
+
+CREATE INDEX idx_chunks_fts ON document_chunks USING GIN (fts);
+
+-- Hybrid search function
+CREATE OR REPLACE FUNCTION hybrid_search(
+  query_text TEXT,
+  query_embedding VECTOR(768),
+  match_count INT DEFAULT 10,
+  vector_weight FLOAT DEFAULT 0.5,
+  keyword_weight FLOAT DEFAULT 0.5
+)
+RETURNS TABLE (
+  id UUID,
+  content TEXT,
+  document_id UUID,
+  similarity FLOAT,
+  rank_score FLOAT
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN QUERY
+  WITH vector_results AS (
+    SELECT
+      dc.id,
+      dc.content,
+      dc.document_id,
+      1 - (dc.embedding <=> query_embedding) AS similarity,
+      ROW_NUMBER() OVER (ORDER BY dc.embedding <=> query_embedding) AS vector_rank
+    FROM document_chunks dc
+    ORDER BY dc.embedding <=> query_embedding
+    LIMIT 20
+  ),
+  keyword_results AS (
+    SELECT
+      dc.id,
+      dc.content,
+      dc.document_id,
+      ts_rank(dc.fts, plainto_tsquery('english', query_text)) AS text_rank,
+      ROW_NUMBER() OVER (ORDER BY ts_rank(dc.fts, plainto_tsquery('english', query_text)) DESC) AS keyword_rank
+    FROM document_chunks dc
+    WHERE dc.fts @@ plainto_tsquery('english', query_text)
+    ORDER BY text_rank DESC
+    LIMIT 20
+  ),
+  combined AS (
+    SELECT
+      COALESCE(v.id, k.id) AS id,
+      COALESCE(v.content, k.content) AS content,
+      COALESCE(v.document_id, k.document_id) AS document_id,
+      COALESCE(v.similarity, 0) AS similarity,
+      -- RRF: Reciprocal Rank Fusion
+      (vector_weight / (60 + COALESCE(v.vector_rank, 1000))) +
+      (keyword_weight / (60 + COALESCE(k.keyword_rank, 1000))) AS rank_score
+    FROM vector_results v
+    FULL OUTER JOIN keyword_results k ON v.id = k.id
+  )
+  SELECT c.id, c.content, c.document_id, c.similarity, c.rank_score
+  FROM combined c
+  ORDER BY c.rank_score DESC
+  LIMIT match_count;
+END;
+$$;
+```
+
+**Why Hybrid?** [Research shows](https://superlinked.com/vectorhub/articles/optimizing-rag-with-hybrid-search-reranking) 2-3x reduction in hallucinations vs single-route retrieval.
+
+---
+
+#### 4.4 Embedding Model Choice
+
+**Recommended: Gemini text-embedding-004**
+
+| Model | Dimensions | Cost | Notes |
+|-------|------------|------|-------|
+| **Gemini text-embedding-004** | 768 (default) | FREE | Best value, multilingual |
+| Gemini (full) | 3072 | FREE | Higher quality, more storage |
+| OpenAI text-embedding-3-small | 1536 | $0.02/1M tokens | Reliable, well-documented |
+| OpenAI text-embedding-3-large | 3072 | $0.13/1M tokens | Highest quality |
+
+Per [Google's benchmarks](https://developers.googleblog.com/en/gemini-embedding-available-gemini-api/), Gemini outperforms OpenAI's embedding-3-large by ~6% while being free.
+
+**Critical Rule:** Always use the SAME embedding model for:
+- Document chunks
+- User queries
+- Learned facts
+
+Mixing models produces meaningless similarity scores.
+
+---
+
+#### 4.5 Complete RAG Flow
+
+```
+User Question: "What's the pool cleaning schedule for Casa Luna?"
      │
      ▼
-┌─────────────────┐
-│ Query Analysis  │ ← Understand intent, extract keywords
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Embed Query     │ ← Convert to vector using Gemini
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Vector Search   │ ← Find top-k relevant chunks in Supabase
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Context Build   │ ← Combine chunks + conversation history + learned facts
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Gemini LLM      │ ← Generate response with context
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Response + Cite │ ← Include source documents
-└─────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│ 1. QUERY PROCESSING                                         │
+│    • Embed query with Gemini                                │
+│    • Extract keywords for BM25                              │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 2. HYBRID RETRIEVAL                                         │
+│    • Vector search (semantic): top 20                       │
+│    • BM25 search (keywords): top 20                         │
+│    • RRF fusion → top 10                                    │
+│    • (Optional) Rerank → top 5                              │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 3. CONTEXT ASSEMBLY                                         │
+│    • Retrieved chunks (with source metadata)                │
+│    • Thread history (last 10 messages)                      │
+│    • Relevant learned facts                                 │
+│    • System prompt with persona                             │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 4. GENERATION (Gemini)                                      │
+│    • Generate response with citations                       │
+│    • Include source document names                          │
+│    • Format for Slack                                       │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 5. RESPONSE                                                 │
+│    "Pool cleaning at Casa Luna is Monday & Thursday at 8 AM"│
+│    📄 Source: Property Maintenance SOP                      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+#### 4.6 Chunking Implementation
+
+```typescript
+import { RecursiveCharacterTextSplitter } from 'langchain/text_splitters';
+
+interface ChunkMetadata {
+  documentId: string;
+  documentTitle: string;
+  chunkIndex: number;
+  sourceType: 'google_drive' | 'website';
+  fileType: string;
+  lastModified: Date;
+}
+
+async function chunkDocument(
+  content: string,
+  document: Document
+): Promise<{ text: string; metadata: ChunkMetadata }[]> {
+  const splitter = new RecursiveCharacterTextSplitter({
+    chunkSize: 512,
+    chunkOverlap: 50,
+    separators: ['\n\n', '\n', '. ', ' ', ''],
+  });
+
+  const rawChunks = await splitter.splitText(content);
+
+  return rawChunks.map((chunk, index) => {
+    // Add contextual prefix (Anthropic's method)
+    const contextualChunk = `[Document: ${document.title}]\n\n${chunk}`;
+
+    return {
+      text: contextualChunk,
+      metadata: {
+        documentId: document.id,
+        documentTitle: document.title,
+        chunkIndex: index,
+        sourceType: document.source_type,
+        fileType: document.file_type,
+        lastModified: document.last_modified,
+      },
+    };
+  });
+}
+
+async function embedAndStore(chunks: { text: string; metadata: ChunkMetadata }[]) {
+  // Batch embedding (more efficient than one-by-one)
+  const BATCH_SIZE = 100;
+
+  for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+    const batch = chunks.slice(i, i + BATCH_SIZE);
+    const texts = batch.map(c => c.text);
+
+    // Gemini embedding API
+    const embeddings = await gemini.embedContent({
+      model: 'text-embedding-004',
+      content: texts,
+    });
+
+    // Store in Supabase
+    const rows = batch.map((chunk, idx) => ({
+      document_id: chunk.metadata.documentId,
+      chunk_index: chunk.metadata.chunkIndex,
+      content: chunk.text,
+      embedding: embeddings[idx],
+      metadata: chunk.metadata,
+    }));
+
+    await supabase.from('document_chunks').insert(rows);
+  }
+}
+```
+
+---
+
+#### 4.7 Retrieval Quality Metrics
+
+Track these to know if your RAG is working:
+
+| Metric | Target | How to Measure |
+|--------|--------|----------------|
+| **Recall@5** | >80% | % of relevant chunks in top 5 results |
+| **MRR (Mean Reciprocal Rank)** | >0.7 | Average 1/rank of first relevant result |
+| **Answer accuracy** | >90% | User feedback (thumbs up/down) |
+| **Retrieval latency** | <500ms | Time from query to chunks retrieved |
+
+**Testing retrieval quality:**
+```typescript
+// Create a test set of question → expected_document pairs
+const testCases = [
+  { question: 'What is check-in time?', expectedDoc: 'guest-checkin-sop' },
+  { question: 'Pool maintenance schedule', expectedDoc: 'property-maintenance' },
+];
+
+// Run and measure recall
+for (const test of testCases) {
+  const results = await hybridSearch(test.question);
+  const foundExpected = results.some(r => r.document_id === test.expectedDoc);
+  console.log(`${test.question}: ${foundExpected ? '✓' : '✗'}`);
+}
 ```
 
 ### 5. Self-Learning System
