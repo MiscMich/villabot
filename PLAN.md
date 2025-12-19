@@ -184,29 +184,59 @@ CREATE INDEX ON learned_facts USING ivfflat (embedding vector_cosine_ops) WITH (
 
 The bot passively monitors all messages in configured channels and uses AI to detect when someone is asking a question it can help with. No @mentions or slash commands needed.
 
-**How It Works:**
+**How It Works (Tiered Detection - Cost Optimized):**
+
 ```
 Message Posted in Channel
          │
          ▼
-┌─────────────────────┐
-│  Intent Classifier  │ ← Gemini analyzes: Is this a question I can answer?
-└──────────┬──────────┘
-           │
-     ┌─────┴─────┐
-     │           │
-   Question   Not a Question
-     │           │
-     ▼           ▼
-  Respond     Ignore (stay silent)
+┌─────────────────────────────────────────────────────────────┐
+│  TIER 1: Fast Heuristics (< 1ms, runs on every message)     │
+│  • Ends with question mark?                                  │
+│  • Contains: what, how, when, where, why, who, can, does?   │
+│  • Length > 10 chars and < 500 chars?                        │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+                     Pass? ─┼─ No → IGNORE (filters ~70% of messages)
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│  TIER 2: Keyword Match (< 10ms)                             │
+│  • Mentions property names? (Casa Luna, Villa Sol, etc.)    │
+│  • Contains SOP terms? (checkout, check-in, maintenance)    │
+│  • Matches topics in knowledge base index?                   │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+                     Match? ─┼─ No → IGNORE (filters another ~20%)
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│  TIER 3: Gemini Classifier (~500ms, only ~10% reach here)   │
+│  • "Is this a question about Villa Paraiso operations?"     │
+│  • Returns: { shouldRespond: boolean, confidence: 0-1 }     │
+│  • Only respond if confidence > threshold (default: 0.7)    │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+                           ▼
+                    RESPOND IN THREAD
 ```
 
-**Question Detection Criteria:**
-- Contains question words (what, how, when, where, why, who)
-- Ends with question mark
-- Asks about topics in the knowledge base (SOPs, policies, procedures)
-- Semantic analysis shows information-seeking intent
-- NOT casual conversation, greetings, or off-topic chat
+**Why Tiered?**
+- Gemini API calls cost money and add latency
+- Most Slack messages are casual chat, not questions
+- Heuristics filter 90%+ of messages for free
+- Only complex/ambiguous cases need AI classification
+
+**Keyword Index (Auto-Generated):**
+```typescript
+// Built from document titles and extracted entities
+const keywordIndex = {
+  properties: ['casa luna', 'villa sol', 'casa del mar', ...],
+  topics: ['check-in', 'checkout', 'maintenance', 'pool', 'cleaning', ...],
+  people: ['property manager', 'guest', 'vendor', ...]
+};
+// Updated automatically when knowledge base syncs
+```
 
 **Threaded Conversations:**
 - Bot ALWAYS responds in a thread to keep channels clean
@@ -511,6 +541,36 @@ villa-paraiso-bot/
 ├── turbo.json                         # Turborepo config (optional)
 └── README.md                          # Project documentation
 ```
+
+---
+
+## MVP Scope (Recommended)
+
+For a working MVP, focus on the core loop first. Ship fast, iterate based on real usage.
+
+### MVP (Phase 1-4) - Target: 2-3 weeks of dev time
+```
+✅ INCLUDE                          ❌ DEFER TO V2
+─────────────────────────────────   ─────────────────────────────────
+Google Drive sync (polling)         Google Drive webhooks
+Basic document parsing (PDF, DOCX)  Google Sheets, complex formats
+Core RAG pipeline                   Advanced chunking strategies
+Slack bot in 1-2 channels           Multi-channel configuration
+Threaded conversations              Per-channel customization
+Simple dashboard (status + docs)    Full analytics dashboard
+Basic error handling                Graceful degradation tiers
+                                    Website scraping
+                                    Self-learning system
+                                    Learned facts verification
+                                    Load testing
+```
+
+### MVP Success Criteria
+- [ ] Bot correctly answers 80%+ of questions from SOPs
+- [ ] Response time < 5 seconds
+- [ ] Documents sync within 10 minutes of changes
+- [ ] No crashes for 24 hours of operation
+- [ ] Team can view indexed documents in dashboard
 
 ---
 
@@ -893,6 +953,239 @@ Carlos: What time should we arrive for setup tomorrow?
 | Knowledge base coverage | 100% of SOPs | Document count |
 | User adoption | >80% of team | Unique users/week |
 | Error rate | <1% | Error logs |
+
+---
+
+## Error Handling & Resilience
+
+### External API Failures
+
+| Service | Failure Mode | Handling Strategy |
+|---------|--------------|-------------------|
+| **Gemini API** | Rate limit / 503 | Retry 3x with exponential backoff (1s, 2s, 4s). If still fails, respond: "I'm having trouble thinking right now. Please try again in a moment." |
+| **Gemini API** | Token limit exceeded | Truncate context, keep most recent thread messages + top 3 KB chunks |
+| **Supabase** | Connection failed | Retry 3x. If fails, log error, respond: "I can't access my knowledge base right now." |
+| **Google Drive** | Auth expired | Auto-refresh token. If fails, alert admin via dashboard + Slack DM |
+| **Google Drive** | Rate limited | Queue sync jobs, process with delay. Never block bot responses. |
+| **Slack API** | Rate limited | Respect `Retry-After` header, queue messages |
+
+### Document Processing Errors
+
+```typescript
+// Pseudo-code for robust document processing
+async function processDocument(file: DriveFile) {
+  try {
+    const content = await parseDocument(file);
+    if (!content || content.length < 10) {
+      throw new Error('Empty or invalid content');
+    }
+    const chunks = chunkText(content);
+    const embeddings = await generateEmbeddings(chunks);
+    await storeInSupabase(file.id, chunks, embeddings);
+
+    logSuccess(file.id);
+  } catch (error) {
+    // Don't fail silently - track the error
+    await markDocumentAsErrored(file.id, error.message);
+    alertAdminIfCritical(error);
+
+    // Don't block other documents
+    return;
+  }
+}
+```
+
+### Graceful Degradation Tiers
+
+```
+Tier 1 (Full Service):
+  ✓ Gemini available
+  ✓ Supabase available
+  ✓ Full RAG pipeline
+  → Normal operation
+
+Tier 2 (Degraded - No AI):
+  ✗ Gemini unavailable
+  ✓ Supabase available
+  → Keyword search fallback, return raw document excerpts
+
+Tier 3 (Degraded - Cache Only):
+  ✗ Gemini unavailable
+  ✗ Supabase unavailable
+  → Return cached responses for common questions (Redis)
+
+Tier 4 (Offline):
+  ✗ All services down
+  → "I'm currently offline for maintenance. Please try again later."
+```
+
+---
+
+## Edge Cases
+
+### Message Handling
+
+| Edge Case | How to Handle |
+|-----------|---------------|
+| Very long message (>4000 chars) | Truncate, focus on first paragraph |
+| Multiple questions in one message | Answer the first clear question, offer to address others |
+| Message in non-English | Detect language, respond in same language (Gemini supports this) |
+| User replies in thread bot didn't start | Check if question is relevant, respond if yes |
+| Rapid-fire questions from same user | Rate limit: max 5 questions/minute per user |
+| Empty or whitespace-only message | Ignore silently |
+| Message is just emoji/reactions | Ignore silently |
+
+### Document Processing
+
+| Edge Case | How to Handle |
+|-----------|---------------|
+| File > 10MB | Skip, log warning, alert admin |
+| Corrupted PDF | Try alternate parser, mark as errored if fails |
+| Password-protected file | Skip, notify admin via dashboard |
+| Empty document | Skip, don't add to KB |
+| Scanned PDF (images only) | Use OCR (Tesseract) or skip with warning |
+| Google Doc with images/diagrams | Extract text only, note that images were skipped |
+| Spreadsheet with multiple sheets | Process all sheets, prefix content with sheet name |
+| Document with 100+ pages | Chunk carefully, may need multiple embedding batches |
+
+### Knowledge Base Conflicts
+
+| Edge Case | How to Handle |
+|-----------|---------------|
+| Two docs have conflicting info | Prefer more recently modified document |
+| Learned fact contradicts document | Flag for admin review, use learned fact temporarily |
+| Document deleted but still referenced | Remove from KB, update any cached responses |
+| Same doc uploaded twice | Detect via content hash, skip duplicate |
+
+### Thread Management
+
+| Edge Case | How to Handle |
+|-----------|---------------|
+| Thread has 50+ messages | Only include last 10 messages in context |
+| Thread inactive for 24+ hours | Mark session as closed, start fresh if user returns |
+| User deletes their message | Bot response remains, log the deletion |
+| Bot's response is deleted | Log it, don't re-respond |
+
+---
+
+## Testing Strategy
+
+### Unit Tests
+
+```
+tests/
+├── unit/
+│   ├── parsers/
+│   │   ├── docx.test.ts      # Test DOCX extraction
+│   │   ├── pdf.test.ts       # Test PDF extraction
+│   │   ├── sheets.test.ts    # Test spreadsheet parsing
+│   │   └── fixtures/         # Sample files for testing
+│   ├── chunker.test.ts       # Text chunking logic
+│   ├── intent-classifier.test.ts  # Question detection
+│   ├── heuristics.test.ts    # Fast filters
+│   └── hash.test.ts          # Content hashing
+```
+
+**Key Unit Test Cases:**
+- Parser handles malformed files gracefully
+- Chunker respects max chunk size
+- Chunker maintains sentence boundaries
+- Intent classifier correctly identifies questions
+- Heuristics filter non-questions efficiently
+
+### Integration Tests
+
+```
+tests/
+├── integration/
+│   ├── drive-sync.test.ts    # Drive API integration
+│   ├── supabase.test.ts      # DB operations + vector search
+│   ├── gemini.test.ts        # Embeddings + generation
+│   ├── slack.test.ts         # Message handling
+│   └── rag-pipeline.test.ts  # End-to-end RAG
+```
+
+**Key Integration Test Cases:**
+- Drive sync detects new/modified/deleted files
+- Vector search returns relevant results
+- Embeddings are consistent (same text → same vector)
+- Slack messages trigger correct handlers
+- Thread context is properly maintained
+
+### End-to-End Tests
+
+```typescript
+// Example E2E test
+describe('Bot answers questions from SOPs', () => {
+  beforeAll(async () => {
+    // Seed test documents into Drive
+    await uploadTestDocument('test-sop.docx');
+    await waitForSync();
+  });
+
+  it('answers a question about content in the SOP', async () => {
+    const response = await simulateSlackMessage(
+      'What is the checkout time?'
+    );
+
+    expect(response).toContain('checkout');
+    expect(response.sources).toContain('test-sop.docx');
+  });
+
+  it('maintains context in thread', async () => {
+    const thread = await startThread('What properties do we manage?');
+    const followUp = await replyInThread(thread, 'What about Casa Luna specifically?');
+
+    expect(followUp).toContain('Casa Luna');
+    // Should not re-explain all properties
+  });
+});
+```
+
+### RAG Quality Tests
+
+```typescript
+// Test that RAG returns accurate answers
+describe('RAG Accuracy', () => {
+  const testCases = [
+    {
+      question: 'What time is check-in?',
+      expectedAnswer: /3\s*PM|3:00|15:00/i,
+      requiredSource: 'check-in-sop'
+    },
+    {
+      question: 'How do I report a maintenance issue?',
+      expectedAnswer: /maintenance form|submit ticket/i,
+      requiredSource: 'maintenance-procedures'
+    }
+  ];
+
+  testCases.forEach(({ question, expectedAnswer, requiredSource }) => {
+    it(`correctly answers: "${question}"`, async () => {
+      const response = await askBot(question);
+      expect(response.text).toMatch(expectedAnswer);
+      expect(response.sources).toContain(requiredSource);
+    });
+  });
+});
+```
+
+### Load Testing
+
+```
+Tools: k6 or Artillery
+
+Scenarios:
+1. Sustained load: 10 questions/minute for 1 hour
+2. Spike test: 50 questions in 1 minute
+3. Soak test: Low traffic (1 q/min) for 24 hours
+
+Metrics to track:
+- Response time (p50, p95, p99)
+- Error rate
+- Memory usage over time
+- Supabase connection pool health
+```
 
 ---
 
