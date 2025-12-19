@@ -118,18 +118,33 @@ CREATE TABLE document_chunks (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Conversation history for context
-CREATE TABLE conversations (
+-- Thread sessions for multi-turn conversations
+CREATE TABLE thread_sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   slack_channel_id VARCHAR NOT NULL,
+  slack_thread_ts VARCHAR NOT NULL UNIQUE,
+  started_by_user_id VARCHAR NOT NULL,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  last_activity TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Individual messages within threads
+CREATE TABLE thread_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID REFERENCES thread_sessions(id) ON DELETE CASCADE,
   slack_user_id VARCHAR NOT NULL,
-  slack_thread_ts VARCHAR,
-  message TEXT NOT NULL,
-  response TEXT,
+  role VARCHAR NOT NULL, -- 'user' | 'assistant'
+  content TEXT NOT NULL,
   sources JSONB DEFAULT '[]',
+  confidence_score FLOAT,
   feedback_rating INTEGER, -- 1-5 rating
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Index for fast thread lookups
+CREATE INDEX idx_thread_sessions_thread_ts ON thread_sessions(slack_thread_ts);
+CREATE INDEX idx_thread_messages_session ON thread_messages(session_id);
 
 -- Bot configuration
 CREATE TABLE bot_config (
@@ -165,19 +180,58 @@ CREATE INDEX ON learned_facts USING ivfflat (embedding vector_cosine_ops) WITH (
 
 ### 3. Slack Bot Integration
 
-**Features:**
-- Listen to messages in configured channels
-- Respond to direct mentions (@VillaBot)
-- Support threaded conversations for context
-- Handle slash commands for special actions
-- Provide feedback buttons on responses
+**Natural Language Listening (No Mentions Required):**
 
-**Slash Commands:**
-- `/villa help` - Show available commands
-- `/villa search [query]` - Direct knowledge base search
-- `/villa status` - Show bot status and last sync time
-- `/villa learn [fact]` - Teach the bot something new
-- `/villa forget [topic]` - Remove learned information
+The bot passively monitors all messages in configured channels and uses AI to detect when someone is asking a question it can help with. No @mentions or slash commands needed.
+
+**How It Works:**
+```
+Message Posted in Channel
+         │
+         ▼
+┌─────────────────────┐
+│  Intent Classifier  │ ← Gemini analyzes: Is this a question I can answer?
+└──────────┬──────────┘
+           │
+     ┌─────┴─────┐
+     │           │
+   Question   Not a Question
+     │           │
+     ▼           ▼
+  Respond     Ignore (stay silent)
+```
+
+**Question Detection Criteria:**
+- Contains question words (what, how, when, where, why, who)
+- Ends with question mark
+- Asks about topics in the knowledge base (SOPs, policies, procedures)
+- Semantic analysis shows information-seeking intent
+- NOT casual conversation, greetings, or off-topic chat
+
+**Threaded Conversations:**
+- Bot ALWAYS responds in a thread to keep channels clean
+- Maintains conversation context within the thread
+- Users can ask follow-up questions in the same thread
+- Thread history is included in context for multi-turn conversations
+- Each thread is an independent conversation session
+
+**Example Flow:**
+```
+#general channel:
+├── User: "What's the checkout procedure for Casa Luna?"
+│   └── Thread:
+│       ├── Bot: "Here's the checkout procedure for Casa Luna..."
+│       ├── User: "What about the pool maintenance?"
+│       ├── Bot: "For pool maintenance at Casa Luna..." (uses thread context)
+│       └── User: "Thanks!"
+```
+
+**Configurable Behavior (via Dashboard):**
+- Confidence threshold for responding (default: 70%)
+- Response delay (appear more natural, not instant)
+- Quiet hours (don't respond during off-hours)
+- Per-channel enable/disable
+- Topics to ignore (configurable blocklist)
 
 ### 4. RAG Pipeline
 
@@ -218,67 +272,147 @@ User Question
 
 ### 5. Self-Learning System
 
-**Automatic Updates:**
-- Poll Google Drive every 5-15 minutes for changes
-- Compare content hashes to detect modifications
-- Re-process updated documents automatically
-- Remove chunks for deleted documents
+**Google Drive Real-Time Sync:**
 
-**User Teaching:**
-- Accept corrections via Slack ("Actually, the check-in time is 3 PM")
+The bot continuously monitors your Google Drive folder and automatically updates the knowledge base when documents change.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                   GOOGLE DRIVE SYNC ENGINE                      │
+└─────────────────────────────────────────────────────────────────┘
+
+Every 5 minutes:
+┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+│  List Files  │───▶│ Compare Hash │───▶│ Detect Delta │
+│  in Folder   │    │ + Modified   │    │              │
+└──────────────┘    └──────────────┘    └──────┬───────┘
+                                               │
+                    ┌──────────────────────────┼──────────────────────────┐
+                    │                          │                          │
+                    ▼                          ▼                          ▼
+           ┌──────────────┐           ┌──────────────┐           ┌──────────────┐
+           │  NEW FILE    │           │   MODIFIED   │           │   DELETED    │
+           │  detected    │           │   FILE       │           │   FILE       │
+           └──────┬───────┘           └──────┬───────┘           └──────┬───────┘
+                  │                          │                          │
+                  ▼                          ▼                          ▼
+           ┌──────────────┐           ┌──────────────┐           ┌──────────────┐
+           │ Parse & Embed│           │ Delete old   │           │ Remove from  │
+           │ Add to KB    │           │ Re-parse     │           │ Knowledge    │
+           └──────────────┘           │ Re-embed     │           │ Base         │
+                                      └──────────────┘           └──────────────┘
+```
+
+**Change Detection Methods:**
+1. **Modified Timestamp**: Google Drive API returns `modifiedTime` - compare with last sync
+2. **Content Hash**: MD5/SHA256 hash of file content - catches any content change
+3. **File Version**: Drive tracks file versions - detect even if timestamp is same
+
+**What Triggers an Update:**
+- You edit a Google Doc and save → detected within 5 minutes
+- You upload a new PDF → detected within 5 minutes
+- You delete a file → removed from KB within 5 minutes
+- You rename a file → metadata updated within 5 minutes
+- You move a file out of the folder → removed from KB
+
+**User Teaching (Natural Language):**
+- Accept corrections in thread: "Actually, the check-in time is 3 PM not 4 PM"
+- Bot detects correction intent and stores as learned fact
 - Store learned facts with embeddings
-- Include learned facts in RAG context
+- Include learned facts in RAG context (higher priority than old docs)
 - Admin verification workflow for learned facts
 
 **Website Scraping:**
 - Weekly scheduled crawl of company website
 - Extract text content from pages
 - Process and embed like documents
-- Update knowledge base with changes
+- Differential updates (only changed pages)
+- Remove pages that no longer exist
 
-### 6. Admin Dashboard
+### 6. Admin Dashboard (Full UI Configuration)
+
+**Design Philosophy:**
+- Modern, clean UI built with Next.js + Tailwind CSS + shadcn/ui
+- **ALL settings configurable via UI** - no code changes needed
+- Real-time updates and live status indicators
+- Mobile-responsive design
+- Dark/light mode support
 
 **Pages:**
 
 1. **Overview Dashboard**
-   - Bot status (online/offline)
+   - Bot status (online/offline) with uptime indicator
+   - Live activity feed (recent questions/responses)
    - Total questions answered today/week/month
-   - Response accuracy rating
-   - Last sync timestamps
-   - Error logs summary
+   - Response accuracy rating (from user feedback)
+   - Last sync timestamps (Drive, Website)
+   - Error logs summary with alerts
+   - Quick action buttons (force sync, restart, etc.)
 
 2. **Knowledge Base Management**
-   - List of all indexed documents
-   - Document status (active/outdated/error)
-   - Manual re-sync button
-   - Add/remove documents
-   - View document chunks
+   - List of all indexed documents with search/filter
+   - Document status (active/outdated/error/syncing)
+   - Preview document content and chunks
+   - Manual re-sync button per document or all
+   - Add Google Drive folders to monitor
+   - View embedding count and storage usage
+   - Delete documents from knowledge base
 
 3. **Channel Configuration**
-   - Select which Slack channels bot monitors
-   - Configure bot behavior per channel
-   - Set response style (formal/casual)
-   - Enable/disable features per channel
+   - Visual channel selector (pulls from Slack)
+   - Toggle bot on/off per channel
+   - Per-channel settings:
+     - Response confidence threshold (slider: 50-100%)
+     - Response delay (0-5 seconds)
+     - Response style (formal/casual/friendly)
+     - Quiet hours schedule
+     - Topic blocklist
+   - Test bot in channel button
 
-4. **Analytics**
-   - Most asked questions
-   - Response times
-   - User satisfaction ratings
-   - Knowledge gaps (questions with no good answer)
-   - Usage trends over time
+4. **Analytics Dashboard**
+   - Interactive charts (Recharts)
+   - Most asked questions (word cloud + list)
+   - Response times histogram
+   - User satisfaction ratings over time
+   - Knowledge gaps report (questions with low confidence)
+   - Usage trends (daily/weekly/monthly)
+   - Top users by question count
+   - Export data to CSV
 
-5. **Settings**
-   - Google Drive folder configuration
-   - Website URLs to scrape
-   - Polling intervals
-   - Gemini API settings (temperature, etc.)
-   - Slack workspace settings
+5. **Settings (API & Configuration)**
+   - **API Keys Management:**
+     - Google Drive credentials (OAuth flow via UI)
+     - Gemini API key (with test button)
+     - Slack tokens (with validation)
+     - Supabase connection (auto-configured)
+   - **Sync Settings:**
+     - Drive polling interval (dropdown: 1/5/10/15/30 min)
+     - Website scrape schedule (cron builder UI)
+     - Website URLs to scrape (add/remove list)
+   - **AI Settings:**
+     - Gemini model selection
+     - Temperature slider (0.0 - 1.0)
+     - Max response length
+     - System prompt customization
+   - **General Settings:**
+     - Bot display name
+     - Bot avatar
+     - Timezone configuration
 
-6. **Learned Facts**
-   - View all user-taught facts
-   - Verify/reject pending facts
-   - Edit existing facts
-   - See who taught what
+6. **Learned Facts Management**
+   - View all user-taught facts with source
+   - Pending verification queue
+   - Approve/reject/edit facts
+   - See who taught what and when
+   - Bulk actions (approve all, delete old)
+   - Search and filter facts
+
+7. **Logs & Debugging**
+   - Real-time log viewer
+   - Filter by log level (info/warn/error)
+   - Search logs
+   - Download log files
+   - API request/response inspector
 
 ---
 
@@ -439,20 +573,28 @@ villa-paraiso-bot/
 ---
 
 ### Phase 4: Slack Bot Integration
-**Goal:** Deploy bot to Slack channels
+**Goal:** Deploy bot to Slack channels with natural language understanding
 
 **Tasks:**
-- [ ] Set up Slack Bolt SDK
-- [ ] Configure event subscriptions (app_mention, message)
-- [ ] Implement message handlers
-- [ ] Add slash commands
-- [ ] Build threaded conversation support
-- [ ] Add typing indicators
+- [ ] Set up Slack Bolt SDK with Socket Mode
+- [ ] Configure event subscriptions (message.channels, message.groups)
+- [ ] Build intent classifier using Gemini:
+  - [ ] Detect if message is a question
+  - [ ] Determine if question is relevant to knowledge base
+  - [ ] Calculate confidence score
+- [ ] Implement natural language message handler
+- [ ] Build threaded conversation system:
+  - [ ] Always respond in threads
+  - [ ] Track thread context in database
+  - [ ] Support multi-turn conversations
+  - [ ] Include thread history in RAG context
+- [ ] Add typing indicators while processing
 - [ ] Implement feedback buttons (thumbs up/down)
-- [ ] Configure channel allowlist
+- [ ] Build channel configuration system (enable/disable per channel)
+- [ ] Add confidence threshold filtering
 - [ ] Deploy initial bot to workspace
 
-**Deliverable:** Functional Slack bot answering questions in channels
+**Deliverable:** Functional Slack bot that naturally responds to questions in channels
 
 ---
 
@@ -460,18 +602,23 @@ villa-paraiso-bot/
 **Goal:** Keep knowledge base automatically updated
 
 **Tasks:**
-- [ ] Implement Drive polling scheduler (every 10 minutes)
-- [ ] Build change detection using modified timestamps
-- [ ] Handle document updates (re-embed changed docs)
-- [ ] Handle document deletions (remove from KB)
+- [ ] Implement Drive polling scheduler (configurable: 1-30 minutes)
+- [ ] Build change detection system:
+  - [ ] Compare modified timestamps from Drive API
+  - [ ] Hash content to detect changes
+  - [ ] Track file versions
+- [ ] Handle document updates (delete old chunks, re-embed)
+- [ ] Handle document deletions (cascade delete from KB)
+- [ ] Handle new documents (parse, chunk, embed)
 - [ ] Create learned facts system:
-  - [ ] `/villa learn` command
-  - [ ] Correction detection in messages
-  - [ ] Fact storage with embeddings
-  - [ ] Include facts in RAG context
-- [ ] Build fact verification workflow
+  - [ ] Natural language correction detection ("actually...", "the correct...")
+  - [ ] Store facts with embeddings and metadata
+  - [ ] Include learned facts in RAG context (higher weight)
+  - [ ] Track who taught what
+- [ ] Build admin verification workflow in dashboard
+- [ ] Add sync status notifications to dashboard
 
-**Deliverable:** Bot that stays current and learns from users
+**Deliverable:** Bot that stays current with Drive changes and learns from users
 
 ---
 
@@ -620,49 +767,118 @@ DRIVE_POLL_INTERVAL_MS=600000  # 10 minutes
 ## Slack App Configuration
 
 **OAuth Scopes (Bot Token):**
-- `app_mentions:read` - Receive mentions
-- `channels:history` - Read channel messages
+- `channels:history` - Read channel messages (required for listening)
 - `channels:read` - View channel info
-- `chat:write` - Send messages
-- `commands` - Slash commands
+- `chat:write` - Send messages and respond in threads
 - `groups:history` - Private channel messages
 - `groups:read` - Private channel info
-- `im:history` - DM history
-- `im:read` - DM info
-- `users:read` - User info
+- `reactions:write` - Add reactions (for feedback)
+- `users:read` - User info (for learned facts attribution)
 
 **Event Subscriptions:**
-- `app_mention` - When bot is mentioned
-- `message.channels` - Messages in public channels
-- `message.groups` - Messages in private channels
+- `message.channels` - All messages in public channels (for natural language detection)
+- `message.groups` - All messages in private channels
+
+**Socket Mode:** Enabled (recommended for real-time message handling)
+
+**Note:** No slash commands or app_mention needed - bot listens to all messages and uses AI to decide when to respond.
 
 ---
 
-## Sample Bot Interaction
+## Sample Bot Interactions
 
+### Natural Question Detection (No @mention needed)
 ```
-User: @VillaBot What's the check-in process for guests?
+#operations channel:
 
-VillaBot: Based on our SOPs, here's the check-in process for guests:
+Maria: Hey does anyone know what the check-in process is for guests?
 
-1. **Pre-arrival** (24 hours before):
-   - Send welcome email with property access codes
-   - Confirm arrival time
+    └─ Thread:
+       VillaBot: Based on our SOPs, here's the check-in process:
 
-2. **Day of arrival**:
-   - Property manager conducts final inspection
-   - Ensure all amenities are stocked
+       1. **Pre-arrival** (24 hours before):
+          - Send welcome email with property access codes
+          - Confirm arrival time
 
-3. **Guest arrival**:
-   - Greet at property (if requested)
-   - Walk through house features
-   - Provide emergency contact numbers
+       2. **Day of arrival**:
+          - Property manager conducts final inspection
+          - Ensure all amenities are stocked
 
-📄 Sources:
-• Guest Check-in SOP v2.3 (last updated: Dec 10, 2024)
-• Property Manager Guidelines
+       3. **Guest arrival**:
+          - Greet at property (if requested)
+          - Walk through house features
+          - Provide emergency contact numbers
 
-Was this helpful? 👍 👎
+       📄 Sources:
+       • Guest Check-in SOP v2.3 (updated Dec 10, 2024)
+
+       Was this helpful? [👍] [👎]
+```
+
+### Multi-Turn Threaded Conversation
+```
+#operations channel:
+
+Carlos: What's the pool cleaning schedule?
+
+    └─ Thread:
+       VillaBot: Pool cleaning is scheduled as follows:
+       - Casa Luna: Monday & Thursday, 8 AM
+       - Villa Sol: Tuesday & Friday, 9 AM
+       - Casa del Mar: Wednesday & Saturday, 8 AM
+
+       📄 Source: Property Maintenance SOP
+
+       ───────────────────────────────
+
+       Carlos: What about Casa Luna specifically if there's a guest checkout?
+
+       VillaBot: Great follow-up! For Casa Luna post-checkout:
+       - Emergency pool cleaning within 4 hours of checkout
+       - Full chemical balance check
+       - Skim and vacuum
+       - Contact pool vendor: ABC Pool Services (555-1234)
+
+       This is in addition to the regular Monday/Thursday schedule.
+
+       📄 Source: Property Maintenance SOP, Section 4.2
+
+       ───────────────────────────────
+
+       Carlos: Perfect, thanks!
+
+       VillaBot: You're welcome! Let me know if you have other questions. 😊
+```
+
+### Self-Learning Example
+```
+#operations channel:
+
+Sofia: Actually the check-in time changed to 3 PM, not 4 PM
+
+    └─ Thread:
+       VillaBot: Thanks for the update! I've noted that:
+
+       ✅ **Learned:** Check-in time is now 3 PM (previously 4 PM)
+
+       This will be pending admin verification. I'll use this info
+       going forward while it's reviewed.
+
+       _Taught by Sofia on Dec 19, 2024_
+```
+
+### Bot Stays Silent (Not a Question)
+```
+#general channel:
+
+Juan: Great job on the event yesterday everyone! 🎉
+      (Bot does not respond - not a question about SOPs)
+
+Maria: Thanks! It was fun
+      (Bot does not respond)
+
+Carlos: What time should we arrive for setup tomorrow?
+      (Bot does not respond - casual/scheduling question, not SOP-related)
 ```
 
 ---
