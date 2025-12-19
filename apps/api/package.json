@@ -1,0 +1,43 @@
+{
+  "name": "@villa-paraiso/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:migrate": "node scripts/migrate.js",
+    "db:generate": "node scripts/generate-types.js"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.21.0",
+    "@slack/bolt": "^3.22.0",
+    "@supabase/supabase-js": "^2.47.10",
+    "@villa-paraiso/shared": "workspace:*",
+    "cheerio": "^1.0.0",
+    "express": "^4.21.2",
+    "googleapis": "^144.0.0",
+    "langchain": "^0.3.11",
+    "mammoth": "^1.8.0",
+    "node-cron": "^3.0.3",
+    "pdf-parse": "^1.1.1",
+    "puppeteer": "^23.11.1",
+    "winston": "^3.17.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.2",
+    "@types/node-cron": "^3.0.11",
+    "@types/pdf-parse": "^1.1.4",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
