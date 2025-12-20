@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Sun,
   Moon,
+  MessageSquare,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
@@ -40,6 +41,12 @@ const navigation = [
     href: '/analytics',
     icon: BarChart3,
     description: 'Usage & performance',
+  },
+  {
+    name: 'Conversations',
+    href: '/conversations',
+    icon: MessageSquare,
+    description: 'Bot interactions',
   },
   {
     name: 'Settings',

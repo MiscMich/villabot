@@ -1,6 +1,8 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import {
   FileText,
@@ -14,6 +16,7 @@ import {
   Sparkles,
   TrendingUp,
   Activity,
+  Loader2,
 } from 'lucide-react';
 
 // Stat Card Component
@@ -178,6 +181,10 @@ function LoadingSkeleton() {
 }
 
 export default function OverviewPage() {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   const { data: overview, isLoading: overviewLoading } = useQuery({
     queryKey: ['overview'],
     queryFn: api.getOverview,
@@ -193,6 +200,40 @@ export default function OverviewPage() {
     queryKey: ['syncStatus'],
     queryFn: api.getSyncStatus,
   });
+
+  const syncMutation = useMutation({
+    mutationFn: api.triggerSync,
+    onSuccess: (data) => {
+      setSyncMessage({
+        type: 'success',
+        text: `Sync complete! Added: ${data.added}, Updated: ${data.updated}, Removed: ${data.removed}`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['syncStatus'] });
+      queryClient.invalidateQueries({ queryKey: ['overview'] });
+      setTimeout(() => setSyncMessage(null), 5000);
+    },
+    onError: (error) => {
+      setSyncMessage({
+        type: 'error',
+        text: `Sync failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      });
+      setTimeout(() => setSyncMessage(null), 5000);
+    },
+  });
+
+  const handleSyncDocuments = () => {
+    if (!syncMutation.isPending) {
+      syncMutation.mutate();
+    }
+  };
+
+  const handleTrainBot = () => {
+    router.push('/knowledge');
+  };
+
+  const handleViewConversations = () => {
+    router.push('/conversations');
+  };
 
   if (overviewLoading) {
     return <LoadingSkeleton />;
@@ -277,6 +318,26 @@ export default function OverviewPage() {
         documentCount={syncStatus?.documentCount ?? 0}
       />
 
+      {/* Sync Status Message */}
+      {syncMessage && (
+        <div
+          className={`fixed top-4 right-4 z-50 p-4 rounded-xl shadow-lg animate-fade-in ${
+            syncMessage.type === 'success'
+              ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-200 border border-green-200 dark:border-green-800'
+              : 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-200 border border-red-200 dark:border-red-800'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {syncMessage.type === 'success' ? (
+              <CheckCircle className="w-5 h-5" />
+            ) : (
+              <XCircle className="w-5 h-5" />
+            )}
+            <span className="font-medium">{syncMessage.text}</span>
+          </div>
+        </div>
+      )}
+
       {/* Quick Actions */}
       <div className="opacity-0 animate-fade-in-up" style={{ animationDelay: '500ms' }}>
         <div className="section-header">
@@ -284,21 +345,37 @@ export default function OverviewPage() {
           <div className="divider" />
         </div>
         <div className="grid gap-4 md:grid-cols-3">
-          <button className="premium-card p-6 text-left group hover:border-amber-500/50 transition-colors">
-            <RefreshCw className="w-8 h-8 text-amber-500 mb-3 group-hover:rotate-180 transition-transform duration-500" />
-            <h3 className="font-display font-semibold mb-1">Sync Documents</h3>
+          <button
+            onClick={handleSyncDocuments}
+            disabled={syncMutation.isPending}
+            className="premium-card p-6 text-left group hover:border-amber-500/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {syncMutation.isPending ? (
+              <Loader2 className="w-8 h-8 text-amber-500 mb-3 animate-spin" />
+            ) : (
+              <RefreshCw className="w-8 h-8 text-amber-500 mb-3 group-hover:rotate-180 transition-transform duration-500" />
+            )}
+            <h3 className="font-display font-semibold mb-1">
+              {syncMutation.isPending ? 'Syncing...' : 'Sync Documents'}
+            </h3>
             <p className="text-sm text-muted-foreground">
               Manually trigger a Google Drive sync
             </p>
           </button>
-          <button className="premium-card p-6 text-left group hover:border-amber-500/50 transition-colors">
+          <button
+            onClick={handleTrainBot}
+            className="premium-card p-6 text-left group hover:border-amber-500/50 transition-colors"
+          >
             <Brain className="w-8 h-8 text-amber-500 mb-3 group-hover:scale-110 transition-transform" />
             <h3 className="font-display font-semibold mb-1">Train Bot</h3>
             <p className="text-sm text-muted-foreground">
               Add new knowledge to the assistant
             </p>
           </button>
-          <button className="premium-card p-6 text-left group hover:border-amber-500/50 transition-colors">
+          <button
+            onClick={handleViewConversations}
+            className="premium-card p-6 text-left group hover:border-amber-500/50 transition-colors"
+          >
             <MessageSquare className="w-8 h-8 text-amber-500 mb-3 group-hover:scale-110 transition-transform" />
             <h3 className="font-display font-semibold mb-1">View Conversations</h3>
             <p className="text-sm text-muted-foreground">

@@ -9,6 +9,7 @@ import { documentsRouter } from './routes/documents.js';
 import { analyticsRouter } from './routes/analytics.js';
 import { authRouter, initializeDriveFromStoredTokens } from './routes/auth.js';
 import errorsRouter from './routes/errors.js';
+import conversationsRouter from './routes/conversations.js';
 import { testSupabaseConnection } from './services/supabase/client.js';
 import { initializeSlackBot, isSlackBotRunning, shutdownSlackBot } from './services/slack/bot.js';
 import { initializeScheduler, stopScheduler } from './services/scheduler/index.js';
@@ -39,6 +40,7 @@ app.use('/api/config', configRouter);
 app.use('/api/documents', documentsRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/errors', errorsRouter);
+app.use('/api/conversations', conversationsRouter);
 app.use('/auth', authRouter);
 
 // Root endpoint
@@ -51,6 +53,7 @@ app.get('/', (_req, res) => {
       config: '/api/config',
       documents: '/api/documents',
       analytics: '/api/analytics',
+      conversations: '/api/conversations',
       auth: '/auth',
     },
   });

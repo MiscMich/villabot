@@ -157,4 +157,60 @@ export const api = {
   getGoogleAuthUrl: () => fetchApi<{ authUrl: string }>('/auth/google'),
 
   disconnectGoogle: () => fetchApi('/auth/google', { method: 'DELETE' }),
+
+  // Conversations
+  getConversations: (page = 1, limit = 20) => fetchApi<{
+    conversations: Array<{
+      id: string;
+      slack_channel_id: string;
+      slack_thread_ts: string;
+      started_by_user_id: string;
+      is_active: boolean;
+      created_at: string;
+      last_activity: string;
+      messageCount: number;
+      lastMessage: {
+        content: string;
+        role: 'user' | 'assistant';
+        created_at: string;
+      } | null;
+    }>;
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+    };
+  }>(`/api/conversations?page=${page}&limit=${limit}`),
+
+  getConversation: (id: string) => fetchApi<{
+    conversation: {
+      id: string;
+      slack_channel_id: string;
+      slack_thread_ts: string;
+      started_by_user_id: string;
+      is_active: boolean;
+      created_at: string;
+      last_activity: string;
+      messages: Array<{
+        id: string;
+        slack_user_id: string;
+        role: 'user' | 'assistant';
+        content: string;
+        sources: string[];
+        confidence_score: number | null;
+        feedback_rating: number | null;
+        created_at: string;
+      }>;
+    };
+  }>(`/api/conversations/${id}`),
+
+  getConversationStats: () => fetchApi<{
+    stats: {
+      totalConversations: number;
+      activeConversations: number;
+      totalMessages: number;
+      avgMessagesPerConversation: number;
+    };
+  }>('/api/conversations/stats/summary'),
 };
