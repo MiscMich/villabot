@@ -1534,3 +1534,571 @@ Metrics to track:
 ---
 
 *This plan was created for Villa Paraiso Vacation Rentals Slack AI Assistant Bot*
+
+---
+
+# Enhancement Plan v2.0: Multi-Bot Platform
+
+## Executive Summary
+
+This section outlines enhancements to transform the single-bot RAG system into a flexible, multi-bot platform with document categorization, improved source attribution, and enterprise-ready deployment.
+
+---
+
+## Enhancement 1: Document Categorization System
+
+### Current State
+- Documents stored in flat structure with `source_type` (google_drive, website)
+- No distinction between SOPs, company knowledge, website content
+- All documents searched equally for every query
+
+### Target State
+- Documents organized by **category** (knowledge type) and **scope** (which bots can access)
+- Search can filter by category or combine across categories with proper attribution
+- Source citations clearly indicate document category
+
+### Database Migration
+
+```sql
+-- New ENUM for document categories
+CREATE TYPE document_category AS ENUM (
+  'company_knowledge',    -- General company info, website scrape
+  'internal_sops',        -- Standard operating procedures
+  'marketing',            -- Marketing materials, brand guidelines
+  'sales',                -- Sales playbooks, pricing
+  'operations',           -- Operational procedures
+  'hr_policies',          -- HR documentation
+  'technical',            -- Technical documentation
+  'custom'                -- User-defined categories
+);
+
+-- Add to documents table
+ALTER TABLE documents ADD COLUMN category document_category DEFAULT 'company_knowledge';
+ALTER TABLE documents ADD COLUMN category_custom VARCHAR(100); -- For 'custom' type
+ALTER TABLE documents ADD COLUMN priority INTEGER DEFAULT 5;   -- 1-10, higher = more important
+
+-- Create index for category filtering
+CREATE INDEX idx_documents_category ON documents(category, is_active);
+
+-- Update chunks metadata to include category
+-- Already using JSONB metadata, add category field during sync
+```
+
+### Updated Search Function
+
+```sql
+CREATE OR REPLACE FUNCTION hybrid_search_categorized(
+  query_text TEXT,
+  query_embedding VECTOR(768),
+  category_filter document_category[] DEFAULT NULL,
+  top_k INTEGER DEFAULT 15,
+  vector_weight FLOAT DEFAULT 0.5,
+  keyword_weight FLOAT DEFAULT 0.5
+)
+RETURNS TABLE (
+  chunk_id UUID,
+  document_id UUID,
+  content TEXT,
+  similarity FLOAT,
+  category document_category,
+  document_title TEXT,
+  source_url TEXT
+) AS $$
+BEGIN
+  RETURN QUERY
+  WITH vector_results AS (
+    SELECT
+      dc.id,
+      dc.content,
+      dc.document_id,
+      d.category,
+      d.title,
+      d.source_url,
+      1 - (dc.embedding <=> query_embedding) AS similarity,
+      ROW_NUMBER() OVER (ORDER BY dc.embedding <=> query_embedding) AS vector_rank
+    FROM document_chunks dc
+    JOIN documents d ON dc.document_id = d.id
+    WHERE d.is_active = true
+      AND (category_filter IS NULL OR d.category = ANY(category_filter))
+    ORDER BY dc.embedding <=> query_embedding
+    LIMIT 20
+  ),
+  keyword_results AS (
+    SELECT
+      dc.id,
+      dc.content,
+      dc.document_id,
+      d.category,
+      d.title,
+      d.source_url,
+      ts_rank(dc.fts, plainto_tsquery('english', query_text)) AS text_rank,
+      ROW_NUMBER() OVER (ORDER BY ts_rank(dc.fts, plainto_tsquery('english', query_text)) DESC) AS keyword_rank
+    FROM document_chunks dc
+    JOIN documents d ON dc.document_id = d.id
+    WHERE dc.fts @@ plainto_tsquery('english', query_text)
+      AND d.is_active = true
+      AND (category_filter IS NULL OR d.category = ANY(category_filter))
+    ORDER BY text_rank DESC
+    LIMIT 20
+  ),
+  combined AS (
+    SELECT
+      COALESCE(v.id, k.id) AS chunk_id,
+      COALESCE(v.document_id, k.document_id) AS document_id,
+      COALESCE(v.content, k.content) AS content,
+      COALESCE(v.similarity, 0) AS similarity,
+      COALESCE(v.category, k.category) AS category,
+      COALESCE(v.title, k.title) AS document_title,
+      COALESCE(v.source_url, k.source_url) AS source_url,
+      (vector_weight / (60 + COALESCE(v.vector_rank, 1000))) +
+      (keyword_weight / (60 + COALESCE(k.keyword_rank, 1000))) AS rank_score
+    FROM vector_results v
+    FULL OUTER JOIN keyword_results k ON v.id = k.id
+  )
+  SELECT c.chunk_id, c.document_id, c.content, c.similarity, c.category, c.document_title, c.source_url
+  FROM combined c
+  ORDER BY c.rank_score DESC
+  LIMIT top_k;
+END;
+$$ LANGUAGE plpgsql;
+```
+
+### API Changes
+
+```typescript
+// Enhanced SearchOptions interface
+interface SearchOptions {
+  query: string;
+  categories?: DocumentCategory[];  // Filter to specific categories
+  combineCategories?: boolean;      // If true, search all but attribute separately
+  topK?: number;
+  minSimilarity?: number;
+}
+
+// Enhanced SearchResult
+interface SearchResult {
+  content: string;
+  similarity: number;
+  documentId: string;
+  documentTitle: string;
+  sourceUrl: string | null;
+  category: DocumentCategory;       // Which category this came from
+  categoryLabel: string;            // Human-readable: "Internal SOP", "Company Knowledge"
+}
+```
+
+### Source Attribution Enhancement
+
+When responding, the bot will:
+1. Group sources by category in the response
+2. Cite with category prefix: "According to *[SOP: Check-in Procedures]*..."
+3. Indicate when combining: "Based on company knowledge and internal SOPs..."
+
+Example response format:
+```
+Based on our Standard Operating Procedures and company knowledge:
+
+**From Check-in Procedures (SOP):**
+Guests should arrive between 3 PM and 8 PM...
+
+**From Villa Paraiso Website:**
+Villa Paraiso offers luxury vacation rentals...
+
+---
+📚 Sources:
+- Check-in Procedures (Internal SOP)
+- villaparaiso.com/about (Company Knowledge)
+```
+
+### Dashboard Category Management
+
+New features in Documents page:
+- Category filter tabs: `[All] [Company Knowledge] [SOPs] [Marketing] [Sales]`
+- Drag-and-drop category assignment
+- Bulk category updates
+- Category-specific sync settings
+- Google Drive folder → category mapping
+
+---
+
+## Enhancement 2: Website Scraping Improvements
+
+### Current Limitation
+```typescript
+// apps/api/src/services/scraper/website.ts:54
+while (urlsToScrape.size > 0 && scrapedUrls.size < 50) { // Hard limit!
+```
+
+### Solution: Configurable Scraping
+
+```typescript
+// New scraper configuration interface
+interface ScraperConfig {
+  maxPages: number;           // Default: 500 (was 50)
+  maxDepth: number;           // Max link depth from start URL (default: 10)
+  rateLimit: number;          // Milliseconds between requests (default: 1000)
+  respectRobotsTxt: boolean;  // Check robots.txt (default: true)
+  includePatterns: string[];  // URL patterns to include (glob patterns)
+  excludePatterns: string[];  // URL patterns to exclude
+  category: DocumentCategory; // Assign to scraped pages
+  timeout: number;            // Page load timeout (default: 30000)
+  userAgent: string;          // Custom user agent
+}
+
+// Default configuration
+const DEFAULT_SCRAPER_CONFIG: ScraperConfig = {
+  maxPages: 500,
+  maxDepth: 10,
+  rateLimit: 1000,
+  respectRobotsTxt: true,
+  includePatterns: ['*'],
+  excludePatterns: [
+    '**/login*',
+    '**/admin*',
+    '**/cart*',
+    '**/checkout*'
+  ],
+  category: 'company_knowledge',
+  timeout: 30000,
+  userAgent: 'VillaBot/1.0 (+https://villaparaiso.com/bot)'
+};
+```
+
+### Implementation Changes
+
+```typescript
+// apps/api/src/services/scraper/website.ts
+
+import robotsParser from 'robots-parser';
+
+async function scrapeWebsite(
+  url: string,
+  config: Partial<ScraperConfig> = {}
+): Promise<ScrapeResult> {
+  const settings = { ...DEFAULT_SCRAPER_CONFIG, ...config };
+
+  // Check robots.txt
+  let robots: ReturnType<typeof robotsParser> | null = null;
+  if (settings.respectRobotsTxt) {
+    const robotsUrl = new URL('/robots.txt', url).href;
+    try {
+      const robotsContent = await fetch(robotsUrl).then(r => r.text());
+      robots = robotsParser(robotsUrl, robotsContent);
+    } catch {
+      // robots.txt not found, proceed without restrictions
+    }
+  }
+
+  const urlsToScrape = new Set([url]);
+  const scrapedUrls = new Set<string>();
+  const results: PageResult[] = [];
+
+  while (urlsToScrape.size > 0 && scrapedUrls.size < settings.maxPages) {
+    const currentUrl = urlsToScrape.values().next().value;
+    urlsToScrape.delete(currentUrl);
+
+    // Check robots.txt
+    if (robots && !robots.isAllowed(currentUrl, settings.userAgent)) {
+      continue;
+    }
+
+    // Check URL patterns
+    if (!matchesPatterns(currentUrl, settings.includePatterns, settings.excludePatterns)) {
+      continue;
+    }
+
+    // Rate limiting
+    await sleep(settings.rateLimit);
+
+    // Scrape page...
+    const pageResult = await scrapePage(currentUrl, settings);
+    if (pageResult) {
+      results.push({
+        ...pageResult,
+        category: settings.category
+      });
+    }
+
+    scrapedUrls.add(currentUrl);
+  }
+
+  return {
+    pagesScraped: results.length,
+    results,
+    errors: []
+  };
+}
+```
+
+### Dashboard Scrape Configuration
+
+New UI in Settings:
+- Max pages slider: 50 → 1000
+- URL include/exclude patterns
+- Category assignment for scraped pages
+- Progress indicator during scrape
+- Preview of discovered pages before scraping
+
+---
+
+## Enhancement 3: Multi-Bot Architecture
+
+### Concept
+
+Create a **workspace/bot** system where:
+- Each bot has its own Slack configuration
+- Each bot has access to specific document categories
+- Bots can share common knowledge while having exclusive access to their domain
+- Single codebase, multiple bot instances
+
+### Database Schema
+
+```sql
+-- Bots table
+CREATE TABLE bots (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(100) NOT NULL,
+  slug VARCHAR(50) UNIQUE NOT NULL,  -- 'operations', 'marketing', 'sales'
+  description TEXT,
+  system_prompt TEXT,                 -- Bot-specific personality/instructions
+  slack_bot_token TEXT,               -- Each bot has own Slack credentials
+  slack_app_token TEXT,
+  slack_signing_secret TEXT,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Bot-category access control
+CREATE TABLE bot_category_access (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  bot_id UUID REFERENCES bots(id) ON DELETE CASCADE,
+  category document_category NOT NULL,
+  access_level VARCHAR(20) DEFAULT 'read', -- 'read', 'write', 'admin'
+  priority INTEGER DEFAULT 5,               -- Search priority for this category
+  UNIQUE(bot_id, category)
+);
+
+-- Track which bot handled which conversation
+ALTER TABLE thread_sessions ADD COLUMN bot_id UUID REFERENCES bots(id);
+ALTER TABLE thread_messages ADD COLUMN bot_id UUID REFERENCES bots(id);
+
+-- Documents can be assigned to specific bots (optional restriction)
+ALTER TABLE documents ADD COLUMN bot_id UUID REFERENCES bots(id);
+-- NULL means accessible to all bots with category access
+```
+
+### Bot Configuration Examples
+
+```yaml
+# Operations Bot (current Villa Paraiso bot)
+operations_bot:
+  name: "VillaBot Operations"
+  slug: "operations"
+  categories:
+    - company_knowledge: { priority: 5 }
+    - internal_sops: { priority: 10 }      # Highest priority
+    - operations: { priority: 8 }
+  system_prompt: |
+    You are VillaBot, the operations assistant for Villa Paraiso Vacation Rentals.
+    Focus on SOPs, check-in procedures, property management, and guest services.
+    Always prioritize internal SOPs when answering operational questions.
+    Cite your sources with the category prefix.
+
+# Marketing Bot
+marketing_bot:
+  name: "VillaBot Marketing"
+  slug: "marketing"
+  categories:
+    - company_knowledge: { priority: 5 }
+    - marketing: { priority: 10 }
+    - sales: { priority: 7 }
+  system_prompt: |
+    You are the Marketing Assistant for Villa Paraiso.
+    Help with campaigns, brand guidelines, social media, and lead generation.
+    Focus on marketing materials and sales strategies.
+
+# General Knowledge Bot
+general_bot:
+  name: "VillaBot General"
+  slug: "general"
+  categories:
+    - company_knowledge: { priority: 10 }
+  system_prompt: |
+    You are a general knowledge assistant for Villa Paraiso.
+    Answer questions about the company, properties, and services.
+```
+
+### Runtime Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     API Server (Port 3000)                   │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌──────────────────┐ ┌──────────────────┐ ┌──────────────┐ │
+│  │ Operations Bot   │ │ Marketing Bot    │ │ General Bot  │ │
+│  │ Socket: /ops     │ │ Socket: /mkt     │ │ Socket: /gen │ │
+│  │ Categories:      │ │ Categories:      │ │ Categories:  │ │
+│  │ - SOPs           │ │ - Marketing      │ │ - Company    │ │
+│  │ - Operations     │ │ - Sales          │ │   Knowledge  │ │
+│  │ - Company        │ │ - Company        │ │              │ │
+│  └────────┬─────────┘ └────────┬─────────┘ └──────┬───────┘ │
+│           │                    │                   │         │
+│           └────────────────────┼───────────────────┘         │
+│                                ▼                             │
+│  ┌──────────────────────────────────────────────────────────┐│
+│  │              Shared RAG Search Engine                    ││
+│  │  - Category-filtered hybrid search                       ││
+│  │  - Bot-specific priority weighting                       ││
+│  │  - Cross-category source attribution                     ││
+│  └──────────────────────────────────────────────────────────┘│
+│                                │                             │
+│                                ▼                             │
+│  ┌──────────────────────────────────────────────────────────┐│
+│  │              Shared Document Store                       ││
+│  │  - Supabase + pgvector                                   ││
+│  │  - Category-indexed documents                            ││
+│  │  - Unified embeddings                                    ││
+│  └──────────────────────────────────────────────────────────┘│
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Dashboard Bot Management
+
+New "Bots" page:
+- List of all configured bots
+- Create/edit bot configurations
+- Assign categories to bots
+- Test bot responses
+- View per-bot analytics
+- Slack credential management per bot
+
+---
+
+## Enhancement 4: Docker Deployment Verification
+
+### Current Status: ✅ Complete
+
+The Docker deployment is production-ready with:
+
+1. **Multi-stage builds** - Optimized image sizes
+2. **Health checks** - Automatic container health monitoring
+3. **Environment variables** - Full configuration via .env
+4. **Network isolation** - Secure inter-service communication
+5. **Graceful shutdown** - Proper signal handling
+
+### Deployment Verification Checklist
+
+```bash
+# 1. Build and start
+docker compose up -d --build
+
+# 2. Verify health
+curl http://localhost:3000/health
+# Expected: {"status":"healthy","services":{"supabase":true,"slack":true,...}}
+
+# 3. Access dashboard
+open http://localhost:3001
+
+# 4. Check logs
+docker compose logs -f api
+docker compose logs -f dashboard
+
+# 5. Test Slack connection
+# Send a message in configured Slack channel
+# Bot should respond in thread
+```
+
+### Production Deployment
+
+See `DEPLOYMENT.md` for complete production deployment guide including:
+- Reverse proxy (nginx) configuration
+- SSL/TLS setup
+- Monitoring recommendations
+- Backup strategies
+
+---
+
+## Implementation Roadmap
+
+### Phase 1: Document Categorization (Current Priority)
+- [ ] Create database migration for categories
+- [ ] Update `hybrid_search` function with category filtering
+- [ ] Modify sync process to assign categories
+- [ ] Update dashboard with category management
+- [ ] Implement category-aware source attribution
+
+### Phase 2: Website Scraping Improvements
+- [ ] Remove 50-page hard limit
+- [ ] Add configurable scraping options
+- [ ] Implement rate limiting and robots.txt
+- [ ] Add progress tracking UI
+- [ ] Category assignment for scraped pages
+
+### Phase 3: Multi-Bot Foundation
+- [ ] Create bots and bot_category_access tables
+- [ ] Bot configuration management API
+- [ ] Bot selection in search pipeline
+- [ ] Bot management dashboard page
+
+### Phase 4: Multi-Bot Deployment
+- [ ] Multi-socket Slack connections
+- [ ] Bot-specific system prompts
+- [ ] Per-bot analytics tracking
+- [ ] Bot creation wizard in dashboard
+
+### Phase 5: Advanced Features
+- [ ] Auto-categorization using AI
+- [ ] Cross-bot conversation handoff
+- [ ] Custom category definitions
+- [ ] API for external integrations
+
+---
+
+## Category Assignment Rules
+
+### Automatic Assignment
+
+| Source | Default Category | Override Conditions |
+|--------|-----------------|---------------------|
+| Website scrape | `company_knowledge` | Configurable per scrape |
+| Google Drive root | `company_knowledge` | Based on folder mapping |
+| "SOPs" folder | `internal_sops` | Folder name contains "SOP" |
+| "Marketing" folder | `marketing` | Folder name match |
+| "Sales" folder | `sales` | Folder name match |
+| "HR" folder | `hr_policies` | Folder name match |
+
+### Folder → Category Mapping (Configurable)
+
+```typescript
+// Example configuration in dashboard
+const folderCategoryMap = {
+  '1ABC123_sops_folder_id': 'internal_sops',
+  '1DEF456_marketing_folder_id': 'marketing',
+  '1GHI789_sales_folder_id': 'sales',
+};
+```
+
+---
+
+## Questions for Implementation
+
+1. **Sub-categories**: Do you need deeper categorization? (e.g., SOPs → Check-in SOPs, Checkout SOPs)
+
+2. **Auto-categorization**: Should we use AI to automatically categorize documents based on content analysis?
+
+3. **Bot Deployment Model**:
+   - Option A: All bots in one container (simpler)
+   - Option B: Separate containers per bot (better isolation)
+
+4. **Slack Workspace Strategy**:
+   - Option A: Same workspace, different channels per bot
+   - Option B: Different Slack apps per bot (separate tokens)
+
+5. **Category Access Control**: Should some categories require additional authentication beyond Slack membership?
+
+---
+
+*Enhancement Plan v2.0 - Last Updated: December 2024*
