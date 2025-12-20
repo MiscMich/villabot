@@ -14,13 +14,18 @@ import {
   Sun,
   Moon,
   MessageSquare,
+  Bot,
+  ThumbsUp,
+  Wand2,
+  AlertCircle,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useSetupStatus, getSetupProgress } from '@/hooks/useSetupStatus';
 
 const navigation = [
   {
     name: 'Overview',
-    href: '/',
+    href: '/dashboard',
     icon: LayoutDashboard,
     description: 'Dashboard & metrics',
   },
@@ -49,6 +54,18 @@ const navigation = [
     description: 'Bot interactions',
   },
   {
+    name: 'Bots',
+    href: '/bots',
+    icon: Bot,
+    description: 'Manage bot instances',
+  },
+  {
+    name: 'Feedback',
+    href: '/feedback',
+    icon: ThumbsUp,
+    description: 'Response feedback & ratings',
+  },
+  {
     name: 'Settings',
     href: '/settings',
     icon: Settings,
@@ -59,6 +76,9 @@ const navigation = [
 export function Sidebar() {
   const pathname = usePathname();
   const [isDark, setIsDark] = useState(false);
+  const { data: setupStatus } = useSetupStatus();
+  const setupProgress = getSetupProgress(setupStatus);
+  const isSetupComplete = setupStatus?.completed ?? true; // Default to true to avoid flash
 
   useEffect(() => {
     // Check for dark mode preference
@@ -88,10 +108,42 @@ export function Sidebar() {
           </div>
         </div>
         <div>
-          <h1 className="font-display text-xl font-bold tracking-tight">VillaBot</h1>
-          <p className="text-xs text-muted-foreground font-medium">Admin Dashboard</p>
+          <h1 className="font-display text-xl font-bold tracking-tight">TeamBrain AI</h1>
+          <p className="text-xs text-muted-foreground font-medium">Knowledge Assistant</p>
         </div>
       </div>
+
+      {/* Setup Alert Banner */}
+      {!isSetupComplete && (
+        <div className="px-4 pt-4 relative">
+          <Link
+            href="/setup"
+            className="block p-3 rounded-xl bg-gradient-to-r from-amber-500/10 to-amber-600/10 border border-amber-500/20 hover:border-amber-500/40 transition-colors group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 text-white shadow-md">
+                <Wand2 className="h-4 w-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">Complete Setup</span>
+                  <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
+                </div>
+                <div className="flex items-center gap-2 mt-1">
+                  <div className="flex-1 h-1.5 bg-secondary rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-amber-400 to-amber-600 transition-all duration-500"
+                      style={{ width: `${setupProgress}%` }}
+                    />
+                  </div>
+                  <span className="text-xs text-muted-foreground">{setupProgress}%</span>
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-amber-500 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </Link>
+        </div>
+      )}
 
       {/* Navigation */}
       <nav className="flex-1 space-y-1 px-4 py-6 relative">
@@ -186,12 +238,12 @@ export function Sidebar() {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs font-medium text-muted-foreground">
-              Villa Paraíso
+              TeamBrain AI
             </p>
-            <p className="text-xs text-muted-foreground/60">v0.1.0</p>
+            <p className="text-xs text-muted-foreground/60">v1.0.0</p>
           </div>
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-amber-600">
-            <span className="text-xs font-bold text-white">VP</span>
+            <span className="text-xs font-bold text-white">TB</span>
           </div>
         </div>
       </div>

@@ -2,6 +2,8 @@
  * Conversation and thread management types
  */
 
+import type { DocumentCategory } from './bots.js';
+
 export interface ThreadSession {
   id: string;
   slackChannelId: string;
@@ -10,6 +12,7 @@ export interface ThreadSession {
   isActive: boolean;
   createdAt: Date;
   lastActivity: Date;
+  botId: string | null;  // Which bot handled this conversation
 }
 
 export interface ThreadMessage {
@@ -45,6 +48,7 @@ export interface RetrievedChunk {
   content: string;
   similarity: number;
   rankScore: number;
+  category?: DocumentCategory;  // For source attribution
 }
 
 export interface LearnedFact {

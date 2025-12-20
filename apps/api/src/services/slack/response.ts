@@ -34,6 +34,14 @@ export interface GeneratedResponse {
   confidence: number;
 }
 
+export interface BotResponseOptions {
+  workspaceId: string;  // Required for tenant isolation
+  botId?: string;
+  systemInstructions?: string;
+  includeSharedKnowledge?: boolean;
+  categories?: string[];
+}
+
 const SYSTEM_PROMPT = `You are VillaBot, the AI assistant for Villa Paraiso Vacation Rentals operations team. You help staff quickly find answers about SOPs, policies, guest handling, and property operations.
 
 *Your Knowledge Base:*
@@ -74,11 +82,24 @@ function isDocumentListQuery(question: string): boolean {
 /**
  * Get all documents grouped by type for listing
  */
-async function getDocumentInventory(): Promise<GeneratedResponse> {
-  const { data: documents, error } = await supabase
+async function getDocumentInventory(botOptions: BotResponseOptions): Promise<GeneratedResponse> {
+  let query = supabase
     .from('documents')
-    .select('title, source_type')
-    .eq('is_active', true)
+    .select('title, source_type, bot_id, category')
+    .eq('workspace_id', botOptions.workspaceId)  // Filter by workspace
+    .eq('is_active', true);
+
+  // Filter by bot if specified
+  if (botOptions.botId) {
+    // Include documents for this bot OR shared documents if includeShared is true
+    if (botOptions.includeSharedKnowledge !== false) {
+      query = query.or(`bot_id.eq.${botOptions.botId},bot_id.is.null,category.eq.shared`);
+    } else {
+      query = query.eq('bot_id', botOptions.botId);
+    }
+  }
+
+  const { data: documents, error } = await query
     .order('source_type')
     .order('title');
 
@@ -120,19 +141,23 @@ ${websiteDocs.length > 15 ? `\n_...and ${websiteDocs.length - 15} more website p
  */
 export async function generateResponse(
   question: string,
+  botOptions: BotResponseOptions,
   conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }> = []
 ): Promise<GeneratedResponse> {
-  logger.debug('Generating response', { question });
+  const history = conversationHistory;
+
+  logger.debug('Generating response', { question, botId: botOptions.botId, workspaceId: botOptions.workspaceId });
 
   // Check if user is asking for document inventory (no cache needed - always fresh)
   if (isDocumentListQuery(question)) {
     logger.debug('Detected document list query');
-    return getDocumentInventory();
+    return getDocumentInventory(botOptions);
   }
 
   // Check cache for similar questions (only for questions without conversation history)
-  const cacheKey = generateCacheKey(question);
-  if (conversationHistory.length === 0) {
+  // Include workspaceId in cache key to prevent cross-tenant cache pollution
+  const cacheKey = generateCacheKey(question, botOptions.botId, botOptions.workspaceId);
+  if (history.length === 0) {
     const cached = responseCache.get(cacheKey);
     if (cached) {
       logger.debug('Response cache hit', { question: question.substring(0, 50) });
@@ -142,7 +167,12 @@ export async function generateResponse(
 
   try {
     // Get relevant context from RAG - use more chunks for comprehensive answers
-    const searchResults = await hybridSearch(question, { topK: 15 });
+    const searchResults = await hybridSearch(question, {
+      workspaceId: botOptions.workspaceId,
+      topK: 15,
+      botId: botOptions.botId,
+      includeShared: botOptions.includeSharedKnowledge ?? true,
+    });
 
     if (searchResults.length === 0) {
       return {
@@ -157,7 +187,7 @@ export async function generateResponse(
     const sources = extractSources(searchResults);
 
     // Build conversation for the model
-    const messages = buildMessages(question, context, conversationHistory);
+    const messages = buildMessages(question, context, history, botOptions.systemInstructions);
 
     // Generate response with timeout and retry
     const result = await withRetry(
@@ -190,7 +220,7 @@ export async function generateResponse(
     };
 
     // Cache successful responses (only for standalone questions)
-    if (conversationHistory.length === 0) {
+    if (history.length === 0) {
       responseCache.set(cacheKey, generatedResponse);
     }
 
@@ -209,19 +239,19 @@ export async function generateResponse(
     await errorTracker.track(err, 'gemini', 'high', { question, operation: 'generateResponse' });
 
     // Try to provide a graceful fallback response
-    return generateFallbackResponse(question, err);
+    return generateFallbackResponse(question, err, botOptions.workspaceId);
   }
 }
 
 /**
  * Generate a fallback response when the primary response fails
  */
-async function generateFallbackResponse(question: string, error: Error): Promise<GeneratedResponse> {
-  logger.info('Generating fallback response', { error: error.message });
+async function generateFallbackResponse(question: string, error: Error, workspaceId: string): Promise<GeneratedResponse> {
+  logger.info('Generating fallback response', { error: error.message, workspaceId });
 
   // Try to get search results for context, even if we can't generate AI response
   try {
-    const searchResults = await hybridSearch(question, { topK: 5 });
+    const searchResults = await hybridSearch(question, { workspaceId, topK: 5 });
     const topResult = searchResults[0];
 
     if (topResult) {
@@ -258,6 +288,7 @@ ${searchResults.length > 1 ? `\n_I also found related information in: ${searchRe
 export async function generateFollowUpResponse(
   question: string,
   _sessionId: string,
+  botOptions: BotResponseOptions,
   conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }>
 ): Promise<GeneratedResponse> {
   // For follow-ups, also search using context from conversation
@@ -265,7 +296,7 @@ export async function generateFollowUpResponse(
     ? `${conversationHistory[conversationHistory.length - 1]?.content ?? ''} ${question}`
     : question;
 
-  return generateResponse(contextQuery, conversationHistory);
+  return generateResponse(contextQuery, botOptions, conversationHistory);
 }
 
 /**
@@ -275,7 +306,8 @@ export async function handleCorrection(
   originalQuestion: string,
   originalAnswer: string,
   correction: string,
-  userId: string
+  userId: string,
+  workspaceId: string
 ): Promise<string> {
   const prompt = `A user corrected my previous response.
 
@@ -294,7 +326,7 @@ Keep the response friendly and concise.`;
     const result = await model.generateContent(prompt);
     const response = result.response.text().trim();
 
-    // Store the learned fact
+    // Store the learned fact with workspace context
     const { supabase } = await import('../supabase/client.js');
     const { generateEmbedding } = await import('../rag/embeddings.js');
 
@@ -302,6 +334,7 @@ Keep the response friendly and concise.`;
     const embedding = await generateEmbedding(fact);
 
     await supabase.from('learned_facts').insert({
+      workspace_id: workspaceId,
       fact,
       source: 'user_correction',
       taught_by_user_id: userId,
@@ -309,7 +342,7 @@ Keep the response friendly and concise.`;
       is_verified: false,
     });
 
-    logger.info('Learned new fact from user correction', { userId });
+    logger.info('Learned new fact from user correction', { userId, workspaceId });
 
     return response;
   } catch (error) {
@@ -350,14 +383,20 @@ function extractSources(results: SearchResult[]): string[] {
 function buildMessages(
   question: string,
   context: string,
-  history: Array<{ role: 'user' | 'assistant'; content: string }>
+  history: Array<{ role: 'user' | 'assistant'; content: string }>,
+  customInstructions?: string
 ): Array<{ role: string; parts: Array<{ text: string }> }> {
   const messages: Array<{ role: string; parts: Array<{ text: string }> }> = [];
+
+  // Use custom system instructions if provided, otherwise use default
+  const systemPrompt = customInstructions
+    ? `${SYSTEM_PROMPT}\n\n*Additional Instructions:*\n${customInstructions}`
+    : SYSTEM_PROMPT;
 
   // System prompt as first user message (Gemini doesn't have system role)
   messages.push({
     role: 'user',
-    parts: [{ text: SYSTEM_PROMPT }],
+    parts: [{ text: systemPrompt }],
   });
   messages.push({
     role: 'model',

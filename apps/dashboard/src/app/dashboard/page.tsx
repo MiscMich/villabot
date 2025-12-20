@@ -251,7 +251,7 @@ export default function OverviewPage() {
           <h1 className="text-4xl font-display font-bold">Dashboard</h1>
         </div>
         <p className="text-lg text-muted-foreground">
-          Monitor your VillaBot AI assistant performance and activity
+          Monitor your AI knowledge assistant performance and activity
         </p>
       </div>
 

@@ -6,25 +6,34 @@
 import { Router, Request, Response } from 'express';
 import { supabase } from '../services/supabase/client.js';
 import { logger } from '../utils/logger.js';
+import {
+  authenticate,
+  resolveWorkspace,
+} from '../middleware/index.js';
 
 const router = Router();
 
+// Apply authentication and workspace resolution to all routes
+router.use(authenticate, resolveWorkspace);
+
 /**
  * GET /api/conversations
- * List all conversation threads with pagination
+ * List all conversation threads for the workspace with pagination
  */
 router.get('/', async (req: Request, res: Response) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
     const offset = (page - 1) * limit;
+    const workspaceId = req.workspace!.id;
 
-    // Get total count
+    // Get total count for this workspace
     const { count } = await supabase
       .from('thread_sessions')
-      .select('*', { count: 'exact', head: true });
+      .select('*', { count: 'exact', head: true })
+      .eq('workspace_id', workspaceId);
 
-    // Get conversations with message counts
+    // Get conversations with message counts for this workspace
     const { data: sessions, error } = await supabase
       .from('thread_sessions')
       .select(`
@@ -36,6 +45,7 @@ router.get('/', async (req: Request, res: Response) => {
         created_at,
         last_activity
       `)
+      .eq('workspace_id', workspaceId)
       .order('last_activity', { ascending: false })
       .range(offset, offset + limit - 1);
 
@@ -75,7 +85,7 @@ router.get('/', async (req: Request, res: Response) => {
       },
     });
   } catch (error) {
-    logger.error('Failed to fetch conversations', { error });
+    logger.error('Failed to fetch conversations', { error, workspaceId: req.workspace!.id });
     res.status(500).json({ error: 'Failed to fetch conversations' });
   }
 });
@@ -87,12 +97,14 @@ router.get('/', async (req: Request, res: Response) => {
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const workspaceId = req.workspace!.id;
 
-    // Get session details
+    // Get session details with workspace filter
     const { data: session, error: sessionError } = await supabase
       .from('thread_sessions')
       .select('*')
       .eq('id', id)
+      .eq('workspace_id', workspaceId)
       .single();
 
     if (sessionError || !session) {
@@ -125,52 +137,69 @@ router.get('/:id', async (req: Request, res: Response) => {
       },
     });
   } catch (error) {
-    logger.error('Failed to fetch conversation', { error });
+    logger.error('Failed to fetch conversation', { error, workspaceId: req.workspace!.id });
     res.status(500).json({ error: 'Failed to fetch conversation' });
   }
 });
 
 /**
  * GET /api/conversations/stats/summary
- * Get conversation statistics
+ * Get conversation statistics for the workspace
  */
 router.get('/stats/summary', async (req: Request, res: Response) => {
   try {
-    // Total conversations
+    const workspaceId = req.workspace!.id;
+
+    // Total conversations for this workspace
     const { count: totalConversations } = await supabase
       .from('thread_sessions')
-      .select('*', { count: 'exact', head: true });
+      .select('*', { count: 'exact', head: true })
+      .eq('workspace_id', workspaceId);
 
-    // Active conversations (last 24 hours)
+    // Active conversations (last 24 hours) for this workspace
     const oneDayAgo = new Date();
     oneDayAgo.setDate(oneDayAgo.getDate() - 1);
 
     const { count: activeConversations } = await supabase
       .from('thread_sessions')
       .select('*', { count: 'exact', head: true })
+      .eq('workspace_id', workspaceId)
       .gte('last_activity', oneDayAgo.toISOString());
 
-    // Total messages
-    const { count: totalMessages } = await supabase
-      .from('thread_messages')
-      .select('*', { count: 'exact', head: true });
+    // Get session IDs for this workspace
+    const { data: sessions } = await supabase
+      .from('thread_sessions')
+      .select('id')
+      .eq('workspace_id', workspaceId);
+
+    const sessionIds = (sessions ?? []).map(s => s.id);
+
+    // Total messages for this workspace's sessions
+    let totalMessages = 0;
+    if (sessionIds.length > 0) {
+      const { count } = await supabase
+        .from('thread_messages')
+        .select('*', { count: 'exact', head: true })
+        .in('session_id', sessionIds);
+      totalMessages = count ?? 0;
+    }
 
     // Average messages per conversation
     const avgMessagesPerConversation =
       totalConversations && totalConversations > 0
-        ? Math.round((totalMessages ?? 0) / totalConversations)
+        ? Math.round(totalMessages / totalConversations)
         : 0;
 
     res.json({
       stats: {
         totalConversations: totalConversations ?? 0,
         activeConversations: activeConversations ?? 0,
-        totalMessages: totalMessages ?? 0,
+        totalMessages,
         avgMessagesPerConversation,
       },
     });
   } catch (error) {
-    logger.error('Failed to fetch conversation stats', { error });
+    logger.error('Failed to fetch conversation stats', { error, workspaceId: req.workspace!.id });
     res.status(500).json({ error: 'Failed to fetch stats' });
   }
 });

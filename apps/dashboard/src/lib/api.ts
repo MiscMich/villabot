@@ -1,15 +1,101 @@
+/**
+ * API client for TeamBrain AI Dashboard
+ * Handles authenticated requests with workspace context
+ */
+
+import { getSupabase, isSupabaseConfigured } from './supabase';
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
+// Workspace ID storage key (synced with WorkspaceContext)
+const WORKSPACE_STORAGE_KEY = 'teambrain_current_workspace';
+
+/**
+ * Get current workspace ID from localStorage
+ */
+function getCurrentWorkspaceId(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(WORKSPACE_STORAGE_KEY);
+}
+
+/**
+ * Get access token from Supabase session
+ */
+async function getAccessToken(): Promise<string | null> {
+  if (!isSupabaseConfigured()) return null;
+
+  try {
+    const supabase = getSupabase();
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Core fetch function with auth and workspace headers
+ */
 async function fetchApi<T>(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const [accessToken, workspaceId] = await Promise.all([
+    getAccessToken(),
+    Promise.resolve(getCurrentWorkspaceId()),
+  ]);
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string>),
+  };
+
+  // Add auth header if available
+  if (accessToken) {
+    headers['Authorization'] = `Bearer ${accessToken}`;
+  }
+
+  // Add workspace header if available
+  if (workspaceId) {
+    headers['X-Workspace-ID'] = workspaceId;
+  }
+
+  const res = await fetch(`${API_BASE}${endpoint}`, {
+    ...options,
+    cache: 'no-store',
+    headers,
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ error: 'Request failed' }));
+
+    // Handle specific error codes
+    if (res.status === 401) {
+      // Unauthorized - session may have expired
+      if (typeof window !== 'undefined') {
+        window.location.href = '/auth/signin';
+      }
+    }
+
+    throw new Error(error.error || 'Request failed');
+  }
+
+  return res.json();
+}
+
+/**
+ * Fetch without auth (for public endpoints)
+ */
+async function fetchPublic<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
   const res = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
-    cache: 'no-store', // Disable caching to prevent 304 issues
+    cache: 'no-store',
     headers: {
       'Content-Type': 'application/json',
-      ...options.headers,
+      ...(options.headers as Record<string, string>),
     },
   });
 
@@ -23,14 +109,62 @@ async function fetchApi<T>(
 
 // Health & Status
 export const api = {
-  // Health
-  getHealth: () => fetchApi<{
+  // Health (public)
+  getHealth: () => fetchPublic<{
     status: string;
     uptime: number;
     services: Record<string, boolean>;
   }>('/health'),
 
-  // Config
+  // Setup (public - for initial setup wizard)
+  getSetupStatus: () => fetchPublic<{
+    completed: boolean;
+    completedAt: string | null;
+    steps: {
+      database: boolean;
+      ai: boolean;
+      slack: boolean;
+      googleDrive: boolean;
+      bot: boolean;
+    };
+  }>('/api/setup/status'),
+
+  testDatabase: (url: string, serviceKey: string) =>
+    fetchPublic<{ success: boolean; message?: string; error?: string }>('/api/setup/test-database', {
+      method: 'POST',
+      body: JSON.stringify({ url, serviceKey }),
+    }),
+
+  testAI: (geminiKey: string) =>
+    fetchPublic<{ success: boolean; message?: string; error?: string }>('/api/setup/test-ai', {
+      method: 'POST',
+      body: JSON.stringify({ geminiKey }),
+    }),
+
+  testSlack: (botToken: string, appToken: string) =>
+    fetchPublic<{ success: boolean; message?: string; workspace?: string; botUser?: string; error?: string }>('/api/setup/test-slack', {
+      method: 'POST',
+      body: JSON.stringify({ botToken, appToken }),
+    }),
+
+  getGoogleSetupAuthUrl: () =>
+    fetchPublic<{ authUrl: string }>('/api/setup/google-auth-url'),
+
+  completeSetup: (config: {
+    database: { url: string; serviceKey: string };
+    ai: { geminiKey: string };
+    slack: { botToken: string; appToken: string; signingSecret?: string };
+    googleDrive?: { authenticated: boolean; selectedFolders?: string[] };
+    website?: { url: string; maxPages?: number };
+    bot: { name: string; slug: string; personality?: string; instructions?: string };
+    workspaceId: string;
+  }) =>
+    fetchPublic<{ success: boolean; message: string; bot?: { id: string; name: string } }>('/api/setup/complete', {
+      method: 'POST',
+      body: JSON.stringify({ config }),
+    }),
+
+  // Config (authenticated)
   getConfig: () => fetchApi<{ config: Record<string, unknown> }>('/api/config'),
   updateConfig: (key: string, value: unknown) =>
     fetchApi(`/api/config/${key}`, {
@@ -149,7 +283,7 @@ export const api = {
   deleteFact: (id: string) =>
     fetchApi(`/api/analytics/learned-facts/${id}`, { method: 'DELETE' }),
 
-  // Auth
+  // Auth (Google Drive OAuth - legacy)
   getAuthStatus: () => fetchApi<{
     google: { connected: boolean; connectedAt: string | null };
   }>('/auth/status'),
@@ -213,4 +347,376 @@ export const api = {
       avgMessagesPerConversation: number;
     };
   }>('/api/conversations/stats/summary'),
+
+  // Bots
+  getBots: () => fetchApi<{
+    bots: Array<{
+      id: string;
+      name: string;
+      slug: string;
+      description: string | null;
+      status: 'active' | 'inactive' | 'error';
+      is_default: boolean;
+      system_prompt: string | null;
+      created_at: string;
+      updated_at: string;
+    }>;
+    total: number;
+  }>('/api/bots'),
+
+  getBot: (id: string) => fetchApi<{
+    bot: {
+      id: string;
+      name: string;
+      slug: string;
+      description: string | null;
+      status: 'active' | 'inactive' | 'error';
+      is_default: boolean;
+      system_prompt: string | null;
+      slack_bot_token: string | null;
+      slack_app_token: string | null;
+      created_at: string;
+      updated_at: string;
+    };
+  }>(`/api/bots/${id}`),
+
+  createBot: (data: {
+    name: string;
+    slug: string;
+    description?: string;
+    system_prompt?: string;
+    slack_bot_token?: string;
+    slack_app_token?: string;
+    slack_signing_secret?: string;
+  }) => fetchApi<{ bot: { id: string; name: string; slug: string } }>('/api/bots', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+
+  updateBot: (id: string, data: {
+    name?: string;
+    description?: string;
+    system_prompt?: string;
+    status?: 'active' | 'inactive';
+  }) => fetchApi(`/api/bots/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  }),
+
+  deleteBot: (id: string) => fetchApi(`/api/bots/${id}`, { method: 'DELETE' }),
+
+  activateBot: (id: string) => fetchApi(`/api/bots/${id}/activate`, { method: 'POST' }),
+
+  deactivateBot: (id: string) => fetchApi(`/api/bots/${id}/deactivate`, { method: 'POST' }),
+
+  // Feedback
+  getFeedback: (page = 1, limit = 20) => fetchApi<{
+    feedback: Array<{
+      id: string;
+      message_id: string;
+      rating: number;
+      comment: string | null;
+      response_quality: string | null;
+      source_quality: string | null;
+      created_at: string;
+      message: {
+        content: string;
+        role: string;
+        sources: string[];
+      } | null;
+    }>;
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+    };
+  }>(`/api/feedback?page=${page}&limit=${limit}`),
+
+  getFeedbackStats: () => fetchApi<{
+    stats: {
+      totalFeedback: number;
+      averageRating: number | null;
+      positiveCount: number;
+      negativeCount: number;
+      responseQuality: Record<string, number>;
+      sourceQuality: Record<string, number>;
+    };
+  }>('/api/feedback/stats'),
+
+  // Workspaces
+  getWorkspaces: () => fetchApi<{
+    workspaces: Array<{
+      id: string;
+      name: string;
+      slug: string;
+      tier: string;
+      status: string;
+      role: string;
+    }>;
+  }>('/api/workspaces'),
+
+  getWorkspace: (id: string) => fetchApi<{
+    workspace: {
+      id: string;
+      name: string;
+      slug: string;
+      tier: string;
+      status: string;
+      settings: Record<string, unknown>;
+    };
+    membership: {
+      role: string;
+    };
+  }>(`/api/workspaces/${id}`),
+
+  getWorkspaceUsage: (id: string) => fetchApi<{
+    usage: {
+      queries_used: number;
+      queries_limit: number;
+      queries_percent: number;
+      documents_used: number;
+      documents_limit: number;
+      documents_percent: number;
+      bots_used: number;
+      bots_limit: number;
+    };
+  }>(`/api/workspaces/${id}/usage`),
+
+  // Team
+  getTeamMembers: () => fetchApi<{
+    members: Array<{
+      id: string;
+      user_id: string;
+      role: string;
+      is_active: boolean;
+      invited_at: string;
+      accepted_at: string | null;
+      user: {
+        id: string;
+        full_name: string | null;
+        avatar_url: string | null;
+        email?: string;
+      } | null;
+    }>;
+  }>('/api/team'),
+
+  inviteMember: (email: string, role: string = 'member') =>
+    fetchApi<{ invite: { id: string; email: string }; invite_link: string }>('/api/team/invite', {
+      method: 'POST',
+      body: JSON.stringify({ email, role }),
+    }),
+
+  removeMember: (memberId: string) =>
+    fetchApi(`/api/team/${memberId}`, { method: 'DELETE' }),
+
+  updateMemberRole: (memberId: string, role: string) =>
+    fetchApi(`/api/team/${memberId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role }),
+    }),
+
+  // Billing
+  getBillingOverview: () => fetchApi<{
+    subscription: {
+      tier: string;
+      status: string;
+      current_period_end: string;
+      cancel_at_period_end: boolean;
+    } | null;
+    invoices: Array<{
+      id: string;
+      amount_due: number;
+      status: string;
+      created_at: string;
+      hosted_invoice_url: string | null;
+    }>;
+    payment_methods: Array<{
+      id: string;
+      brand: string;
+      last_four: string;
+      is_default: boolean;
+    }>;
+  }>('/api/billing'),
+
+  createCheckoutSession: (tier: string) =>
+    fetchApi<{ checkout_url: string; session_id: string }>('/api/billing/checkout', {
+      method: 'POST',
+      body: JSON.stringify({
+        tier,
+        success_url: `${typeof window !== 'undefined' ? window.location.origin : ''}/billing?success=true`,
+        cancel_url: `${typeof window !== 'undefined' ? window.location.origin : ''}/billing?canceled=true`,
+      }),
+    }),
+
+  createPortalSession: () =>
+    fetchApi<{ portal_url: string }>('/api/billing/portal', {
+      method: 'POST',
+      body: JSON.stringify({
+        return_url: `${typeof window !== 'undefined' ? window.location.origin : ''}/billing`,
+      }),
+    }),
+
+  changePlan: (tier: string) =>
+    fetchApi<{ success: boolean; subscription: unknown }>('/api/billing/change-plan', {
+      method: 'POST',
+      body: JSON.stringify({ tier }),
+    }),
+
+  cancelSubscription: (immediately = false) =>
+    fetchApi<{ success: boolean; access_until: string }>('/api/billing/cancel', {
+      method: 'POST',
+      body: JSON.stringify({ cancel_immediately: immediately }),
+    }),
+
+  // Admin (Platform Admin Only)
+  getAdminStats: () => fetchApi<{
+    stats: {
+      totalWorkspaces: number;
+      payingWorkspaces: number;
+      internalWorkspaces: number;
+      activeWorkspaces: number;
+      trialingWorkspaces: number;
+      totalUsers: number;
+      adminUsers: number;
+      starterWorkspaces: number;
+      proWorkspaces: number;
+      businessWorkspaces: number;
+      estimatedMrr: number;
+      totalDocuments: number;
+      totalConversations: number;
+      totalBots: number;
+      newWorkspaces30d: number;
+      newWorkspaces7d: number;
+    };
+  }>('/api/admin/stats'),
+
+  getAdminWorkspaces: (filters?: {
+    search?: string;
+    tier?: string;
+    status?: string;
+    isInternal?: boolean;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+    page?: number;
+    limit?: number;
+  }) => {
+    const params = new URLSearchParams();
+    if (filters?.search) params.append('search', filters.search);
+    if (filters?.tier) params.append('tier', filters.tier);
+    if (filters?.status) params.append('status', filters.status);
+    if (filters?.isInternal !== undefined) params.append('isInternal', String(filters.isInternal));
+    if (filters?.sortBy) params.append('sortBy', filters.sortBy);
+    if (filters?.sortOrder) params.append('sortOrder', filters.sortOrder);
+    if (filters?.page) params.append('page', String(filters.page));
+    if (filters?.limit) params.append('limit', String(filters.limit));
+
+    return fetchApi<{
+      data: Array<{
+        id: string;
+        name: string;
+        slug: string;
+        tier: string;
+        status: string;
+        isInternal: boolean;
+        createdAt: string;
+        ownerEmail: string;
+        ownerName?: string;
+        memberCount: number;
+        documentCount: number;
+        botCount: number;
+        queriesThisMonth: number;
+        lastActivity?: string;
+      }>;
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+    }>(`/api/admin/workspaces?${params.toString()}`);
+  },
+
+  getAdminWorkspaceDetails: (id: string) => fetchApi<{
+    workspace: {
+      id: string;
+      name: string;
+      slug: string;
+      tier: string;
+      status: string;
+      isInternal: boolean;
+      internalNotes?: string;
+      createdAt: string;
+      updatedAt: string;
+      trialStartedAt?: string;
+      trialEndsAt?: string;
+      maxDocuments: number;
+      maxQueriesPerMonth: number;
+      stripeCustomerId?: string;
+      stripeSubscriptionId?: string;
+      ownerId: string;
+      ownerEmail: string;
+      ownerName?: string;
+      memberCount: number;
+      documentCount: number;
+      botCount: number;
+      conversationCount: number;
+      queriesThisMonth: number;
+      lastActivity?: string;
+    };
+    members: Array<{
+      id: string;
+      userId: string;
+      email: string;
+      fullName?: string;
+      role: string;
+      joinedAt: string;
+    }>;
+    bots: Array<{
+      id: string;
+      name: string;
+      slug: string;
+      status: string;
+      createdAt: string;
+    }>;
+    usage: {
+      documents: number;
+      conversations: number;
+      queriesThisMonth: number;
+      totalStorage: number;
+    };
+  }>(`/api/admin/workspaces/${id}`),
+
+  createInternalWorkspace: (data: {
+    name: string;
+    ownerEmail: string;
+    notes?: string;
+  }) => fetchApi<{
+    workspace: {
+      id: string;
+      name: string;
+      slug: string;
+      isInternal: boolean;
+    };
+  }>('/api/admin/workspaces/internal', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+
+  updateAdminWorkspace: (id: string, data: {
+    name?: string;
+    tier?: string;
+    status?: string;
+    isInternal?: boolean;
+    internalNotes?: string;
+  }) => fetchApi(`/api/admin/workspaces/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  }),
+
+  getAdminGrowth: (days = 30) => fetchApi<{
+    data: Array<{
+      date: string;
+      newWorkspaces: number;
+      totalWorkspaces: number;
+    }>;
+  }>(`/api/admin/growth?days=${days}`),
 };

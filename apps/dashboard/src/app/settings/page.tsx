@@ -37,7 +37,7 @@ export default function SettingsPage() {
   });
 
   const [generalSettings, setGeneralSettings] = useState({
-    botName: 'VillaBot',
+    botName: 'TeamBrain',
     timezone: 'America/Los_Angeles',
   });
 
@@ -138,7 +138,7 @@ export default function SettingsPage() {
           <h1 className="text-4xl font-display font-bold">Settings</h1>
         </div>
         <p className="text-lg text-muted-foreground">
-          Configure your VillaBot AI assistant
+          Configure your AI knowledge assistant
         </p>
       </div>
 

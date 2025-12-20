@@ -25,30 +25,34 @@ interface SyncResult {
   errors: string[];
 }
 
-// Store page token in bot_config
-const PAGE_TOKEN_KEY = 'drive_page_token';
+interface SyncOptions {
+  workspaceId: string;  // Required for tenant isolation
+  botId?: string;  // Optional bot-specific sync
+}
 
 /**
- * Get stored page token
+ * Get stored page token for workspace
  */
-async function getStoredPageToken(): Promise<string | null> {
+async function getStoredPageToken(workspaceId: string): Promise<string | null> {
+  const pageTokenKey = `drive_page_token:${workspaceId}`;
   const { data } = await supabase
     .from('bot_config')
     .select('value')
-    .eq('key', PAGE_TOKEN_KEY)
+    .eq('key', pageTokenKey)
     .single();
 
   return data?.value?.token ?? null;
 }
 
 /**
- * Store page token
+ * Store page token for workspace
  */
-async function storePageToken(token: string): Promise<void> {
+async function storePageToken(workspaceId: string, token: string): Promise<void> {
+  const pageTokenKey = `drive_page_token:${workspaceId}`;
   await supabase
     .from('bot_config')
     .upsert({
-      key: PAGE_TOKEN_KEY,
+      key: pageTokenKey,
       value: { token, updatedAt: new Date().toISOString() },
     });
 }
@@ -56,24 +60,33 @@ async function storePageToken(token: string): Promise<void> {
 /**
  * Perform full sync of all documents
  */
-export async function fullSync(): Promise<SyncResult> {
+export async function fullSync(options: SyncOptions): Promise<SyncResult> {
+  const { workspaceId, botId } = options;
+
   if (!isDriveClientInitialized()) {
     logger.warn('Drive client not initialized, skipping sync');
     return { added: 0, updated: 0, removed: 0, errors: ['Drive client not initialized'] };
   }
 
-  logger.info('Starting full document sync');
+  logger.info('Starting full document sync', { workspaceId, botId });
   const result: SyncResult = { added: 0, updated: 0, removed: 0, errors: [] };
 
   try {
     // Get all files from Drive
     const driveFiles = await listFilesInFolder();
 
-    // Get all existing documents from DB
-    const { data: existingDocs } = await supabase
+    // Get all existing documents from DB for this workspace
+    let query = supabase
       .from('documents')
       .select('id, drive_file_id, content_hash')
+      .eq('workspace_id', workspaceId)
       .eq('source_type', 'google_drive');
+
+    if (botId) {
+      query = query.eq('bot_id', botId);
+    }
+
+    const { data: existingDocs } = await query;
 
     const existingMap = new Map(
       (existingDocs ?? []).map(d => [d.drive_file_id, d])
@@ -101,8 +114,8 @@ export async function fullSync(): Promise<SyncResult> {
           await updateDocument(existing.id, file, parsed.content, contentHash);
           result.updated++;
         } else {
-          // Add new document
-          await addDocument(file, parsed.content, contentHash);
+          // Add new document with workspace context
+          await addDocument(file, parsed.content, contentHash, workspaceId, botId);
           result.added++;
         }
       } catch (error) {
@@ -120,14 +133,14 @@ export async function fullSync(): Promise<SyncResult> {
       }
     }
 
-    // Store page token for incremental sync
+    // Store page token for incremental sync (per workspace)
     const pageToken = await getStartPageToken();
-    await storePageToken(pageToken);
+    await storePageToken(workspaceId, pageToken);
 
-    logger.info('Full sync completed', result);
+    logger.info('Full sync completed', { ...result, workspaceId });
     return result;
   } catch (error) {
-    logger.error('Full sync failed', { error });
+    logger.error('Full sync failed', { error, workspaceId });
     throw error;
   }
 }
@@ -135,7 +148,9 @@ export async function fullSync(): Promise<SyncResult> {
 /**
  * Perform incremental sync based on changes
  */
-export async function incrementalSync(): Promise<SyncResult> {
+export async function incrementalSync(options: SyncOptions): Promise<SyncResult> {
+  const { workspaceId, botId } = options;
+
   if (!isDriveClientInitialized()) {
     logger.warn('Drive client not initialized, skipping sync');
     return { added: 0, updated: 0, removed: 0, errors: ['Drive client not initialized'] };
@@ -144,34 +159,35 @@ export async function incrementalSync(): Promise<SyncResult> {
   const result: SyncResult = { added: 0, updated: 0, removed: 0, errors: [] };
 
   try {
-    // Get stored page token
-    let pageToken = await getStoredPageToken();
+    // Get stored page token for this workspace
+    let pageToken = await getStoredPageToken(workspaceId);
 
     if (!pageToken) {
-      logger.info('No page token found, performing full sync');
-      return fullSync();
+      logger.info('No page token found, performing full sync', { workspaceId });
+      return fullSync(options);
     }
 
-    logger.info('Starting incremental sync');
+    logger.info('Starting incremental sync', { workspaceId });
 
     // Get changes since last sync
     const { changes, newPageToken } = await listChanges(pageToken);
 
     if (changes.length === 0) {
       logger.debug('No changes detected');
-      await storePageToken(newPageToken);
+      await storePageToken(workspaceId, newPageToken);
       return result;
     }
 
-    logger.info(`Processing ${changes.length} changes`);
+    logger.info(`Processing ${changes.length} changes`, { workspaceId });
 
     for (const change of changes) {
       try {
         if (change.removed) {
-          // File was deleted
+          // File was deleted - only delete for this workspace
           const { data } = await supabase
             .from('documents')
             .delete()
+            .eq('workspace_id', workspaceId)
             .eq('drive_file_id', change.fileId)
             .select('id');
 
@@ -179,10 +195,11 @@ export async function incrementalSync(): Promise<SyncResult> {
             result.removed++;
           }
         } else if (change.file) {
-          // File was added or modified
+          // File was added or modified - check within workspace
           const { data: existing } = await supabase
             .from('documents')
             .select('id, content_hash')
+            .eq('workspace_id', workspaceId)
             .eq('drive_file_id', change.fileId)
             .single();
 
@@ -199,7 +216,7 @@ export async function incrementalSync(): Promise<SyncResult> {
               result.updated++;
             }
           } else {
-            await addDocument(change.file, parsed.content, contentHash);
+            await addDocument(change.file, parsed.content, contentHash, workspaceId, botId);
             result.added++;
           }
         }
@@ -210,13 +227,13 @@ export async function incrementalSync(): Promise<SyncResult> {
       }
     }
 
-    // Store new page token
-    await storePageToken(newPageToken);
+    // Store new page token for this workspace
+    await storePageToken(workspaceId, newPageToken);
 
-    logger.info('Incremental sync completed', result);
+    logger.info('Incremental sync completed', { ...result, workspaceId });
     return result;
   } catch (error) {
-    logger.error('Incremental sync failed', { error });
+    logger.error('Incremental sync failed', { error, workspaceId });
     throw error;
   }
 }
@@ -227,22 +244,31 @@ export async function incrementalSync(): Promise<SyncResult> {
 async function addDocument(
   file: DriveFile,
   content: string,
-  contentHash: string
+  contentHash: string,
+  workspaceId: string,
+  botId?: string
 ): Promise<void> {
-  logger.info(`Adding document: ${file.name}`);
+  logger.info(`Adding document: ${file.name}`, { workspaceId });
 
-  // Insert document metadata
+  // Insert document metadata with workspace context
+  const insertData: Record<string, unknown> = {
+    workspace_id: workspaceId,
+    drive_file_id: file.id,
+    title: file.name,
+    file_type: file.mimeType,
+    source_type: 'google_drive',
+    source_url: file.webViewLink,
+    content_hash: contentHash,
+    last_modified: file.modifiedTime,
+  };
+
+  if (botId) {
+    insertData.bot_id = botId;
+  }
+
   const { data: doc, error: docError } = await supabase
     .from('documents')
-    .insert({
-      drive_file_id: file.id,
-      title: file.name,
-      file_type: file.mimeType,
-      source_type: 'google_drive',
-      source_url: file.webViewLink,
-      content_hash: contentHash,
-      last_modified: file.modifiedTime,
-    })
+    .insert(insertData)
     .select('id')
     .single();
 
@@ -336,30 +362,34 @@ function hashContent(content: string): string {
 }
 
 /**
- * Get sync status
+ * Get sync status for a workspace
  */
-export async function getSyncStatus(): Promise<{
+export async function getSyncStatus(workspaceId: string): Promise<{
   lastSync: string | null;
   documentCount: number;
   chunkCount: number;
 }> {
+  const pageTokenKey = `drive_page_token:${workspaceId}`;
   const { data: tokenData } = await supabase
     .from('bot_config')
     .select('value')
-    .eq('key', PAGE_TOKEN_KEY)
+    .eq('key', pageTokenKey)
     .single();
 
   const { count: docCount } = await supabase
     .from('documents')
-    .select('*', { count: 'exact', head: true });
+    .select('*', { count: 'exact', head: true })
+    .eq('workspace_id', workspaceId);
 
-  const { count: chunkCount } = await supabase
+  // Get chunk count by joining with documents for this workspace
+  const { data: chunks } = await supabase
     .from('document_chunks')
-    .select('*', { count: 'exact', head: true });
+    .select('id, documents!inner(workspace_id)')
+    .eq('documents.workspace_id', workspaceId);
 
   return {
     lastSync: tokenData?.value?.updatedAt ?? null,
     documentCount: docCount ?? 0,
-    chunkCount: chunkCount ?? 0,
+    chunkCount: chunks?.length ?? 0,
   };
 }

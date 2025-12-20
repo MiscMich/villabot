@@ -2,6 +2,8 @@
  * Document types for the knowledge base
  */
 
+import type { DocumentCategory } from './bots.js';
+
 export type DocumentSourceType = 'google_drive' | 'website';
 
 export type DocumentFileType = 'pdf' | 'docx' | 'google_doc' | 'google_sheet' | 'txt' | 'html';
@@ -19,6 +21,11 @@ export interface Document {
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
+
+  // Multi-bot fields
+  botId: string | null;
+  category: DocumentCategory;
+  priority: number;
 }
 
 export interface DocumentChunk {

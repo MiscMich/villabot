@@ -1,7 +1,7 @@
-# Villa Paraiso Slack AI Assistant - Project Instructions
+# TeamBrain AI - Project Instructions
 
 ## Project Overview
-RAG-powered Slack bot for Villa Paraiso Vacation Rentals that answers team questions using SOPs, documentation from Google Drive, and website content. Designed as a multi-bot platform for extending to other company departments (marketing, sales, etc.).
+Multi-tenant SaaS platform for AI-powered knowledge management. Features RAG-powered Slack bots that answer team questions using SOPs, documentation from Google Drive, and website content. Supports multiple workspaces with isolated data, Stripe billing integration, and a full dashboard for configuration.
 
 ## Tech Stack
 - **Backend**: Node.js/TypeScript + Express (port 3000)
@@ -104,7 +104,7 @@ Key constants in `packages/shared/src/constants.ts`:
 - `apps/api/src/services/rag/search.ts` - Hybrid search implementation
 - `apps/api/src/services/rag/chunking.ts` - Document chunking
 - `apps/api/src/services/google-drive/sync.ts` - Drive sync logic
-- `apps/api/src/services/scraper/website.ts` - Website scraper (50 page limit - to be increased)
+- `apps/api/src/services/scraper/website.ts` - Website scraper (configurable limit)
 - `packages/shared/src/constants.ts` - RAG configuration
 
 ## Environment Variables
@@ -116,25 +116,31 @@ See `.env.example` for required configuration:
 - `GOOGLE_DRIVE_FOLDER_ID` - Source folder for documents
 - `COMPANY_WEBSITE_URL` - Website to scrape
 
-## Planned Enhancements (See PLAN.md)
+## Implemented Features (See PLAN.md)
 
-### Document Categorization
+### Multi-Tenant Architecture (Complete)
+- Workspaces with isolated data using RLS
+- Supabase authentication (email/password)
+- Stripe billing with subscription tiers
+- Team member management and invites
+
+### Document Categorization (Complete)
 - Categories: `company_knowledge`, `internal_sops`, `marketing`, `sales`, etc.
-- Category-filtered search
+- Category-filtered search with workspace isolation
 - Source attribution by category
 
-### Website Scraping Improvements
-- Remove 50-page limit (increase to 500+)
-- Configurable rate limiting and robots.txt support
-- Progress tracking in dashboard
-
-### Multi-Bot Architecture
-- Multiple bots with different Slack credentials
+### Multi-Bot Architecture (Complete)
+- Multiple bots per workspace with different Slack credentials
 - Each bot has access to specific document categories
 - Shared knowledge base with bot-specific priorities
+
+### Coming Soon
+- Landing page for marketing
+- Bot management dashboard page
+- Feedback review dashboard page
 
 ## Available Plugins
 Use `/commit` for git commits, `/code-review` for PR reviews, `/feature-dev` for feature development workflow.
 
 ## Repository
-GitHub: https://github.com/MiscMich/villabot
+GitHub: https://github.com/MiscMich/teambrain-ai

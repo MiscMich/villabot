@@ -6,60 +6,85 @@
 import { Router } from 'express';
 import { supabase } from '../services/supabase/client.js';
 import { logger } from '../utils/logger.js';
+import {
+  authenticate,
+  resolveWorkspace,
+  requireWorkspaceAdmin,
+} from '../middleware/index.js';
 
 export const analyticsRouter = Router();
 
+// Apply authentication and workspace resolution to all routes
+analyticsRouter.use(authenticate, resolveWorkspace);
+
 /**
- * Get dashboard overview stats
+ * Get dashboard overview stats for the workspace
  */
-analyticsRouter.get('/overview', async (_req, res) => {
+analyticsRouter.get('/overview', async (req, res) => {
   try {
-    // Get document counts
+    const workspaceId = req.workspace!.id;
+
+    // Get document counts for this workspace
     const { count: totalDocs } = await supabase
       .from('documents')
-      .select('*', { count: 'exact', head: true });
+      .select('*', { count: 'exact', head: true })
+      .eq('workspace_id', workspaceId);
 
     const { count: activeDocs } = await supabase
       .from('documents')
       .select('*', { count: 'exact', head: true })
+      .eq('workspace_id', workspaceId)
       .eq('is_active', true);
 
     const { count: totalChunks } = await supabase
       .from('document_chunks')
-      .select('*', { count: 'exact', head: true });
+      .select('*', { count: 'exact', head: true })
+      .eq('workspace_id', workspaceId);
 
-    // Get message counts for last 7 days
+    // Get message counts for last 7 days for this workspace
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
     const { count: messagesThisWeek } = await supabase
       .from('analytics')
       .select('*', { count: 'exact', head: true })
+      .eq('workspace_id', workspaceId)
       .eq('event_type', 'message_received')
       .gte('created_at', sevenDaysAgo.toISOString());
 
     const { count: responsesThisWeek } = await supabase
       .from('analytics')
       .select('*', { count: 'exact', head: true })
+      .eq('workspace_id', workspaceId)
       .eq('event_type', 'response_sent')
       .gte('created_at', sevenDaysAgo.toISOString());
 
-    // Get feedback stats
+    // Get feedback stats for this workspace
     const { data: feedback } = await supabase
       .from('thread_messages')
-      .select('feedback_rating')
+      .select('feedback_rating, session_id')
       .not('feedback_rating', 'is', null)
       .gte('created_at', sevenDaysAgo.toISOString());
 
-    const positiveCount = feedback?.filter(f => f.feedback_rating > 0).length ?? 0;
-    const negativeCount = feedback?.filter(f => f.feedback_rating < 0).length ?? 0;
+    // Filter to only include messages from this workspace's sessions
+    const { data: workspaceSessions } = await supabase
+      .from('thread_sessions')
+      .select('id')
+      .eq('workspace_id', workspaceId);
+
+    const sessionIds = new Set((workspaceSessions ?? []).map(s => s.id));
+    const workspaceFeedback = (feedback ?? []).filter(f => sessionIds.has(f.session_id));
+
+    const positiveCount = workspaceFeedback.filter(f => f.feedback_rating > 0).length;
+    const negativeCount = workspaceFeedback.filter(f => f.feedback_rating < 0).length;
     const totalFeedback = positiveCount + negativeCount;
     const satisfactionRate = totalFeedback > 0 ? Math.round((positiveCount / totalFeedback) * 100) : null;
 
-    // Get learned facts count
+    // Get learned facts count for this workspace
     const { count: learnedFacts } = await supabase
       .from('learned_facts')
-      .select('*', { count: 'exact', head: true });
+      .select('*', { count: 'exact', head: true })
+      .eq('workspace_id', workspaceId);
 
     res.json({
       documents: {
@@ -81,7 +106,7 @@ analyticsRouter.get('/overview', async (_req, res) => {
       },
     });
   } catch (error) {
-    logger.error('Failed to get overview stats', { error });
+    logger.error('Failed to get overview stats', { error, workspaceId: req.workspace!.id });
     res.status(500).json({ error: 'Failed to get overview stats' });
   }
 });
@@ -98,6 +123,7 @@ analyticsRouter.get('/activity', async (req, res) => {
     const { data } = await supabase
       .from('analytics')
       .select('event_data, created_at')
+      .eq('workspace_id', req.workspace!.id)
       .eq('event_type', 'daily_summary')
       .gte('created_at', startDate.toISOString())
       .order('created_at', { ascending: true });
@@ -111,13 +137,13 @@ analyticsRouter.get('/activity', async (req, res) => {
       },
     });
   } catch (error) {
-    logger.error('Failed to get activity data', { error });
+    logger.error('Failed to get activity data', { error, workspaceId: req.workspace!.id });
     res.status(500).json({ error: 'Failed to get activity data' });
   }
 });
 
 /**
- * Get recent events
+ * Get recent events for this workspace
  */
 analyticsRouter.get('/events', async (req, res) => {
   try {
@@ -127,6 +153,7 @@ analyticsRouter.get('/events', async (req, res) => {
     let query = supabase
       .from('analytics')
       .select('id, event_type, event_data, created_at')
+      .eq('workspace_id', req.workspace!.id)
       .order('created_at', { ascending: false })
       .limit(limit);
 
@@ -140,13 +167,13 @@ analyticsRouter.get('/events', async (req, res) => {
 
     res.json({ events: data ?? [] });
   } catch (error) {
-    logger.error('Failed to get events', { error });
+    logger.error('Failed to get events', { error, workspaceId: req.workspace!.id });
     res.status(500).json({ error: 'Failed to get events' });
   }
 });
 
 /**
- * Get top questions
+ * Get top questions for this workspace
  */
 analyticsRouter.get('/top-questions', async (req, res) => {
   try {
@@ -156,9 +183,25 @@ analyticsRouter.get('/top-questions', async (req, res) => {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
+    // Get workspace sessions first
+    const { data: sessions } = await supabase
+      .from('thread_sessions')
+      .select('id')
+      .eq('workspace_id', req.workspace!.id);
+
+    const sessionIds = (sessions ?? []).map(s => s.id);
+
+    if (sessionIds.length === 0) {
+      return res.json({
+        recentQuestions: [],
+        topWords: [],
+      });
+    }
+
     const { data } = await supabase
       .from('thread_messages')
       .select('content, created_at')
+      .in('session_id', sessionIds)
       .eq('role', 'user')
       .gte('created_at', startDate.toISOString())
       .order('created_at', { ascending: false })
@@ -185,13 +228,13 @@ analyticsRouter.get('/top-questions', async (req, res) => {
       topWords,
     });
   } catch (error) {
-    logger.error('Failed to get top questions', { error });
+    logger.error('Failed to get top questions', { error, workspaceId: req.workspace!.id });
     res.status(500).json({ error: 'Failed to get top questions' });
   }
 });
 
 /**
- * Get learned facts
+ * Get learned facts for this workspace
  */
 analyticsRouter.get('/learned-facts', async (req, res) => {
   try {
@@ -201,6 +244,7 @@ analyticsRouter.get('/learned-facts', async (req, res) => {
     let query = supabase
       .from('learned_facts')
       .select('id, fact, source, taught_by_user_id, is_verified, created_at')
+      .eq('workspace_id', req.workspace!.id)
       .order('created_at', { ascending: false })
       .limit(limit);
 
@@ -214,7 +258,7 @@ analyticsRouter.get('/learned-facts', async (req, res) => {
 
     res.json({ facts: data ?? [] });
   } catch (error) {
-    logger.error('Failed to get learned facts', { error });
+    logger.error('Failed to get learned facts', { error, workspaceId: req.workspace!.id });
     res.status(500).json({ error: 'Failed to get learned facts' });
   }
 });
@@ -222,7 +266,7 @@ analyticsRouter.get('/learned-facts', async (req, res) => {
 /**
  * Verify or reject a learned fact
  */
-analyticsRouter.patch('/learned-facts/:id', async (req, res) => {
+analyticsRouter.patch('/learned-facts/:id', requireWorkspaceAdmin, async (req, res) => {
   try {
     const { is_verified } = req.body;
 
@@ -234,15 +278,16 @@ analyticsRouter.patch('/learned-facts/:id', async (req, res) => {
       .from('learned_facts')
       .update({ is_verified })
       .eq('id', req.params.id)
+      .eq('workspace_id', req.workspace!.id)
       .select()
       .single();
 
     if (error) throw error;
 
-    logger.info('Learned fact updated', { id: req.params.id, is_verified });
+    logger.info('Learned fact updated', { id: req.params.id, is_verified, workspaceId: req.workspace!.id });
     res.json(data);
   } catch (error) {
-    logger.error('Failed to update learned fact', { error });
+    logger.error('Failed to update learned fact', { error, workspaceId: req.workspace!.id });
     res.status(500).json({ error: 'Failed to update learned fact' });
   }
 });
@@ -250,19 +295,20 @@ analyticsRouter.patch('/learned-facts/:id', async (req, res) => {
 /**
  * Delete a learned fact
  */
-analyticsRouter.delete('/learned-facts/:id', async (req, res) => {
+analyticsRouter.delete('/learned-facts/:id', requireWorkspaceAdmin, async (req, res) => {
   try {
     const { error } = await supabase
       .from('learned_facts')
       .delete()
-      .eq('id', req.params.id);
+      .eq('id', req.params.id)
+      .eq('workspace_id', req.workspace!.id);
 
     if (error) throw error;
 
-    logger.info('Learned fact deleted', { id: req.params.id });
+    logger.info('Learned fact deleted', { id: req.params.id, workspaceId: req.workspace!.id });
     res.json({ success: true });
   } catch (error) {
-    logger.error('Failed to delete learned fact', { error });
+    logger.error('Failed to delete learned fact', { error, workspaceId: req.workspace!.id });
     res.status(500).json({ error: 'Failed to delete learned fact' });
   }
 });

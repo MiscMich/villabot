@@ -12,6 +12,8 @@ const config: Config = {
       fontFamily: {
         sans: ['DM Sans', 'system-ui', 'sans-serif'],
         display: ['Playfair Display', 'serif'],
+        geist: ['Geist', 'system-ui', 'sans-serif'],
+        mono: ['Geist Mono', 'ui-monospace', 'monospace'],
       },
       colors: {
         background: 'hsl(var(--background))',
@@ -93,6 +95,13 @@ const config: Config = {
         'float': 'float 6s ease-in-out infinite',
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'shimmer': 'shimmer 2s infinite',
+        'glow-pulse': 'glow-pulse 2s ease-in-out infinite',
+        'spin-slow': 'spin 3s linear infinite',
+        'bounce-subtle': 'bounce-subtle 2s ease-in-out infinite',
+        'slide-up': 'slide-up 0.4s ease-out forwards',
+        'slide-down': 'slide-down 0.3s ease-out forwards',
+        'checkmark': 'checkmark 0.6s ease-out forwards',
+        'confetti': 'confetti 0.8s ease-out forwards',
       },
       keyframes: {
         'fade-in': {
@@ -118,6 +127,31 @@ const config: Config = {
         'shimmer': {
           '0%': { transform: 'translateX(-100%)' },
           '100%': { transform: 'translateX(100%)' },
+        },
+        'glow-pulse': {
+          '0%, 100%': { boxShadow: '0 0 20px rgba(251, 191, 36, 0.3)' },
+          '50%': { boxShadow: '0 0 40px rgba(251, 191, 36, 0.6)' },
+        },
+        'bounce-subtle': {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-5px)' },
+        },
+        'slide-up': {
+          from: { opacity: '0', transform: 'translateY(30px)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
+        },
+        'slide-down': {
+          from: { opacity: '0', transform: 'translateY(-20px)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
+        },
+        'checkmark': {
+          '0%': { strokeDashoffset: '50' },
+          '100%': { strokeDashoffset: '0' },
+        },
+        'confetti': {
+          '0%': { transform: 'scale(0) rotate(0deg)', opacity: '1' },
+          '50%': { transform: 'scale(1.2) rotate(180deg)', opacity: '1' },
+          '100%': { transform: 'scale(1) rotate(360deg)', opacity: '1' },
         },
       },
     },

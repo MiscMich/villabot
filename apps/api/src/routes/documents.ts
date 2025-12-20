@@ -10,11 +10,20 @@ import { triggerImmediateSync, triggerWebsiteScrape } from '../services/schedule
 import { fullSync, getSyncStatus } from '../services/google-drive/sync.js';
 import { isDriveClientInitialized } from '../services/google-drive/client.js';
 import { env } from '../config/env.js';
+import {
+  authenticate,
+  resolveWorkspace,
+  requireWorkspaceAdmin,
+  checkUsageLimit,
+} from '../middleware/index.js';
 
 export const documentsRouter = Router();
 
+// Apply authentication and workspace resolution to all routes
+documentsRouter.use(authenticate, resolveWorkspace);
+
 /**
- * List all documents
+ * List all documents for the workspace
  */
 documentsRouter.get('/', async (req, res) => {
   try {
@@ -23,6 +32,7 @@ documentsRouter.get('/', async (req, res) => {
     let query = supabase
       .from('documents')
       .select('id, title, file_type, source_type, source_url, last_modified, last_synced, is_active, created_at')
+      .eq('workspace_id', req.workspace!.id)
       .order('last_modified', { ascending: false });
 
     if (source_type) {
@@ -42,7 +52,7 @@ documentsRouter.get('/', async (req, res) => {
       total: count ?? data?.length ?? 0,
     });
   } catch (error) {
-    logger.error('Failed to list documents', { error });
+    logger.error('Failed to list documents', { error, workspaceId: req.workspace!.id });
     res.status(500).json({ error: 'Failed to list documents' });
   }
 });
@@ -56,6 +66,7 @@ documentsRouter.get('/:id', async (req, res) => {
       .from('documents')
       .select('*')
       .eq('id', req.params.id)
+      .eq('workspace_id', req.workspace!.id)
       .single();
 
     if (docError) {
@@ -79,7 +90,7 @@ documentsRouter.get('/:id', async (req, res) => {
       chunk_count: chunks?.length ?? 0,
     });
   } catch (error) {
-    logger.error('Failed to get document', { error, id: req.params.id });
+    logger.error('Failed to get document', { error, id: req.params.id, workspaceId: req.workspace!.id });
     res.status(500).json({ error: 'Failed to get document' });
   }
 });
@@ -87,7 +98,7 @@ documentsRouter.get('/:id', async (req, res) => {
 /**
  * Toggle document active status
  */
-documentsRouter.patch('/:id/status', async (req, res) => {
+documentsRouter.patch('/:id/status', requireWorkspaceAdmin, async (req, res) => {
   try {
     const { is_active } = req.body;
 
@@ -99,15 +110,16 @@ documentsRouter.patch('/:id/status', async (req, res) => {
       .from('documents')
       .update({ is_active })
       .eq('id', req.params.id)
+      .eq('workspace_id', req.workspace!.id)
       .select('id, title, is_active')
       .single();
 
     if (error) throw error;
 
-    logger.info('Document status updated', { id: req.params.id, is_active });
+    logger.info('Document status updated', { id: req.params.id, is_active, workspaceId: req.workspace!.id });
     res.json(data);
   } catch (error) {
-    logger.error('Failed to update document status', { error, id: req.params.id });
+    logger.error('Failed to update document status', { error, id: req.params.id, workspaceId: req.workspace!.id });
     res.status(500).json({ error: 'Failed to update document status' });
   }
 });
@@ -115,127 +127,138 @@ documentsRouter.patch('/:id/status', async (req, res) => {
 /**
  * Delete a document
  */
-documentsRouter.delete('/:id', async (req, res) => {
+documentsRouter.delete('/:id', requireWorkspaceAdmin, async (req, res) => {
   try {
     const { error } = await supabase
       .from('documents')
       .delete()
-      .eq('id', req.params.id);
+      .eq('id', req.params.id)
+      .eq('workspace_id', req.workspace!.id);
 
     if (error) throw error;
 
-    logger.info('Document deleted', { id: req.params.id });
+    logger.info('Document deleted', { id: req.params.id, workspaceId: req.workspace!.id });
     res.json({ success: true });
   } catch (error) {
-    logger.error('Failed to delete document', { error, id: req.params.id });
+    logger.error('Failed to delete document', { error, id: req.params.id, workspaceId: req.workspace!.id });
     res.status(500).json({ error: 'Failed to delete document' });
   }
 });
 
 /**
- * Get sync status
+ * Get sync status for the workspace
  */
-documentsRouter.get('/sync/status', async (_req, res) => {
+documentsRouter.get('/sync/status', async (req, res) => {
   try {
-    const status = await getSyncStatus();
+    const status = await getSyncStatus(req.workspace!.id);
     const driveConnected = isDriveClientInitialized();
+
+    // Get workspace-specific document counts
+    const { count: docCount } = await supabase
+      .from('documents')
+      .select('*', { count: 'exact', head: true })
+      .eq('workspace_id', req.workspace!.id)
+      .eq('source_type', 'google_drive');
 
     res.json({
       ...status,
       driveConnected,
+      workspaceDocuments: docCount ?? 0,
     });
   } catch (error) {
-    logger.error('Failed to get sync status', { error });
+    logger.error('Failed to get sync status', { error, workspaceId: req.workspace!.id });
     res.status(500).json({ error: 'Failed to get sync status' });
   }
 });
 
 /**
- * Trigger immediate sync
+ * Trigger immediate sync for the workspace
  */
-documentsRouter.post('/sync', async (_req, res) => {
+documentsRouter.post('/sync', requireWorkspaceAdmin, checkUsageLimit('documents'), async (req, res) => {
   try {
     if (!isDriveClientInitialized()) {
       return res.status(400).json({ error: 'Google Drive not connected' });
     }
 
-    const result = await triggerImmediateSync();
+    const result = await triggerImmediateSync(req.workspace!.id);
 
-    logger.info('Manual sync triggered', result);
+    logger.info('Manual sync triggered', { ...result, workspaceId: req.workspace!.id });
     res.json({
       success: true,
       ...result,
     });
   } catch (error) {
-    logger.error('Failed to trigger sync', { error });
+    logger.error('Failed to trigger sync', { error, workspaceId: req.workspace!.id });
     res.status(500).json({ error: 'Failed to trigger sync' });
   }
 });
 
 /**
- * Trigger full resync
+ * Trigger full resync for the workspace
  */
-documentsRouter.post('/sync/full', async (_req, res) => {
+documentsRouter.post('/sync/full', requireWorkspaceAdmin, checkUsageLimit('documents'), async (req, res) => {
   try {
     if (!isDriveClientInitialized()) {
       return res.status(400).json({ error: 'Google Drive not connected' });
     }
 
-    const result = await fullSync();
+    const result = await fullSync({ workspaceId: req.workspace!.id });
 
-    logger.info('Full sync triggered', result);
+    logger.info('Full sync triggered', { ...result, workspaceId: req.workspace!.id });
     res.json({
       success: true,
       ...result,
     });
   } catch (error) {
-    logger.error('Failed to trigger full sync', { error });
+    logger.error('Failed to trigger full sync', { error, workspaceId: req.workspace!.id });
     res.status(500).json({ error: 'Failed to trigger full sync' });
   }
 });
 
 /**
- * Trigger website scrape
+ * Trigger website scrape for the workspace
  */
-documentsRouter.post('/scrape/website', async (_req, res) => {
+documentsRouter.post('/scrape/website', requireWorkspaceAdmin, checkUsageLimit('documents'), async (req, res) => {
   try {
     if (!env.COMPANY_WEBSITE_URL) {
       return res.status(400).json({ error: 'Website URL not configured' });
     }
 
-    const result = await triggerWebsiteScrape();
+    const result = await triggerWebsiteScrape(req.workspace!.id);
 
-    logger.info('Website scrape triggered', result);
+    logger.info('Website scrape triggered', { ...result, workspaceId: req.workspace!.id });
     res.json({
       success: true,
       ...result,
     });
   } catch (error) {
-    logger.error('Failed to trigger website scrape', { error });
+    logger.error('Failed to trigger website scrape', { error, workspaceId: req.workspace!.id });
     res.status(500).json({ error: 'Failed to trigger website scrape' });
   }
 });
 
 /**
- * Get website scrape status
+ * Get website scrape status for the workspace
  */
-documentsRouter.get('/scrape/status', async (_req, res) => {
+documentsRouter.get('/scrape/status', async (req, res) => {
   try {
     const websiteConfigured = !!env.COMPANY_WEBSITE_URL;
 
-    // Get latest website scrape event
+    // Get latest website scrape event for this workspace
     const { data: lastScrape } = await supabase
       .from('analytics')
       .select('created_at, event_data')
+      .eq('workspace_id', req.workspace!.id)
       .in('event_type', ['website_scrape', 'website_scrape_scheduled'])
       .order('created_at', { ascending: false })
       .limit(1)
       .single();
 
-    // Count website documents
+    // Count website documents for this workspace
     const { count: websiteDocCount } = await supabase
       .from('documents')
       .select('*', { count: 'exact', head: true })
+      .eq('workspace_id', req.workspace!.id)
       .eq('source_type', 'website');
 
     res.json({
@@ -246,7 +269,7 @@ documentsRouter.get('/scrape/status', async (_req, res) => {
       documentCount: websiteDocCount ?? 0,
     });
   } catch (error) {
-    logger.error('Failed to get scrape status', { error });
+    logger.error('Failed to get scrape status', { error, workspaceId: req.workspace!.id });
     res.status(500).json({ error: 'Failed to get scrape status' });
   }
 });

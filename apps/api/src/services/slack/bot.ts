@@ -30,6 +30,54 @@ const RESPONSE_TIMEOUT_MS = 30000;
 
 let slackApp: InstanceType<typeof App> | null = null;
 let botUserId: string | null = null;
+let defaultWorkspaceId: string | null = null;
+let defaultBotId: string | null = null;
+
+/**
+ * Get or create a default workspace for legacy single-bot mode
+ */
+async function getOrCreateDefaultWorkspace(): Promise<{ workspaceId: string; botId: string | null }> {
+  // First, check if there's a default workspace
+  const { data: existingWorkspace } = await supabase
+    .from('workspaces')
+    .select('id')
+    .eq('is_active', true)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .single();
+
+  let workspaceId: string;
+  if (existingWorkspace) {
+    workspaceId = existingWorkspace.id;
+  } else {
+    // Create a default workspace for legacy mode
+    const { data: newWorkspace, error } = await supabase
+      .from('workspaces')
+      .insert({
+        name: 'Default Workspace',
+        slug: 'default',
+        is_active: true,
+      })
+      .select('id')
+      .single();
+
+    if (error || !newWorkspace) {
+      throw new Error('Failed to create default workspace');
+    }
+    workspaceId = newWorkspace.id;
+    logger.info('Created default workspace for legacy bot mode', { workspaceId });
+  }
+
+  // Get the default bot for this workspace (if any)
+  const { data: defaultBot } = await supabase
+    .from('bots')
+    .select('id')
+    .eq('workspace_id', workspaceId)
+    .eq('is_default', true)
+    .single();
+
+  return { workspaceId, botId: defaultBot?.id ?? null };
+}
 
 /**
  * Initialize the Slack bot
@@ -39,6 +87,12 @@ export async function initializeSlackBot(): Promise<void> {
     logger.warn('Slack credentials not configured, bot disabled');
     return;
   }
+
+  // Get or create default workspace for legacy single-bot mode
+  const { workspaceId, botId } = await getOrCreateDefaultWorkspace();
+  defaultWorkspaceId = workspaceId;
+  defaultBotId = botId;
+  logger.info('Legacy bot using workspace', { workspaceId, botId });
 
   slackApp = new App({
     token: env.SLACK_BOT_TOKEN,
@@ -56,6 +110,7 @@ export async function initializeSlackBot(): Promise<void> {
   registerMentionHandler();
   registerMessageHandler();
   registerReactionHandlers();
+  registerFeedbackActionHandlers();
 
   // Initialize error tracker
   await errorTracker.initialize();
@@ -92,8 +147,14 @@ function registerMentionHandler(): void {
     }
 
     try {
+      // Ensure workspace context exists
+      if (!defaultWorkspaceId) {
+        throw new Error('No workspace configured for legacy bot');
+      }
+
       // Log analytics
       await supabase.from('analytics').insert({
+        workspace_id: defaultWorkspaceId,
         event_type: 'mention_received',
         event_data: {
           channel_id: channelId,
@@ -102,14 +163,18 @@ function registerMentionHandler(): void {
       });
 
       // Get or create session
-      const sessionId = await getOrCreateSession(channelId, threadTs, userId);
+      const sessionId = await getOrCreateSession(channelId, threadTs, userId, defaultWorkspaceId, defaultBotId ?? undefined);
 
       // Add user message to session
       await addMessage(sessionId, userId, 'user', messageText);
 
       // Generate response with timeout
+      const botOptions = {
+        workspaceId: defaultWorkspaceId,
+        botId: defaultBotId ?? undefined,
+      };
       const response = await withTimeout(
-        generateResponse(messageText),
+        generateResponse(messageText, botOptions),
         RESPONSE_TIMEOUT_MS,
         'generateResponse'
       );
@@ -124,12 +189,15 @@ function registerMentionHandler(): void {
         response.confidence
       );
 
-      // Send response in thread
-      await say({
+      // Send response in thread with feedback buttons
+      const sentMessage = await say({
         text: response.content,
         thread_ts: threadTs,
         unfurl_links: false,
-        blocks: buildResponseBlocks(response.content, response.sources, response.confidence),
+        blocks: buildResponseBlocks(response.content, response.sources, response.confidence, {
+          threadTs,
+          queryText: messageText,
+        }),
       });
 
       // Log response analytics
@@ -141,6 +209,7 @@ function registerMentionHandler(): void {
           confidence: response.confidence,
           source_count: response.sources.length,
           triggered_by: 'mention',
+          slack_message_ts: sentMessage?.ts,
         },
       });
 
@@ -241,8 +310,14 @@ function registerMessageHandler(): void {
         return;
       }
 
+      // Ensure workspace context exists
+      if (!defaultWorkspaceId) {
+        throw new Error('No workspace configured for legacy bot');
+      }
+
       // Log analytics
       await supabase.from('analytics').insert({
+        workspace_id: defaultWorkspaceId,
         event_type: 'message_received',
         event_data: {
           channel_id: channelId,
@@ -253,10 +328,16 @@ function registerMessageHandler(): void {
       });
 
       // Get or create session
-      const sessionId = await getOrCreateSession(channelId, threadTs, userId);
+      const sessionId = await getOrCreateSession(channelId, threadTs, userId, defaultWorkspaceId, defaultBotId ?? undefined);
 
       // Add user message to session
       await addMessage(sessionId, userId, 'user', messageText);
+
+      // Create bot options for response generation
+      const botOptions = {
+        workspaceId: defaultWorkspaceId,
+        botId: defaultBotId ?? undefined,
+      };
 
       // Generate response based on intent with timeout
       let response;
@@ -272,14 +353,14 @@ function registerMessageHandler(): void {
 
         if (lastBotMsg && lastUserQuestion) {
           const correctionResponse = await withTimeout(
-            handleCorrection(lastUserQuestion.content, lastBotMsg.content, messageText, userId),
+            handleCorrection(lastUserQuestion.content, lastBotMsg.content, messageText, userId, defaultWorkspaceId),
             RESPONSE_TIMEOUT_MS,
             'handleCorrection'
           );
           response = { content: correctionResponse, sources: [], confidence: 0.9 };
         } else {
           response = await withTimeout(
-            generateResponse(messageText),
+            generateResponse(messageText, botOptions),
             RESPONSE_TIMEOUT_MS,
             'generateResponse'
           );
@@ -288,14 +369,14 @@ function registerMessageHandler(): void {
         // Follow-up question in existing conversation
         const context = await getConversationContext(threadTs);
         response = await withTimeout(
-          generateFollowUpResponse(messageText, sessionId, context?.messages ?? []),
+          generateFollowUpResponse(messageText, sessionId, botOptions, context?.messages ?? []),
           RESPONSE_TIMEOUT_MS,
           'generateFollowUpResponse'
         );
       } else {
         // New question
         response = await withTimeout(
-          generateResponse(messageText),
+          generateResponse(messageText, botOptions),
           RESPONSE_TIMEOUT_MS,
           'generateResponse'
         );
@@ -311,22 +392,27 @@ function registerMessageHandler(): void {
         response.confidence
       );
 
-      // Send response in thread
-      await say({
+      // Send response in thread with feedback buttons
+      const sentMessage = await say({
         text: response.content,
         thread_ts: threadTs,
         unfurl_links: false,
-        blocks: buildResponseBlocks(response.content, response.sources, response.confidence),
+        blocks: buildResponseBlocks(response.content, response.sources, response.confidence, {
+          threadTs,
+          queryText: messageText,
+        }),
       });
 
       // Log response analytics
       await supabase.from('analytics').insert({
+        workspace_id: defaultWorkspaceId,
         event_type: 'response_sent',
         event_data: {
           session_id: sessionId,
           message_id: messageId,
           confidence: response.confidence,
           source_count: response.sources.length,
+          slack_message_ts: sentMessage?.ts,
         },
       });
 
@@ -390,13 +476,141 @@ async function handleFeedbackReaction(messageTs: string, rating: number): Promis
         .limit(1);
 
       const message = messages?.[0];
-      if (message) {
-        await recordFeedback(message.session_id, message.id, rating);
+      if (message && defaultWorkspaceId) {
+        await recordFeedback(message.session_id, message.id, rating, defaultWorkspaceId);
         logger.info('Recorded feedback', { rating, messageId: message.id });
       }
     }
   } catch (error) {
     logger.error('Failed to record feedback', { error });
+  }
+}
+
+/**
+ * Register feedback action handlers for button clicks
+ */
+function registerFeedbackActionHandlers(): void {
+  if (!slackApp) return;
+
+  // Handle helpful feedback button
+  slackApp.action('feedback_helpful', async ({ body, ack, client }) => {
+    await ack();
+    await handleFeedbackAction(body, true, client);
+  });
+
+  // Handle unhelpful feedback button
+  slackApp.action('feedback_unhelpful', async ({ body, ack, client }) => {
+    await ack();
+    await handleFeedbackAction(body, false, client);
+  });
+}
+
+/**
+ * Handle feedback action from button click
+ */
+async function handleFeedbackAction(
+  body: any,
+  isHelpful: boolean,
+  client: any
+): Promise<void> {
+  try {
+    const action = body.actions?.[0];
+    if (!action?.value) return;
+
+    const metadata = JSON.parse(action.value);
+    const userId = body.user?.id;
+    const channelId = body.channel?.id;
+    const messageTs = body.message?.ts;
+
+    // Find the session for this thread
+    const { data: sessions } = await supabase
+      .from('thread_sessions')
+      .select('id')
+      .eq('slack_thread_ts', metadata.threadTs);
+
+    const session = sessions?.[0];
+    let messageId: string | null = null;
+
+    if (session) {
+      // Find the most recent bot message in this session
+      const { data: messages } = await supabase
+        .from('thread_messages')
+        .select('id')
+        .eq('session_id', session.id)
+        .eq('role', 'assistant')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      messageId = messages?.[0]?.id ?? null;
+
+      // Also record in the old feedback system for compatibility
+      if (messageId && defaultWorkspaceId) {
+        await recordFeedback(session.id, messageId, isHelpful ? 1 : -1, defaultWorkspaceId);
+      }
+    }
+
+    // Submit to the new response_feedback table
+    const sourcesUsed = (metadata.sources ?? []).map((s: string, i: number) => ({
+      documentId: `source-${i}`,
+      documentTitle: s.startsWith('http') ? new URL(s).hostname : s,
+    }));
+
+    const { error } = await supabase
+      .from('response_feedback')
+      .insert({
+        workspace_id: defaultWorkspaceId,
+        message_id: messageId,
+        session_id: session?.id ?? null,
+        is_helpful: isHelpful,
+        query_text: metadata.queryText,
+        response_text: metadata.responseText,
+        sources_used: sourcesUsed,
+        slack_user_id: userId,
+        slack_channel_id: channelId,
+        slack_message_ts: messageTs,
+      });
+
+    if (error) {
+      logger.error('Failed to insert feedback', { error });
+    } else {
+      logger.info('Feedback recorded via button', { isHelpful, userId, messageTs });
+    }
+
+    // Update the message to show feedback was received
+    if (messageTs && channelId) {
+      try {
+        // Get the original message blocks
+        const originalBlocks = body.message?.blocks ?? [];
+
+        // Remove the actions block and add a confirmation
+        const updatedBlocks = originalBlocks.filter(
+          (block: any) => block.type !== 'actions'
+        );
+
+        updatedBlocks.push({
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: isHelpful
+                ? '✅ Thanks for your feedback! Glad this was helpful.'
+                : '📝 Thanks for your feedback! We\'ll use this to improve.',
+            },
+          ],
+        });
+
+        await client.chat.update({
+          channel: channelId,
+          ts: messageTs,
+          text: body.message?.text ?? '',
+          blocks: updatedBlocks,
+        });
+      } catch (updateError) {
+        logger.error('Failed to update message after feedback', { updateError });
+      }
+    }
+  } catch (error) {
+    logger.error('Failed to handle feedback action', { error });
   }
 }
 
@@ -450,7 +664,11 @@ function splitTextIntoChunks(text: string, maxLength: number): string[] {
 function buildResponseBlocks(
   content: string,
   sources: string[],
-  confidence: number
+  confidence: number,
+  feedbackMetadata?: {
+    threadTs: string;
+    queryText: string;
+  }
 ): any[] {
   const blocks: any[] = [];
   const MAX_BLOCK_LENGTH = 2900; // Leave buffer for safety
@@ -502,6 +720,48 @@ function buildResponseBlocks(
         {
           type: 'mrkdwn',
           text: '⚠️ _I\'m not very confident about this answer. Please verify with a team member._',
+        },
+      ],
+    });
+  }
+
+  // Add feedback buttons
+  if (feedbackMetadata) {
+    // Encode metadata in button value (truncate to stay within Slack limits)
+    const buttonValue = JSON.stringify({
+      threadTs: feedbackMetadata.threadTs,
+      queryText: feedbackMetadata.queryText.slice(0, 500),
+      responseText: content.slice(0, 500),
+      sources: sources.slice(0, 5),
+    });
+
+    blocks.push({
+      type: 'divider',
+    });
+
+    blocks.push({
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: {
+            type: 'plain_text',
+            text: '👍 Helpful',
+            emoji: true,
+          },
+          action_id: 'feedback_helpful',
+          value: buttonValue,
+          style: 'primary',
+        },
+        {
+          type: 'button',
+          text: {
+            type: 'plain_text',
+            text: '👎 Not Helpful',
+            emoji: true,
+          },
+          action_id: 'feedback_unhelpful',
+          value: buttonValue,
         },
       ],
     });

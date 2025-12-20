@@ -7,6 +7,7 @@ import { supabase } from '../supabase/client.js';
 import { generateQueryEmbedding } from './embeddings.js';
 import { logger } from '../../utils/logger.js';
 import { RAG_CONFIG } from '@villa-paraiso/shared';
+import type { DocumentCategory } from '@villa-paraiso/shared';
 import { searchCache, generateCacheKey } from '../../utils/cache.js';
 import { withTimeout } from '../../utils/timeout.js';
 import { errorTracker } from '../../utils/error-tracker.js';
@@ -24,6 +25,7 @@ export interface SearchResult {
   similarity: number;
   rankScore: number;
   sourceUrl?: string;
+  category?: DocumentCategory;  // For source attribution
 }
 
 export interface SearchOptions {
@@ -34,6 +36,10 @@ export interface SearchOptions {
   includeLearnedFacts?: boolean;
   enableReranking?: boolean;
   enableQueryExpansion?: boolean;
+  // Multi-tenant + multi-bot filtering
+  workspaceId: string;  // Required for tenant isolation
+  botId?: string;
+  includeShared?: boolean;
 }
 
 /**
@@ -42,9 +48,10 @@ export interface SearchOptions {
  */
 export async function hybridSearch(
   query: string,
-  options: SearchOptions = {}
+  options: SearchOptions
 ): Promise<SearchResult[]> {
   const {
+    workspaceId,
     topK = RAG_CONFIG.topK,
     vectorWeight = RAG_CONFIG.vectorWeight,
     keywordWeight = RAG_CONFIG.keywordWeight,
@@ -52,10 +59,12 @@ export async function hybridSearch(
     includeLearnedFacts = true,
     enableReranking = true, // Enable reranking by default
     enableQueryExpansion = true, // Enable query expansion by default
+    botId = undefined,
+    includeShared = true,
   } = options;
 
-  // Check cache first
-  const cacheKey = generateCacheKey(`hybrid:${query}:${topK}`);
+  // Check cache first (include workspaceId + botId in cache key for tenant isolation)
+  const cacheKey = generateCacheKey(`hybrid:${query}:${topK}:${botId ?? 'all'}`, botId, workspaceId);
   const cached = searchCache.get(cacheKey);
   if (cached) {
     logger.debug('Search cache hit', { query: query.substring(0, 50) });
@@ -85,15 +94,24 @@ export async function hybridSearch(
 
     // Call the hybrid_search database function with timeout
     // Use expanded query for text search, original embedding for vector search
+    const rpcParams: Record<string, unknown> = {
+      query_text: searchQuery, // Expanded query for BM25 keyword matching
+      query_embedding: queryEmbedding,
+      match_count: topK,
+      vector_weight: vectorWeight,
+      keyword_weight: keywordWeight,
+      p_workspace_id: workspaceId,  // Required for tenant isolation
+    };
+
+    // Add bot filtering parameters if provided
+    if (botId) {
+      rpcParams.p_bot_id = botId;
+      rpcParams.include_shared = includeShared;
+    }
+
     const rpcResult = await withTimeout(
       (async () => {
-        return supabase.rpc('hybrid_search', {
-          query_text: searchQuery, // Expanded query for BM25 keyword matching
-          query_embedding: queryEmbedding,
-          match_count: topK,
-          vector_weight: vectorWeight,
-          keyword_weight: keywordWeight,
-        });
+        return supabase.rpc('hybrid_search', rpcParams);
       })(),
       SEARCH_TIMEOUT_MS,
       'hybridSearch'
@@ -104,19 +122,20 @@ export async function hybridSearch(
     if (error) {
       logger.error('Hybrid search failed, falling back to vector search', { error });
       // Fallback to vector-only search
-      return await vectorSearchFallback(query, queryEmbedding, topK, minSimilarity);
+      return await vectorSearchFallback(query, queryEmbedding, topK, minSimilarity, workspaceId);
     }
 
-    // Fetch document metadata for results
+    // Fetch document metadata for results (source_url not returned by new function)
     const documentIds = [...new Set(chunks.map((c: any) => c.document_id))];
     const { data: documents } = await supabase
       .from('documents')
-      .select('id, title, source_url')
+      .select('id, source_url')
       .in('id', documentIds);
 
     const docMap = new Map(documents?.map(d => [d.id, d]) ?? []);
 
     // Build results with document info
+    // The new hybrid_search function returns category and source_title directly
     let results: SearchResult[] = chunks
       .filter((chunk: any) => chunk.similarity >= minSimilarity)
       .map((chunk: any) => {
@@ -125,16 +144,17 @@ export async function hybridSearch(
           id: chunk.id,
           content: chunk.content,
           documentId: chunk.document_id,
-          documentTitle: doc?.title ?? 'Unknown',
+          documentTitle: chunk.source_title ?? 'Unknown',
           similarity: chunk.similarity,
           rankScore: chunk.rank_score,
           sourceUrl: doc?.source_url,
+          category: chunk.category as DocumentCategory | undefined,
         };
       });
 
     // Include learned facts if enabled
     if (includeLearnedFacts) {
-      const learnedResults = await searchLearnedFacts(queryEmbedding, Math.ceil(topK / 2));
+      const learnedResults = await searchLearnedFacts(queryEmbedding, Math.ceil(topK / 2), workspaceId);
       results = [...results, ...learnedResults].sort((a, b) => b.rankScore - a.rankScore).slice(0, topK);
     }
 
@@ -165,7 +185,7 @@ export async function hybridSearch(
     try {
       logger.info('Attempting vector-only search fallback');
       const queryEmbedding = await generateQueryEmbedding(query);
-      return await vectorSearchFallback(query, queryEmbedding, topK, minSimilarity);
+      return await vectorSearchFallback(query, queryEmbedding, topK, minSimilarity, workspaceId);
     } catch (fallbackError) {
       logger.error('Vector search fallback also failed', { error: fallbackError });
       // Return empty results rather than crashing
@@ -181,13 +201,15 @@ async function vectorSearchFallback(
   query: string,
   queryEmbedding: number[],
   topK: number,
-  minSimilarity: number
+  minSimilarity: number,
+  workspaceId: string
 ): Promise<SearchResult[]> {
-  logger.debug('Performing vector search fallback', { query, topK });
+  logger.debug('Performing vector search fallback', { query, topK, workspaceId });
 
   const { data: chunks, error } = await supabase.rpc('match_documents', {
     query_embedding: queryEmbedding,
     match_count: topK,
+    p_workspace_id: workspaceId,
   });
 
   if (error) {
@@ -199,6 +221,7 @@ async function vectorSearchFallback(
   const { data: documents } = await supabase
     .from('documents')
     .select('id, title, source_url')
+    .eq('workspace_id', workspaceId)
     .in('id', documentIds);
 
   const docMap = new Map(documents?.map(d => [d.id, d]) ?? []);
@@ -224,12 +247,14 @@ async function vectorSearchFallback(
  */
 async function searchLearnedFacts(
   queryEmbedding: number[],
-  limit: number
+  limit: number,
+  workspaceId: string
 ): Promise<SearchResult[]> {
   try {
     const { data: facts, error } = await supabase.rpc('match_learned_facts', {
       query_embedding: queryEmbedding,
       match_count: limit,
+      p_workspace_id: workspaceId,
     });
 
     if (error) {
@@ -257,15 +282,17 @@ async function searchLearnedFacts(
  */
 export async function vectorSearch(
   query: string,
+  workspaceId: string,
   topK: number = RAG_CONFIG.topK
 ): Promise<SearchResult[]> {
-  logger.debug('Performing vector search', { query, topK });
+  logger.debug('Performing vector search', { query, topK, workspaceId });
 
   const queryEmbedding = await generateQueryEmbedding(query);
 
   const { data: chunks, error } = await supabase.rpc('match_documents', {
     query_embedding: queryEmbedding,
     match_count: topK,
+    p_workspace_id: workspaceId,
   });
 
   if (error) {
@@ -277,6 +304,7 @@ export async function vectorSearch(
   const { data: documents } = await supabase
     .from('documents')
     .select('id, title, source_url')
+    .eq('workspace_id', workspaceId)
     .in('id', documentIds);
 
   const docMap = new Map(documents?.map(d => [d.id, d]) ?? []);
@@ -297,21 +325,49 @@ export async function vectorSearch(
 
 /**
  * Get context for a query (formatted for LLM)
+ * Supports bot-specific filtering and category attribution
  */
 export async function getContextForQuery(
   query: string,
-  maxChunks: number = RAG_CONFIG.topK
+  workspaceId: string,
+  maxChunks: number = RAG_CONFIG.topK,
+  options: { botId?: string; includeShared?: boolean } = {}
 ): Promise<string> {
-  const results = await hybridSearch(query, { topK: maxChunks });
+  const results = await hybridSearch(query, {
+    workspaceId,
+    topK: maxChunks,
+    botId: options.botId,
+    includeShared: options.includeShared ?? true,
+  });
 
   if (results.length === 0) {
     return '';
   }
 
-  // Format results as context
+  // Format results as context with category attribution
   const contextParts = results.map((result, index) => {
-    return `[Source ${index + 1}: ${result.documentTitle}]\n${result.content}`;
+    const categoryLabel = getCategoryLabel(result.category);
+    return `[Source ${index + 1}: ${result.documentTitle}${categoryLabel}]\n${result.content}`;
   });
 
   return contextParts.join('\n\n---\n\n');
+}
+
+/**
+ * Get human-readable label for document category
+ */
+function getCategoryLabel(category?: DocumentCategory): string {
+  if (!category) return '';
+
+  const labels: Record<DocumentCategory, string> = {
+    shared: ' (Company Knowledge)',
+    operations: ' (Operations)',
+    marketing: ' (Marketing)',
+    sales: ' (Sales)',
+    hr: ' (HR)',
+    technical: ' (Technical)',
+    custom: '',
+  };
+
+  return labels[category] ?? '';
 }

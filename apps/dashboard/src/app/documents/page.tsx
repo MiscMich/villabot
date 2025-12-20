@@ -186,21 +186,27 @@ export default function DocumentsPage() {
 
         {/* Website Scraping */}
         <div className="premium-card p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '150ms' }}>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4">
               <div className="p-3 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600">
                 <Globe className="h-6 w-6 text-white" />
               </div>
               <div>
                 <p className="font-display font-semibold text-lg">Website Scraping</p>
-                <p className="text-sm text-muted-foreground">
-                  {scrapeStatus?.websiteConfigured
-                    ? `${scrapeStatus.documentCount} pages indexed`
-                    : 'No website URL configured'}
-                </p>
-                {scrapeStatus?.lastScrape && (
-                  <p className="text-xs text-muted-foreground">
-                    Last scraped: {new Date(scrapeStatus.lastScrape).toLocaleString()}
+                {scrapeStatus?.websiteUrl && (
+                  <a
+                    href={scrapeStatus.websiteUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-muted-foreground hover:text-amber-600 dark:hover:text-amber-400 flex items-center gap-1 transition-colors"
+                  >
+                    {scrapeStatus.websiteUrl}
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                )}
+                {!scrapeStatus?.websiteConfigured && (
+                  <p className="text-sm text-muted-foreground">
+                    No website URL configured - add in Settings
                   </p>
                 )}
               </div>
@@ -217,11 +223,70 @@ export default function DocumentsPage() {
                   disabled={scraping}
                   className="hover:border-amber-500/50"
                 >
-                  <RefreshCw className={`h-4 w-4 ${scraping ? 'animate-spin' : ''}`} />
+                  <RefreshCw className={`h-4 w-4 mr-2 ${scraping ? 'animate-spin' : ''}`} />
+                  {scraping ? 'Scraping...' : 'Scrape Now'}
                 </Button>
               )}
             </div>
           </div>
+
+          {/* Scraping Progress Indicator */}
+          {scraping && (
+            <div className="mt-4 p-4 rounded-xl bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800">
+              <div className="flex items-center gap-3 mb-2">
+                <RefreshCw className="h-5 w-5 text-purple-600 dark:text-purple-400 animate-spin" />
+                <span className="font-medium text-purple-700 dark:text-purple-300">
+                  Scraping website...
+                </span>
+              </div>
+              <p className="text-sm text-purple-600 dark:text-purple-400">
+                This may take a few minutes depending on the website size.
+              </p>
+              <div className="mt-3 h-2 bg-purple-200 dark:bg-purple-800 rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full animate-pulse w-2/3" />
+              </div>
+            </div>
+          )}
+
+          {/* Stats Grid */}
+          {scrapeStatus?.websiteConfigured && !scraping && (
+            <div className="grid grid-cols-3 gap-4 mt-4">
+              <div className="text-center p-3 rounded-xl bg-secondary/50">
+                <p className="text-2xl font-display font-bold text-purple-600 dark:text-purple-400">
+                  {scrapeStatus.documentCount}
+                </p>
+                <p className="text-xs text-muted-foreground">Pages Indexed</p>
+              </div>
+              <div className="text-center p-3 rounded-xl bg-secondary/50">
+                <p className="text-2xl font-display font-bold">
+                  {scrapeStatus.lastScrapeResult?.pagesScraped ?? '-'}
+                </p>
+                <p className="text-xs text-muted-foreground">Last Scraped</p>
+              </div>
+              <div className="text-center p-3 rounded-xl bg-secondary/50">
+                <p className="text-2xl font-display font-bold">
+                  {scrapeStatus.lastScrapeResult?.chunksCreated ?? '-'}
+                </p>
+                <p className="text-xs text-muted-foreground">Chunks Created</p>
+              </div>
+            </div>
+          )}
+
+          {/* Last Scrape Info */}
+          {scrapeStatus?.lastScrape && !scraping && (
+            <div className="mt-4 pt-4 border-t border-border/50">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">
+                  Last scraped: {new Date(scrapeStatus.lastScrape).toLocaleString()}
+                </p>
+                {scrapeStatus.lastScrapeResult?.errors && scrapeStatus.lastScrapeResult.errors.length > 0 && (
+                  <span className="text-xs font-medium px-2 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                    {scrapeStatus.lastScrapeResult.errors.length} warnings
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

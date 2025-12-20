@@ -24,6 +24,17 @@ const envSchema = z.object({
   SLACK_SIGNING_SECRET: z.string().min(1).optional(),
   SLACK_APP_TOKEN: z.string().startsWith('xapp-').optional(),
 
+  // Stripe (required for billing)
+  STRIPE_SECRET_KEY: z.string().startsWith('sk_').optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().startsWith('whsec_').optional(),
+  STRIPE_STARTER_PRICE_ID: z.string().startsWith('price_').optional(),
+  STRIPE_PRO_PRICE_ID: z.string().startsWith('price_').optional(),
+  STRIPE_BUSINESS_PRICE_ID: z.string().startsWith('price_').optional(),
+
+  // App URLs
+  APP_URL: z.string().url().default('http://localhost:3001'),
+  API_URL: z.string().url().default('http://localhost:3000'),
+
   // Optional
   COMPANY_WEBSITE_URL: z.string().url().optional(),
   DRIVE_POLL_INTERVAL_MS: z.string().transform(Number).default('300000'),

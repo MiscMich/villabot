@@ -23,6 +23,23 @@ interface ScheduledJob {
 const jobs: Map<string, ScheduledJob> = new Map();
 
 /**
+ * Get all active workspaces for scheduled jobs
+ */
+async function getActiveWorkspaces(): Promise<Array<{ id: string; name: string }>> {
+  const { data, error } = await supabase
+    .from('workspaces')
+    .select('id, name')
+    .eq('is_active', true);
+
+  if (error) {
+    logger.error('Failed to get active workspaces', { error });
+    return [];
+  }
+
+  return data ?? [];
+}
+
+/**
  * Initialize all scheduled jobs
  */
 export function initializeScheduler(): void {
@@ -87,7 +104,7 @@ function scheduleJob(
 }
 
 /**
- * Run incremental Drive sync
+ * Run incremental Drive sync for all workspaces
  */
 async function runDriveSync(): Promise<void> {
   if (!isDriveClientInitialized()) {
@@ -95,25 +112,29 @@ async function runDriveSync(): Promise<void> {
     return;
   }
 
-  try {
-    const result = await incrementalSync();
+  const workspaces = await getActiveWorkspaces();
 
-    if (result.added > 0 || result.updated > 0 || result.removed > 0) {
-      logger.info('Drive sync completed', result);
+  for (const workspace of workspaces) {
+    try {
+      const result = await incrementalSync({ workspaceId: workspace.id });
 
-      // Log to analytics
-      await supabase.from('analytics').insert({
-        event_type: 'drive_sync',
-        event_data: result,
-      });
+      if (result.added > 0 || result.updated > 0 || result.removed > 0) {
+        logger.info('Drive sync completed', { ...result, workspaceId: workspace.id });
+
+        await supabase.from('analytics').insert({
+          workspace_id: workspace.id,
+          event_type: 'drive_sync',
+          event_data: result,
+        });
+      }
+    } catch (error) {
+      logger.error('Drive sync failed', { error, workspaceId: workspace.id });
     }
-  } catch (error) {
-    logger.error('Drive sync failed', { error });
   }
 }
 
 /**
- * Run full Drive sync
+ * Run full Drive sync for all workspaces
  */
 async function runFullSync(): Promise<void> {
   if (!isDriveClientInitialized()) {
@@ -121,16 +142,21 @@ async function runFullSync(): Promise<void> {
     return;
   }
 
-  try {
-    const result = await fullSync();
-    logger.info('Full sync completed', result);
+  const workspaces = await getActiveWorkspaces();
 
-    await supabase.from('analytics').insert({
-      event_type: 'full_sync',
-      event_data: result,
-    });
-  } catch (error) {
-    logger.error('Full sync failed', { error });
+  for (const workspace of workspaces) {
+    try {
+      const result = await fullSync({ workspaceId: workspace.id });
+      logger.info('Full sync completed', { ...result, workspaceId: workspace.id });
+
+      await supabase.from('analytics').insert({
+        workspace_id: workspace.id,
+        event_type: 'full_sync',
+        event_data: result,
+      });
+    } catch (error) {
+      logger.error('Full sync failed', { error, workspaceId: workspace.id });
+    }
   }
 }
 
@@ -153,19 +179,24 @@ async function runSessionCleanup(): Promise<void> {
 }
 
 /**
- * Run website scraping
+ * Run website scraping for all workspaces
  */
 async function runWebsiteScrape(): Promise<void> {
-  try {
-    const result = await scrapeWebsite();
-    logger.info('Website scrape completed', result);
+  const workspaces = await getActiveWorkspaces();
 
-    await supabase.from('analytics').insert({
-      event_type: 'website_scrape_scheduled',
-      event_data: result,
-    });
-  } catch (error) {
-    logger.error('Website scrape failed', { error });
+  for (const workspace of workspaces) {
+    try {
+      const result = await scrapeWebsite({ workspaceId: workspace.id });
+      logger.info('Website scrape completed', { ...result, workspaceId: workspace.id });
+
+      await supabase.from('analytics').insert({
+        workspace_id: workspace.id,
+        event_type: 'website_scrape_scheduled',
+        event_data: result,
+      });
+    } catch (error) {
+      logger.error('Website scrape failed', { error, workspaceId: workspace.id });
+    }
   }
 }
 
@@ -225,28 +256,28 @@ async function runDailyAnalytics(): Promise<void> {
 }
 
 /**
- * Trigger an immediate sync
+ * Trigger an immediate sync for a specific workspace
  */
-export async function triggerImmediateSync(): Promise<{
+export async function triggerImmediateSync(workspaceId: string): Promise<{
   added: number;
   updated: number;
   removed: number;
   errors: string[];
 }> {
-  logger.info('Triggering immediate sync');
-  return incrementalSync();
+  logger.info('Triggering immediate sync', { workspaceId });
+  return incrementalSync({ workspaceId });
 }
 
 /**
- * Trigger an immediate website scrape
+ * Trigger an immediate website scrape for a specific workspace
  */
-export async function triggerWebsiteScrape(): Promise<{
+export async function triggerWebsiteScrape(workspaceId: string): Promise<{
   pagesScraped: number;
   chunksCreated: number;
   errors: string[];
 }> {
-  logger.info('Triggering immediate website scrape');
-  return scrapeWebsite();
+  logger.info('Triggering immediate website scrape', { workspaceId });
+  return scrapeWebsite({ workspaceId });
 }
 
 /**

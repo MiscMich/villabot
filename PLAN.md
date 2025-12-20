@@ -1,8 +1,8 @@
-# Villa Paraiso Slack AI Assistant Bot
+# TeamBrain AI - Knowledge Management Platform
 
 ## Project Overview
 
-A comprehensive Slack AI assistant bot for Villa Paraiso Vacation Rentals that:
+A multi-tenant SaaS platform for AI-powered knowledge management that:
 - Answers team questions using SOPs and company documentation from Google Drive
 - Self-learns and updates automatically when documents change
 - Scrapes the company website weekly for up-to-date information
@@ -31,7 +31,7 @@ A comprehensive Slack AI assistant bot for Villa Paraiso Vacation Rentals that:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              VILLA PARAISO AI BOT                           │
+│                              TEAMBRAIN AI                                   │
 └─────────────────────────────────────────────────────────────────────────────┘
 
 ┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
@@ -217,7 +217,7 @@ Message Posted in Channel
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  TIER 3: Gemini Classifier (~500ms, only ~10% reach here)   │
-│  • "Is this a question about Villa Paraiso operations?"     │
+│  • "Is this a question about company operations?"           │
 │  • Returns: { shouldRespond: boolean, confidence: 0-1 }     │
 │  • Only respond if confidence > threshold (default: 0.7)    │
 └──────────────────────────┬──────────────────────────────────┘
@@ -772,7 +772,7 @@ Every 5 minutes:
 ## Project Structure
 
 ```
-villa-paraiso-bot/
+teambrain-ai/
 ├── apps/
 │   ├── api/                          # Backend API server
 │   │   ├── src/
@@ -1098,8 +1098,8 @@ NODE_ENV=development
 PORT=3000
 DASHBOARD_URL=http://localhost:3001
 
-# Website Scraping
-COMPANY_WEBSITE_URL=https://villaparaisovacationrentals.com
+# Website Scraping (configurable per workspace)
+COMPANY_WEBSITE_URL=https://example.com
 SCRAPE_SCHEDULE=0 0 * * 0  # Weekly on Sunday midnight
 
 # Sync Config
@@ -1177,7 +1177,7 @@ DRIVE_POLL_INTERVAL_MS=600000  # 10 minutes
 Maria: Hey does anyone know what the check-in process is for guests?
 
     └─ Thread:
-       VillaBot: Based on our SOPs, here's the check-in process:
+       TeamBrain: Based on our SOPs, here's the check-in process:
 
        1. **Pre-arrival** (24 hours before):
           - Send welcome email with property access codes
@@ -1205,7 +1205,7 @@ Maria: Hey does anyone know what the check-in process is for guests?
 Carlos: What's the pool cleaning schedule?
 
     └─ Thread:
-       VillaBot: Pool cleaning is scheduled as follows:
+       TeamBrain: Pool cleaning is scheduled as follows:
        - Casa Luna: Monday & Thursday, 8 AM
        - Villa Sol: Tuesday & Friday, 9 AM
        - Casa del Mar: Wednesday & Saturday, 8 AM
@@ -1216,7 +1216,7 @@ Carlos: What's the pool cleaning schedule?
 
        Carlos: What about Casa Luna specifically if there's a guest checkout?
 
-       VillaBot: Great follow-up! For Casa Luna post-checkout:
+       TeamBrain: Great follow-up! For Casa Luna post-checkout:
        - Emergency pool cleaning within 4 hours of checkout
        - Full chemical balance check
        - Skim and vacuum
@@ -1230,7 +1230,7 @@ Carlos: What's the pool cleaning schedule?
 
        Carlos: Perfect, thanks!
 
-       VillaBot: You're welcome! Let me know if you have other questions. 😊
+       TeamBrain: You're welcome! Let me know if you have other questions. 😊
 ```
 
 ### Self-Learning Example
@@ -1240,7 +1240,7 @@ Carlos: What's the pool cleaning schedule?
 Sofia: Actually the check-in time changed to 3 PM, not 4 PM
 
     └─ Thread:
-       VillaBot: Thanks for the update! I've noted that:
+       TeamBrain: Thanks for the update! I've noted that:
 
        ✅ **Learned:** Check-in time is now 3 PM (previously 4 PM)
 
@@ -1533,7 +1533,7 @@ Metrics to track:
 
 ---
 
-*This plan was created for Villa Paraiso Vacation Rentals Slack AI Assistant Bot*
+*TeamBrain AI - Multi-tenant Knowledge Management Platform*
 
 ---
 
@@ -1701,13 +1701,13 @@ Based on our Standard Operating Procedures and company knowledge:
 **From Check-in Procedures (SOP):**
 Guests should arrive between 3 PM and 8 PM...
 
-**From Villa Paraiso Website:**
-Villa Paraiso offers luxury vacation rentals...
+**From Company Website:**
+Your company offers premium services...
 
 ---
 📚 Sources:
 - Check-in Procedures (Internal SOP)
-- villaparaiso.com/about (Company Knowledge)
+- company.com/about (Company Knowledge)
 ```
 
 ### Dashboard Category Management
@@ -1760,7 +1760,7 @@ const DEFAULT_SCRAPER_CONFIG: ScraperConfig = {
   ],
   category: 'company_knowledge',
   timeout: 30000,
-  userAgent: 'VillaBot/1.0 (+https://villaparaiso.com/bot)'
+  userAgent: 'TeamBrain/1.0 (+https://teambrain.ai/bot)'
 };
 ```
 
@@ -1891,42 +1891,42 @@ ALTER TABLE documents ADD COLUMN bot_id UUID REFERENCES bots(id);
 ### Bot Configuration Examples
 
 ```yaml
-# Operations Bot (current Villa Paraiso bot)
+# Operations Bot (example)
 operations_bot:
-  name: "VillaBot Operations"
+  name: "TeamBrain Operations"
   slug: "operations"
   categories:
     - company_knowledge: { priority: 5 }
     - internal_sops: { priority: 10 }      # Highest priority
     - operations: { priority: 8 }
   system_prompt: |
-    You are VillaBot, the operations assistant for Villa Paraiso Vacation Rentals.
-    Focus on SOPs, check-in procedures, property management, and guest services.
+    You are TeamBrain, the operations assistant for your organization.
+    Focus on SOPs, procedures, and operational questions.
     Always prioritize internal SOPs when answering operational questions.
     Cite your sources with the category prefix.
 
 # Marketing Bot
 marketing_bot:
-  name: "VillaBot Marketing"
+  name: "TeamBrain Marketing"
   slug: "marketing"
   categories:
     - company_knowledge: { priority: 5 }
     - marketing: { priority: 10 }
     - sales: { priority: 7 }
   system_prompt: |
-    You are the Marketing Assistant for Villa Paraiso.
+    You are the Marketing Assistant for your organization.
     Help with campaigns, brand guidelines, social media, and lead generation.
     Focus on marketing materials and sales strategies.
 
 # General Knowledge Bot
 general_bot:
-  name: "VillaBot General"
+  name: "TeamBrain General"
   slug: "general"
   categories:
     - company_knowledge: { priority: 10 }
   system_prompt: |
-    You are a general knowledge assistant for Villa Paraiso.
-    Answer questions about the company, properties, and services.
+    You are a general knowledge assistant for your organization.
+    Answer questions about the company, products, and services.
 ```
 
 ### Runtime Architecture
@@ -2021,39 +2021,414 @@ See `DEPLOYMENT.md` for complete production deployment guide including:
 
 ---
 
+## Enhancement 5: Feedback System
+
+### Overview
+
+A feedback system that allows users to rate bot responses with thumbs up/down buttons. This data will be used for:
+1. Quality monitoring in analytics dashboard
+2. Identifying areas for improvement
+3. Training data for future model enhancements
+4. User satisfaction tracking per bot
+
+### Slack Integration
+
+Each bot response includes interactive buttons:
+```
+[Bot Response Content]
+
+Was this helpful?  [👍 Yes]  [👎 No]
+```
+
+### Database Schema
+
+```sql
+-- Create feedback table
+CREATE TABLE response_feedback (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  message_id UUID REFERENCES thread_messages(id) ON DELETE CASCADE,
+  session_id UUID REFERENCES thread_sessions(id) ON DELETE CASCADE,
+  bot_id UUID REFERENCES bots(id) ON DELETE SET NULL,
+
+  -- Feedback details
+  is_helpful BOOLEAN NOT NULL,           -- true = 👍, false = 👎
+  feedback_text TEXT,                      -- Optional text feedback
+
+  -- Context for analysis
+  query_text TEXT,                         -- Original question
+  response_text TEXT,                      -- Bot's response
+  sources_used JSONB DEFAULT '[]',         -- Which sources were cited
+
+  -- User info
+  slack_user_id VARCHAR NOT NULL,
+  slack_channel_id VARCHAR NOT NULL,
+
+  -- Timestamps
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for analytics
+CREATE INDEX idx_feedback_bot ON response_feedback(bot_id, created_at);
+CREATE INDEX idx_feedback_helpful ON response_feedback(is_helpful, created_at);
+CREATE INDEX idx_feedback_session ON response_feedback(session_id);
+```
+
+### API Endpoints
+
+```typescript
+// Submit feedback
+POST /api/feedback
+{
+  messageId: string;
+  isHelpful: boolean;
+  feedbackText?: string;
+}
+
+// Get feedback analytics
+GET /api/feedback/analytics?botId=xxx&startDate=xxx&endDate=xxx
+Response: {
+  totalResponses: number;
+  helpfulCount: number;
+  unhelpfulCount: number;
+  satisfactionRate: number;  // Percentage
+  recentUnhelpful: FeedbackEntry[];
+  trendsOverTime: TimeSeriesData[];
+}
+
+// Get feedback for specific message
+GET /api/feedback/:messageId
+```
+
+### Dashboard Analytics
+
+New "Response Quality" section on Overview page:
+- **Satisfaction Rate**: Overall % of helpful responses
+- **Trend Chart**: Satisfaction over time (7d, 30d, 90d)
+- **Recent Issues**: List of recent 👎 responses for review
+- **Per-Bot Breakdown**: Satisfaction rates by bot
+
+New "Feedback Review" page:
+- Filter by bot, date range, helpful/unhelpful
+- View original query and response
+- See which sources were used
+- Mark feedback as reviewed/addressed
+- Export feedback data for analysis
+
+### Slack Implementation
+
+```typescript
+// Add buttons to bot response
+const feedbackBlocks = [
+  {
+    type: "actions",
+    block_id: "feedback_block",
+    elements: [
+      {
+        type: "button",
+        text: { type: "plain_text", text: "👍 Helpful" },
+        action_id: "feedback_helpful",
+        value: JSON.stringify({ messageId, sessionId })
+      },
+      {
+        type: "button",
+        text: { type: "plain_text", text: "👎 Not Helpful" },
+        action_id: "feedback_unhelpful",
+        value: JSON.stringify({ messageId, sessionId })
+      }
+    ]
+  }
+];
+
+// Handle button clicks
+app.action('feedback_helpful', async ({ ack, body, say }) => {
+  await ack();
+  await recordFeedback(body, true);
+  // Update message to show feedback received
+});
+
+app.action('feedback_unhelpful', async ({ ack, body, say }) => {
+  await ack();
+  await recordFeedback(body, false);
+  // Optionally prompt for more details
+});
+```
+
+### Optional: Detailed Feedback Modal
+
+When user clicks 👎:
+```
+┌────────────────────────────────────┐
+│  What could be improved?           │
+├────────────────────────────────────┤
+│ ○ Answer was incorrect             │
+│ ○ Answer was incomplete            │
+│ ○ Couldn't find the information    │
+│ ○ Response was confusing           │
+│ ○ Other                            │
+├────────────────────────────────────┤
+│ Additional comments:               │
+│ ┌────────────────────────────────┐ │
+│ │                                │ │
+│ └────────────────────────────────┘ │
+├────────────────────────────────────┤
+│            [Submit]                │
+└────────────────────────────────────┘
+```
+
+---
+
 ## Implementation Roadmap
 
-### Phase 1: Document Categorization (Current Priority)
-- [ ] Create database migration for categories
-- [ ] Update `hybrid_search` function with category filtering
-- [ ] Modify sync process to assign categories
-- [ ] Update dashboard with category management
-- [ ] Implement category-aware source attribution
+### Phase 0: Interactive Setup Wizard ✅ COMPLETE
 
-### Phase 2: Website Scraping Improvements
-- [ ] Remove 50-page hard limit
-- [ ] Add configurable scraping options
-- [ ] Implement rate limiting and robots.txt
+**Goal**: Enable first-time users to configure the entire application through a beautiful, guided UI experience — no manual environment variable editing required.
+
+**Status**: Fully implemented with 8-step wizard at `/setup`
+
+#### Setup Wizard Steps
+
+| Step | Name | Description | Status |
+|------|------|-------------|--------|
+| 1 | **Welcome** | Introduction, overview of what will be configured | ✅ |
+| 2 | **Database** | Supabase connection (URL + Service Role Key) | ✅ |
+| 3 | **AI Provider** | Gemini API key configuration | ✅ |
+| 4 | **Slack App** | Bot Token + App Token + Signing Secret | ✅ |
+| 5 | **Google Drive** | OAuth setup for document access | ✅ |
+| 6 | **Knowledge Source** | Select Drive folder(s) + website URL to scrape | ✅ |
+| 7 | **First Bot** | Create the default bot with custom instructions | ✅ |
+| 8 | **Review & Launch** | Summary of all settings, trigger initial sync | ✅ |
+
+#### Completed Features
+
+- Multi-step wizard with progress indicator
+- Real-time validation with success/error states
+- Collapsible instruction panels per step
+- Copy buttons for tokens/keys
+- Test connection buttons with loading states
+- Modal dialogs for detailed instructions
+- Responsive design (tablet + desktop)
+- Setup status middleware (redirect to /setup if not configured)
+- API endpoints for each validation step
+
+---
+
+### Phase SaaS: Multi-Tenant Transformation ✅ COMPLETE
+
+**Goal**: Transform single-tenant VillaBot into multi-tenant TeamBrain AI SaaS platform
+
+**Status**: Fully implemented across 8 sub-phases
+
+| Sub-Phase | Description | Status |
+|-----------|-------------|--------|
+| 1. Database Foundation | Workspaces, user profiles, RLS policies | ✅ |
+| 2. Authentication | Supabase Auth with email/password, JWT verification | ✅ |
+| 3. API Routes | All routes updated with workspace filtering | ✅ |
+| 4. Services | All services updated with workspace context | ✅ |
+| 5. Billing | Stripe integration with checkout, webhooks | ✅ |
+| 6. Dashboard Contexts | AuthContext, WorkspaceContext, protected routes | ✅ |
+| 7. Dashboard Pages | Auth pages, billing, team management | ✅ |
+| 8. Branding | TeamBrain AI branding throughout | ✅ |
+
+---
+
+### Phase Landing: Public Landing Page ✅ COMPLETE
+
+**Goal**: Create a marketing landing page for TeamBrain AI
+
+**Status**: Fully implemented at `/` (root route)
+
+#### Route Structure
+
+| Route | Purpose | Auth Required |
+|-------|---------|---------------|
+| `/` | Public landing page (marketing) | No |
+| `/dashboard` | Authenticated dashboard overview | Yes |
+| `/auth/signin` | Sign in page | No |
+| `/auth/signup` | Sign up page | No |
+| `/setup` | Initial setup wizard | No |
+
+#### Landing Page Sections (All Complete)
+
+- ✅ Navigation with logo and auth CTAs
+- ✅ Hero section with animated stats and Slack demo mockup
+- ✅ Trust section with company logos
+- ✅ Features bento grid (6 cards)
+- ✅ How It Works (3 steps)
+- ✅ Pricing section with monthly/annual toggle (20% annual discount)
+- ✅ Testimonials (3 quotes)
+- ✅ Final CTA section
+- ✅ Footer with links
+
+#### Pricing Tiers
+
+| Tier | Monthly | Annual | Features |
+|------|---------|--------|----------|
+| Starter | $29 | $279 | 1 bot, 100 docs, 1K queries |
+| Pro | $79 | $759 | 3 bots, 500 docs, 10K queries |
+| Business | $199 | $1,910 | Unlimited bots/docs/queries |
+
+---
+
+### Phase 1: Document Categorization (Completed ✅)
+- [x] Create database migration for categories
+- [x] Update `hybrid_search` function with category filtering
+- [x] Modify sync process to assign categories
+- [x] Implement category-aware source attribution
+
+### Phase 2: Website Scraping Improvements (Completed ✅)
+- [x] Remove 50-page hard limit (now configurable, default 500)
+- [x] Add configurable scraping options
+- [x] Implement rate limiting and robots.txt support
 - [ ] Add progress tracking UI
 - [ ] Category assignment for scraped pages
 
-### Phase 3: Multi-Bot Foundation
-- [ ] Create bots and bot_category_access tables
-- [ ] Bot configuration management API
-- [ ] Bot selection in search pipeline
-- [ ] Bot management dashboard page
+### Phase 3: Multi-Bot Foundation ✅ COMPLETE
 
-### Phase 4: Multi-Bot Deployment
-- [ ] Multi-socket Slack connections
-- [ ] Bot-specific system prompts
-- [ ] Per-bot analytics tracking
-- [ ] Bot creation wizard in dashboard
+**Backend (Complete):**
+- [x] Create `bots`, `bot_channels`, `bot_drive_folders` tables (`006_multi_bot_platform.sql`)
+- [x] Bot types and interfaces (`packages/shared/src/types/bots.ts`)
+- [x] Bot CRUD service (`apps/api/src/services/bots/index.ts`)
+- [x] Bot API routes (`apps/api/src/routes/bots.ts`)
+- [x] Multi-bot Slack instance class (`apps/api/src/services/slack/instance.ts`)
+- [x] Bot lifecycle manager (`apps/api/src/services/slack/manager.ts`)
+- [x] Updated `hybrid_search` with bot filtering
 
-### Phase 5: Advanced Features
+**Dashboard (Complete):**
+- [x] Bot management page (`/bots`) with stats overview
+- [x] Bot creation/edit modal with form validation (`bot-form-modal.tsx`)
+- [x] Bot status indicators (active/inactive/error)
+- [x] Bot activation/deactivation toggle switch
+- [x] Search functionality for bots
+- [x] Update sidebar with Bots navigation link
+
+### Phase 4: Feedback System ✅ COMPLETE
+
+**Backend (Complete):**
+- [x] Create `response_feedback` table (`007_feedback_system.sql`)
+- [x] Feedback types and interfaces (`packages/shared/src/types/feedback.ts`)
+- [x] Feedback API routes with analytics (`apps/api/src/routes/feedback.ts`)
+- [x] Feedback buttons in Slack responses (`bot.ts`)
+- [x] `get_satisfaction_rate()` database function
+- [x] `feedback_stats` view for analytics
+
+**Dashboard (Complete):**
+- [x] Feedback review page (`/feedback`) with full UI
+- [x] Stats overview (satisfaction rate, total, helpful, unhelpful)
+- [x] Filter buttons (all/helpful/unhelpful/unreviewed)
+- [x] Feedback list with query/response context
+- [x] Mark as reviewed functionality
+- [x] Pagination support
+- [x] Update sidebar with Feedback navigation link
+
+### Phase 5: Integration & Polish ✅ MOSTLY COMPLETE
+
+- [x] Register `botsRouter` and `feedbackRouter` in main app
+- [x] Migrate main app to use `BotManager` instead of legacy single-bot
+- [x] Update dashboard sidebar with all new navigation items
+- [x] Add Geist font throughout dashboard
+- [x] Implement consistent modal system for all forms
+- [x] Add loading states and skeleton loaders
+- [ ] Error boundaries and toast notifications
+- [ ] Mobile-responsive improvements
+
+### Phase 6: Multi-Bot Deployment ✅ COMPLETE
+
+**Bot Management (Complete):**
+- [x] Multi-socket Slack connections via BotManager
+- [x] Bot-specific system prompts in RAG pipeline
+- [x] Per-bot analytics tracking (bot_id in all events)
+- [x] Bot creation wizard in dashboard (modal-based: `bot-form-modal.tsx`)
+- [x] Bot health monitoring with auto-restart (`manager.ts`)
+- [x] Health status API endpoints (`/api/bots/health/status`, `/api/bots/:id/health`)
+- [x] Manual restart endpoint (`/api/bots/:id/restart`)
+- [x] Health history tracking (`bot_health`, `bot_health_history` tables)
+
+**Bot Health Monitoring:**
+- Health checks every 30 seconds
+- Auto-restart after 3 consecutive failures
+- 60-second cooldown between restart attempts
+- Error state tracking in database
+- Health status dashboard view
+
+---
+
+### Phase Admin: Platform Admin Panel ✅ COMPLETE
+
+**Goal**: Enable platform operators to manage workspaces, users, and create internal/test accounts that bypass billing
+
+**Backend (Complete):**
+- [x] Database migration for admin features (`014_platform_admin.sql`)
+  - `is_platform_admin` column on user_profiles
+  - `is_internal`, `internal_notes`, `created_by_admin` on workspaces
+  - `platform_stats` view for aggregate statistics
+  - `admin_workspace_details` view
+  - `create_internal_workspace()` function with unlimited limits
+  - `admin_audit_log` table
+- [x] Admin API routes (`/api/admin/*`)
+  - GET `/api/admin/stats` - Platform-wide statistics
+  - GET `/api/admin/workspaces` - List all workspaces with filters
+  - GET `/api/admin/workspaces/:id` - Workspace details
+  - POST `/api/admin/workspaces/internal` - Create internal workspace
+  - PATCH `/api/admin/workspaces/:id` - Update workspace
+  - GET `/api/admin/growth` - Growth metrics over time
+- [x] Rate limiting middleware with workspace/tier awareness
+  - Per-workspace rate limits based on tier
+  - Internal workspaces bypass all rate limits
+  - Headers: X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset
+- [x] Error tracking utility (`errorTracker.ts`)
+
+**Dashboard (Complete):**
+- [x] Admin layout with dedicated sidebar (`/admin/layout.tsx`)
+- [x] Admin overview page with platform stats (`/admin/page.tsx`)
+  - Total workspaces, users, estimated MRR, bots
+  - Tier breakdown (Starter/Pro/Business)
+  - Growth chart (30-day trend)
+  - Recent workspaces list
+- [x] Workspaces management page (`/admin/workspaces/page.tsx`)
+  - Search, tier/status/internal filters
+  - Paginated table with workspace details
+  - Link to workspace detail page
+- [x] Workspace detail page (`/admin/workspaces/[id]/page.tsx`)
+  - Stats (members, documents, bots, queries)
+  - Team members list
+  - Bots list
+  - Edit capabilities
+- [x] Create internal workspace modal (`create-internal-modal.tsx`)
+  - Form for name/email/notes
+  - Creates workspace with unlimited limits
+  - No billing required
+
+**Internal/Test Accounts:**
+- Internal workspaces bypass billing completely
+- Unlimited documents, queries, members, bots
+- Rate limits disabled for internal workspaces
+- Clearly marked in admin panel with purple indicator
+
+---
+
+### Phase Setup: Setup Wizard Redesign ✅ COMPLETE
+
+**Goal**: Redesign the setup wizard for SaaS model (remove infrastructure config)
+
+**Changes:**
+- Removed Supabase URL/Service Key configuration (platform-managed)
+- Removed Gemini API key configuration (platform-managed)
+- Streamlined to focus on:
+  - Slack app credentials
+  - Google Drive OAuth
+  - Knowledge source selection
+  - First bot configuration
+- Improved UI with premium design system
+
+---
+
+### Phase 7: Advanced Features (Future)
+
 - [ ] Auto-categorization using AI
 - [ ] Cross-bot conversation handoff
 - [ ] Custom category definitions
 - [ ] API for external integrations
+- [ ] Webhook support for external events
 
 ---
 
@@ -2101,4 +2476,4 @@ const folderCategoryMap = {
 
 ---
 
-*Enhancement Plan v2.0 - Last Updated: December 2024*
+*TeamBrain AI Enhancement Plan v2.0 - Last Updated: December 2024*

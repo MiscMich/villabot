@@ -124,10 +124,13 @@ export const searchCache = new LRUCache<Array<{
 
 /**
  * Generate a cache key from a query
+ * Includes workspace_id to prevent cross-tenant cache pollution
  */
-export function generateCacheKey(query: string): string {
+export function generateCacheKey(query: string, botId?: string, workspaceId?: string): string {
   // Normalize query for better cache hits
-  return query.toLowerCase().trim().replace(/\s+/g, ' ');
+  const normalizedQuery = query.toLowerCase().trim().replace(/\s+/g, ' ');
+  const parts = [workspaceId, botId, normalizedQuery].filter(Boolean);
+  return parts.join(':');
 }
 
 export { LRUCache };

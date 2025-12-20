@@ -22,25 +22,33 @@ export interface ConversationContext {
 export async function getOrCreateSession(
   channelId: string,
   threadTs: string,
-  userId: string
+  userId: string,
+  workspaceId: string,
+  botId?: string
 ): Promise<string> {
+  // Build session data
+  const sessionData: Record<string, unknown> = {
+    workspace_id: workspaceId,  // Required for tenant isolation
+    slack_channel_id: channelId,
+    slack_thread_ts: threadTs,
+    started_by_user_id: userId,
+    is_active: true,
+    last_activity: new Date().toISOString(),
+  };
+
+  // Only include bot_id if provided
+  if (botId) {
+    sessionData.bot_id = botId;
+  }
+
   // Use upsert with ON CONFLICT to handle race conditions
   // The unique constraint on slack_thread_ts prevents duplicate sessions
   const { data: session, error } = await supabase
     .from('thread_sessions')
-    .upsert(
-      {
-        slack_channel_id: channelId,
-        slack_thread_ts: threadTs,
-        started_by_user_id: userId,
-        is_active: true,
-        last_activity: new Date().toISOString(),
-      },
-      {
-        onConflict: 'slack_thread_ts',
-        ignoreDuplicates: false, // Update existing record
-      }
-    )
+    .upsert(sessionData, {
+      onConflict: 'slack_thread_ts',
+      ignoreDuplicates: false, // Update existing record
+    })
     .select('id')
     .single();
 
@@ -147,15 +155,17 @@ export async function getConversationContext(
 export async function recordFeedback(
   sessionId: string,
   messageId: string,
-  rating: number
+  rating: number,
+  workspaceId: string
 ): Promise<void> {
   await supabase
     .from('thread_messages')
     .update({ feedback_rating: rating })
     .eq('id', messageId);
 
-  // Also log to analytics
+  // Also log to analytics with workspace context
   await supabase.from('analytics').insert({
+    workspace_id: workspaceId,
     event_type: 'feedback',
     event_data: {
       session_id: sessionId,
