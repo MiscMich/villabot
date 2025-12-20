@@ -6,6 +6,7 @@ async function fetchApi<T>(
 ): Promise<T> {
   const res = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
+    cache: 'no-store', // Disable caching to prevent 304 issues
     headers: {
       'Content-Type': 'application/json',
       ...options.headers,
@@ -91,6 +92,22 @@ export const api = {
     errors: string[];
   }>('/api/documents/sync/full', { method: 'POST' }),
 
+  // Website scraping
+  getScrapeStatus: () => fetchApi<{
+    websiteConfigured: boolean;
+    websiteUrl: string | null;
+    lastScrape: string | null;
+    lastScrapeResult: { pagesScraped: number; chunksCreated: number; errors: string[] } | null;
+    documentCount: number;
+  }>('/api/documents/scrape/status'),
+
+  triggerWebsiteScrape: () => fetchApi<{
+    success: boolean;
+    pagesScraped: number;
+    chunksCreated: number;
+    errors: string[];
+  }>('/api/documents/scrape/website', { method: 'POST' }),
+
   // Analytics
   getOverview: () => fetchApi<{
     documents: { total: number; active: number; chunks: number };
@@ -100,7 +117,7 @@ export const api = {
   }>('/api/analytics/overview'),
 
   getActivity: (days = 14) => fetchApi<{
-    data: Array<{ event_data: Record<string, number>; created_at: string }>;
+    data: Array<{ date: string; messages: number; responses: number }>;
     period: { start: string; end: string; days: number };
   }>(`/api/analytics/activity?days=${days}`),
 

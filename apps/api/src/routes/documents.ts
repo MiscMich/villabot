@@ -6,9 +6,10 @@
 import { Router } from 'express';
 import { supabase } from '../services/supabase/client.js';
 import { logger } from '../utils/logger.js';
-import { triggerImmediateSync } from '../services/scheduler/index.js';
+import { triggerImmediateSync, triggerWebsiteScrape } from '../services/scheduler/index.js';
 import { fullSync, getSyncStatus } from '../services/google-drive/sync.js';
 import { isDriveClientInitialized } from '../services/google-drive/client.js';
+import { env } from '../config/env.js';
 
 export const documentsRouter = Router();
 
@@ -190,5 +191,62 @@ documentsRouter.post('/sync/full', async (_req, res) => {
   } catch (error) {
     logger.error('Failed to trigger full sync', { error });
     res.status(500).json({ error: 'Failed to trigger full sync' });
+  }
+});
+
+/**
+ * Trigger website scrape
+ */
+documentsRouter.post('/scrape/website', async (_req, res) => {
+  try {
+    if (!env.COMPANY_WEBSITE_URL) {
+      return res.status(400).json({ error: 'Website URL not configured' });
+    }
+
+    const result = await triggerWebsiteScrape();
+
+    logger.info('Website scrape triggered', result);
+    res.json({
+      success: true,
+      ...result,
+    });
+  } catch (error) {
+    logger.error('Failed to trigger website scrape', { error });
+    res.status(500).json({ error: 'Failed to trigger website scrape' });
+  }
+});
+
+/**
+ * Get website scrape status
+ */
+documentsRouter.get('/scrape/status', async (_req, res) => {
+  try {
+    const websiteConfigured = !!env.COMPANY_WEBSITE_URL;
+
+    // Get latest website scrape event
+    const { data: lastScrape } = await supabase
+      .from('analytics')
+      .select('created_at, event_data')
+      .in('event_type', ['website_scrape', 'website_scrape_scheduled'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    // Count website documents
+    const { count: websiteDocCount } = await supabase
+      .from('documents')
+      .select('*', { count: 'exact', head: true })
+      .eq('source_type', 'website');
+
+    res.json({
+      websiteConfigured,
+      websiteUrl: env.COMPANY_WEBSITE_URL ?? null,
+      lastScrape: lastScrape?.created_at ?? null,
+      lastScrapeResult: lastScrape?.event_data ?? null,
+      documentCount: websiteDocCount ?? 0,
+    });
+  } catch (error) {
+    logger.error('Failed to get scrape status', { error });
+    res.status(500).json({ error: 'Failed to get scrape status' });
   }
 });

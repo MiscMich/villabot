@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git clone:*)",
+      "mcp__serena__list_dir",
+      "mcp__serena__activate_project",
+      "mcp__serena__list_memories",
+      "mcp__serena__onboarding",
+      "mcp__serena__write_memory",
+      "mcp__serena__get_symbols_overview",
+      "mcp__tavily__tavily-search",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(cat:*)",
+      "Bash(xargs:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -7,6 +7,8 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { env } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
 import { EMBEDDING_CONFIG } from '@villa-paraiso/shared';
+import { embeddingCache, generateCacheKey } from '../../utils/cache.js';
+import { withTimeout, withRetry } from '../../utils/timeout.js';
 
 // Initialize Gemini client
 const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
@@ -80,17 +82,49 @@ export async function generateEmbeddings(texts: string[]): Promise<number[][]> {
   return embeddings;
 }
 
+// Embedding generation timeout (10 seconds)
+const EMBEDDING_TIMEOUT_MS = 10000;
+
 /**
  * Generate embedding for a search query
  * Uses task_type 'RETRIEVAL_QUERY' for better search performance
+ * Includes caching, timeout, and retry logic
  */
 export async function generateQueryEmbedding(query: string): Promise<number[]> {
+  const cacheKey = generateCacheKey(query);
+
+  // Check cache first
+  const cached = embeddingCache.get(cacheKey);
+  if (cached) {
+    logger.debug('Embedding cache hit', { query: query.substring(0, 50) });
+    return cached;
+  }
+
   try {
-    const result = await embeddingModel.embedContent({
-      content: { parts: [{ text: query }] },
-      taskType: 'RETRIEVAL_QUERY' as any,
-    });
-    return result.embedding.values;
+    // Use timeout and retry for resilience
+    const embedding = await withRetry(
+      async () => {
+        return withTimeout(
+          (async () => {
+            const result = await embeddingModel.embedContent({
+              content: { role: 'user', parts: [{ text: query }] },
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              taskType: 'RETRIEVAL_QUERY' as any,
+            });
+            return result.embedding.values;
+          })(),
+          EMBEDDING_TIMEOUT_MS,
+          'generateQueryEmbedding'
+        );
+      },
+      { maxRetries: 2, initialDelayMs: 500 }
+    );
+
+    // Cache the result
+    embeddingCache.set(cacheKey, embedding);
+    logger.debug('Embedding generated and cached', { query: query.substring(0, 50) });
+
+    return embedding;
   } catch (error) {
     logger.error('Failed to generate query embedding', { error });
     throw error;

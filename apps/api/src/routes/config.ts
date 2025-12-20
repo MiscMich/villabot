@@ -71,11 +71,14 @@ configRouter.put('/:key', async (req, res) => {
 
     const { data, error } = await supabase
       .from('bot_config')
-      .upsert({
-        key: req.params.key,
-        value,
-        updated_at: new Date().toISOString(),
-      })
+      .upsert(
+        {
+          key: req.params.key,
+          value,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'key' }
+      )
       .select('key, value, updated_at')
       .single();
 
@@ -108,7 +111,7 @@ configRouter.patch('/', async (req, res) => {
 
     const { error } = await supabase
       .from('bot_config')
-      .upsert(upsertData);
+      .upsert(upsertData, { onConflict: 'key' });
 
     if (error) throw error;
 

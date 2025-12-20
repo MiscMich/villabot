@@ -52,7 +52,8 @@ export async function scrapeWebsite(): Promise<{
     const scrapedUrls = new Set<string>();
 
     while (urlsToScrape.size > 0 && scrapedUrls.size < 50) { // Limit to 50 pages
-      const currentUrl = urlsToScrape.values().next().value;
+      const currentUrl = urlsToScrape.values().next().value as string | undefined;
+      if (!currentUrl) break;
       urlsToScrape.delete(currentUrl);
 
       if (scrapedUrls.has(currentUrl)) continue;
@@ -167,11 +168,20 @@ async function findInternalLinks(
 ): Promise<string[]> {
   const baseHost = new URL(baseUrl).host;
 
-  const links = await page.evaluate(() => {
-    return Array.from(document.querySelectorAll('a[href]'))
-      .map(a => (a as HTMLAnchorElement).href)
-      .filter(href => href.startsWith('http'));
-  });
+  // This function runs in browser context via Puppeteer
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const links: string[] = await page.evaluate((() => {
+    // Browser context - document and HTMLAnchorElement are available
+    const anchors = document.querySelectorAll('a[href]');
+    const hrefs: string[] = [];
+    anchors.forEach((a) => {
+      const href = (a as HTMLAnchorElement).href;
+      if (href.startsWith('http')) {
+        hrefs.push(href);
+      }
+    });
+    return hrefs;
+  }) as () => string[]);
 
   return links.filter(link => {
     try {

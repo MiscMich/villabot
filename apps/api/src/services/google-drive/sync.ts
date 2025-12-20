@@ -16,7 +16,7 @@ import {
 import { parseFile } from './parsers/index.js';
 import { chunkDocument } from '../rag/chunking.js';
 import { generateEmbeddings } from '../rag/embeddings.js';
-import type { Document, DocumentChunk } from '@villa-paraiso/shared';
+// Types imported from shared package if needed
 
 interface SyncResult {
   added: number;

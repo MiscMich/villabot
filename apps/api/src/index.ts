@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { env } from './config/env.js';
@@ -7,6 +8,7 @@ import { configRouter } from './routes/config.js';
 import { documentsRouter } from './routes/documents.js';
 import { analyticsRouter } from './routes/analytics.js';
 import { authRouter, initializeDriveFromStoredTokens } from './routes/auth.js';
+import errorsRouter from './routes/errors.js';
 import { testSupabaseConnection } from './services/supabase/client.js';
 import { initializeSlackBot, isSlackBotRunning, shutdownSlackBot } from './services/slack/bot.js';
 import { initializeScheduler, stopScheduler } from './services/scheduler/index.js';
@@ -36,6 +38,7 @@ app.use('/health', healthRouter);
 app.use('/api/config', configRouter);
 app.use('/api/documents', documentsRouter);
 app.use('/api/analytics', analyticsRouter);
+app.use('/api/errors', errorsRouter);
 app.use('/auth', authRouter);
 
 // Root endpoint
@@ -76,7 +79,7 @@ async function start(): Promise<void> {
   // Initialize Google Drive from stored tokens
   if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) {
     const driveOk = await initializeDriveFromStoredTokens();
-    updateServiceStatus('google_drive', driveOk);
+    updateServiceStatus('googleDrive', driveOk);
     if (driveOk) {
       logger.info('✓ Google Drive connection established');
     } else {
@@ -98,6 +101,14 @@ async function start(): Promise<void> {
     }
   } else {
     logger.info('○ Slack credentials not configured');
+  }
+
+  // Check Gemini API
+  if (env.GEMINI_API_KEY) {
+    updateServiceStatus('gemini', true);
+    logger.info('✓ Gemini API configured');
+  } else {
+    logger.info('○ Gemini API key not configured');
   }
 
   // Initialize scheduler

@@ -6,7 +6,6 @@
 import { supabase } from '../supabase/client.js';
 import { logger } from '../../utils/logger.js';
 import { THREAD_CONFIG } from '@villa-paraiso/shared';
-import type { ThreadSession, ThreadMessage } from '@villa-paraiso/shared';
 
 export interface ConversationContext {
   sessionId: string;
@@ -18,48 +17,56 @@ export interface ConversationContext {
 
 /**
  * Get or create a thread session
+ * Uses upsert to handle race conditions with concurrent messages
  */
 export async function getOrCreateSession(
   channelId: string,
   threadTs: string,
   userId: string
 ): Promise<string> {
-  // Try to find existing session
-  const { data: existing } = await supabase
+  // Use upsert with ON CONFLICT to handle race conditions
+  // The unique constraint on slack_thread_ts prevents duplicate sessions
+  const { data: session, error } = await supabase
     .from('thread_sessions')
-    .select('id, is_active')
-    .eq('slack_thread_ts', threadTs)
-    .single();
-
-  if (existing) {
-    // Reactivate if needed
-    if (!existing.is_active) {
-      await supabase
-        .from('thread_sessions')
-        .update({ is_active: true, last_activity: new Date().toISOString() })
-        .eq('id', existing.id);
-    }
-    return existing.id;
-  }
-
-  // Create new session
-  const { data: newSession, error } = await supabase
-    .from('thread_sessions')
-    .insert({
-      slack_channel_id: channelId,
-      slack_thread_ts: threadTs,
-      started_by_user_id: userId,
-    })
+    .upsert(
+      {
+        slack_channel_id: channelId,
+        slack_thread_ts: threadTs,
+        started_by_user_id: userId,
+        is_active: true,
+        last_activity: new Date().toISOString(),
+      },
+      {
+        onConflict: 'slack_thread_ts',
+        ignoreDuplicates: false, // Update existing record
+      }
+    )
     .select('id')
     .single();
 
   if (error) {
-    logger.error('Failed to create thread session', { error });
+    // If upsert fails, try to fetch existing session
+    const { data: existing } = await supabase
+      .from('thread_sessions')
+      .select('id')
+      .eq('slack_thread_ts', threadTs)
+      .single();
+
+    if (existing) {
+      // Update last activity
+      await supabase
+        .from('thread_sessions')
+        .update({ is_active: true, last_activity: new Date().toISOString() })
+        .eq('id', existing.id);
+      return existing.id;
+    }
+
+    logger.error('Failed to create/get thread session', { error });
     throw error;
   }
 
-  logger.debug('Created new thread session', { sessionId: newSession.id });
-  return newSession.id;
+  logger.debug('Thread session ready', { sessionId: session.id });
+  return session.id;
 }
 
 /**
@@ -162,23 +169,39 @@ export async function recordFeedback(
  * Check if the bot has previously responded in a thread
  */
 export async function hasBotRespondedInThread(threadTs: string): Promise<boolean> {
-  const { data: session } = await supabase
+  logger.info('Checking if bot responded in thread', { threadTs });
+
+  const { data: session, error: sessionError } = await supabase
     .from('thread_sessions')
     .select('id')
     .eq('slack_thread_ts', threadTs)
-    .single();
+    .maybeSingle(); // Use maybeSingle to avoid error when no rows
 
-  if (!session) {
+  if (sessionError) {
+    logger.error('Error checking thread session', { error: sessionError, threadTs });
     return false;
   }
 
-  const { count } = await supabase
+  if (!session) {
+    logger.info('No session found for thread', { threadTs });
+    return false;
+  }
+
+  const { count, error: countError } = await supabase
     .from('thread_messages')
     .select('*', { count: 'exact', head: true })
     .eq('session_id', session.id)
     .eq('role', 'assistant');
 
-  return (count ?? 0) > 0;
+  if (countError) {
+    logger.error('Error counting assistant messages', { error: countError, sessionId: session.id });
+    return false;
+  }
+
+  const hasResponded = (count ?? 0) > 0;
+  logger.info('Bot response check result', { threadTs, sessionId: session.id, assistantMessages: count, hasResponded });
+
+  return hasResponded;
 }
 
 /**

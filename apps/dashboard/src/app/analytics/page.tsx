@@ -2,10 +2,18 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
-import { RefreshCw, TrendingUp, MessageSquare, Activity } from 'lucide-react';
+import {
+  TrendingUp,
+  MessageSquare,
+  Activity,
+  BarChart3,
+  ThumbsUp,
+  ThumbsDown,
+  Zap,
+  Clock,
+  Users,
+} from 'lucide-react';
 
 export default function AnalyticsPage() {
   const { data: overview, isLoading: overviewLoading } = useQuery({
@@ -25,131 +33,213 @@ export default function AnalyticsPage() {
 
   if (overviewLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="space-y-8">
+        <div className="space-y-2">
+          <div className="h-10 w-48 bg-muted rounded-lg shimmer" />
+          <div className="h-5 w-64 bg-muted rounded-lg shimmer" />
+        </div>
+        <div className="grid gap-6 md:grid-cols-4">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-32 bg-muted rounded-xl shimmer" />
+          ))}
+        </div>
+        <div className="h-80 bg-muted rounded-xl shimmer" />
       </div>
     );
   }
 
-  const getEventIcon = (type: string) => {
-    switch (type) {
-      case 'message_received':
-        return <MessageSquare className="h-4 w-4 text-blue-500" />;
-      case 'response_sent':
-        return <Activity className="h-4 w-4 text-green-500" />;
-      case 'feedback':
-        return <TrendingUp className="h-4 w-4 text-purple-500" />;
-      default:
-        return <Activity className="h-4 w-4 text-gray-500" />;
-    }
-  };
-
-  const getEventBadge = (type: string) => {
-    const variants: Record<string, 'default' | 'secondary' | 'success'> = {
-      message_received: 'default',
-      response_sent: 'success',
-      feedback: 'secondary',
-    };
-    return variants[type] || 'secondary';
-  };
+  const satisfactionRate = overview?.feedback.satisfactionRate ?? 0;
 
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold">Analytics</h1>
-        <p className="text-muted-foreground">
-          Monitor bot performance and usage
+      <div className="opacity-0 animate-fade-in">
+        <div className="flex items-center gap-3 mb-2">
+          <BarChart3 className="w-8 h-8 text-amber-500" />
+          <h1 className="text-4xl font-display font-bold">Analytics</h1>
+        </div>
+        <p className="text-lg text-muted-foreground">
+          Monitor bot performance and user engagement
         </p>
       </div>
 
       {/* Stats Overview */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              Messages This Week
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {overview?.activity.messagesThisWeek ?? 0}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <div className="premium-card p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
+          <div className="flex items-start justify-between">
+            <div className="icon-container">
+              <MessageSquare className="w-6 h-6" />
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Responses Sent</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {overview?.activity.responsesThisWeek ?? 0}
+            <span className="text-xs font-medium px-2 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+              This Week
+            </span>
+          </div>
+          <div className="mt-4">
+            <p className="text-sm text-muted-foreground">Messages Received</p>
+            <p className="stat-value">{overview?.activity.messagesThisWeek ?? 0}</p>
+          </div>
+        </div>
+
+        <div className="premium-card p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '150ms' }}>
+          <div className="flex items-start justify-between">
+            <div className="icon-container">
+              <Zap className="w-6 h-6" />
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              Positive Feedback
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-500">
+            <span className="text-xs font-medium px-2 py-1 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+              Active
+            </span>
+          </div>
+          <div className="mt-4">
+            <p className="text-sm text-muted-foreground">Responses Sent</p>
+            <p className="stat-value">{overview?.activity.responsesThisWeek ?? 0}</p>
+          </div>
+        </div>
+
+        <div className="premium-card p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
+          <div className="flex items-start justify-between">
+            <div className="icon-container">
+              <ThumbsUp className="w-6 h-6" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <p className="text-sm text-muted-foreground">Positive Feedback</p>
+            <p className="text-4xl font-bold tracking-tight text-green-600 dark:text-green-400">
               {overview?.feedback.positive ?? 0}
+            </p>
+          </div>
+        </div>
+
+        <div className="premium-card p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '250ms' }}>
+          <div className="flex items-start justify-between">
+            <div className="icon-container">
+              <ThumbsDown className="w-6 h-6" />
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              Negative Feedback
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-500">
+          </div>
+          <div className="mt-4">
+            <p className="text-sm text-muted-foreground">Negative Feedback</p>
+            <p className="text-4xl font-bold tracking-tight text-red-600 dark:text-red-400">
               {overview?.feedback.negative ?? 0}
-            </div>
-          </CardContent>
-        </Card>
+            </p>
+          </div>
+        </div>
       </div>
 
-      {/* Activity Chart Placeholder */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Activity Over Time</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {activity?.data && activity.data.length > 0 ? (
-            <div className="h-64 flex items-center justify-center border rounded-lg bg-muted/50">
-              <div className="text-center text-muted-foreground">
-                <TrendingUp className="h-12 w-12 mx-auto mb-2" />
-                <p>
-                  {activity.data.length} days of activity data available
-                </p>
-                <p className="text-sm">
-                  {activity.period.start.split('T')[0]} to{' '}
-                  {activity.period.end.split('T')[0]}
-                </p>
+      {/* Activity Chart & Satisfaction */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Activity Chart */}
+        <div className="lg:col-span-2 premium-card opacity-0 animate-fade-in-up" style={{ animationDelay: '300ms' }}>
+          <div className="p-6 border-b border-border/50">
+            <div className="flex items-center gap-3">
+              <TrendingUp className="h-5 w-5 text-amber-500" />
+              <h2 className="font-display text-xl font-semibold">Activity Over Time</h2>
+            </div>
+          </div>
+          <div className="p-6">
+            {activity?.data && activity.data.length > 0 ? (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between text-sm text-muted-foreground">
+                  <span>{activity.period.start.split('T')[0]}</span>
+                  <span>{activity.period.end.split('T')[0]}</span>
+                </div>
+                {/* Simple bar chart visualization */}
+                <div className="flex items-end gap-1 h-48">
+                  {activity.data.map((day, i) => {
+                    const maxValue = Math.max(...activity.data.map(d => d.messages + d.responses));
+                    const height = maxValue > 0 ? ((day.messages + day.responses) / maxValue) * 100 : 0;
+                    return (
+                      <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                        <div
+                          className="w-full bg-gradient-to-t from-amber-500 to-amber-400 rounded-t-sm transition-all duration-300 hover:from-amber-600 hover:to-amber-500"
+                          style={{ height: `${Math.max(height, 2)}%` }}
+                          title={`${day.date}: ${day.messages} messages, ${day.responses} responses`}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center justify-center gap-6 pt-4 text-sm">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded bg-gradient-to-r from-amber-500 to-amber-400" />
+                    <span className="text-muted-foreground">Daily Activity</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="h-48 flex items-center justify-center">
+                <div className="text-center">
+                  <Activity className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
+                  <p className="text-muted-foreground">
+                    No activity data yet. Start using the bot to see analytics.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Satisfaction Meter */}
+        <div className="premium-card opacity-0 animate-fade-in-up" style={{ animationDelay: '350ms' }}>
+          <div className="p-6 border-b border-border/50">
+            <div className="flex items-center gap-3">
+              <Users className="h-5 w-5 text-amber-500" />
+              <h2 className="font-display text-xl font-semibold">Satisfaction</h2>
+            </div>
+          </div>
+          <div className="p-6 flex flex-col items-center justify-center">
+            {/* Circular Progress */}
+            <div className="relative w-40 h-40 mb-4">
+              <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="40"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="8"
+                  className="text-muted/30"
+                />
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="40"
+                  fill="none"
+                  stroke="url(#gradient)"
+                  strokeWidth="8"
+                  strokeLinecap="round"
+                  strokeDasharray={`${satisfactionRate * 2.51} 251`}
+                  className="transition-all duration-1000"
+                />
+                <defs>
+                  <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#f59e0b" />
+                    <stop offset="100%" stopColor="#d97706" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-4xl font-bold text-gradient">
+                  {satisfactionRate !== null ? `${satisfactionRate}%` : 'N/A'}
+                </span>
               </div>
             </div>
-          ) : (
-            <div className="h-64 flex items-center justify-center border rounded-lg bg-muted/50">
-              <p className="text-muted-foreground">
-                No activity data yet. Start using the bot to see analytics.
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            <p className="text-sm text-muted-foreground text-center">
+              Based on {(overview?.feedback.positive ?? 0) + (overview?.feedback.negative ?? 0)} feedback responses
+            </p>
+          </div>
+        </div>
+      </div>
 
       {/* Recent Events */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Events</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <div className="premium-card opacity-0 animate-fade-in-up" style={{ animationDelay: '400ms' }}>
+        <div className="p-6 border-b border-border/50">
+          <div className="flex items-center gap-3">
+            <Clock className="h-5 w-5 text-amber-500" />
+            <h2 className="font-display text-xl font-semibold">Recent Events</h2>
+          </div>
+        </div>
+        <div className="p-6">
           <Tabs defaultValue="all">
-            <TabsList>
+            <TabsList className="bg-secondary/50">
               <TabsTrigger value="all">All</TabsTrigger>
               <TabsTrigger value="messages">Messages</TabsTrigger>
               <TabsTrigger value="responses">Responses</TabsTrigger>
@@ -160,33 +250,22 @@ export default function AnalyticsPage() {
             </TabsContent>
             <TabsContent value="messages" className="mt-4">
               <EventList
-                events={
-                  events?.events.filter(
-                    (e) => e.event_type === 'message_received'
-                  ) ?? []
-                }
+                events={events?.events.filter((e) => e.event_type === 'message_received') ?? []}
               />
             </TabsContent>
             <TabsContent value="responses" className="mt-4">
               <EventList
-                events={
-                  events?.events.filter(
-                    (e) => e.event_type === 'response_sent'
-                  ) ?? []
-                }
+                events={events?.events.filter((e) => e.event_type === 'response_sent') ?? []}
               />
             </TabsContent>
             <TabsContent value="feedback" className="mt-4">
               <EventList
-                events={
-                  events?.events.filter((e) => e.event_type === 'feedback') ??
-                  []
-                }
+                events={events?.events.filter((e) => e.event_type === 'feedback') ?? []}
               />
             </TabsContent>
           </Tabs>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
@@ -203,52 +282,79 @@ function EventList({
 }) {
   if (events.length === 0) {
     return (
-      <p className="text-center text-muted-foreground py-8">No events yet</p>
+      <div className="flex flex-col items-center justify-center py-12">
+        <Activity className="h-8 w-8 text-muted-foreground mb-3" />
+        <p className="text-muted-foreground">No events yet</p>
+      </div>
     );
   }
 
+  const getEventConfig = (type: string) => {
+    switch (type) {
+      case 'message_received':
+        return {
+          icon: MessageSquare,
+          color: 'text-blue-500',
+          bg: 'bg-blue-100 dark:bg-blue-900/30',
+          label: 'Message Received',
+        };
+      case 'response_sent':
+        return {
+          icon: Activity,
+          color: 'text-green-500',
+          bg: 'bg-green-100 dark:bg-green-900/30',
+          label: 'Response Sent',
+        };
+      case 'feedback':
+        return {
+          icon: ThumbsUp,
+          color: 'text-purple-500',
+          bg: 'bg-purple-100 dark:bg-purple-900/30',
+          label: 'Feedback',
+        };
+      default:
+        return {
+          icon: Activity,
+          color: 'text-gray-500',
+          bg: 'bg-gray-100 dark:bg-gray-900/30',
+          label: type.replace('_', ' '),
+        };
+    }
+  };
+
   return (
     <div className="space-y-2 max-h-96 overflow-y-auto">
-      {events.map((event) => (
-        <div
-          key={event.id}
-          className="flex items-center justify-between p-3 rounded-lg border"
-        >
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-muted">
-              {event.event_type === 'message_received' ? (
-                <MessageSquare className="h-4 w-4 text-blue-500" />
-              ) : event.event_type === 'response_sent' ? (
-                <Activity className="h-4 w-4 text-green-500" />
-              ) : (
-                <TrendingUp className="h-4 w-4 text-purple-500" />
-              )}
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <Badge
-                  variant={
-                    event.event_type === 'response_sent'
-                      ? 'success'
-                      : 'secondary'
-                  }
-                >
-                  {event.event_type.replace('_', ' ')}
-                </Badge>
+      {events.map((event, index) => {
+        const config = getEventConfig(event.event_type);
+        const Icon = config.icon;
+        return (
+          <div
+            key={event.id}
+            className="flex items-center justify-between p-4 rounded-xl bg-secondary/30 hover:bg-secondary/50 transition-colors opacity-0 animate-fade-in"
+            style={{ animationDelay: `${450 + index * 30}ms` }}
+          >
+            <div className="flex items-center gap-4">
+              <div className={`p-2 rounded-lg ${config.bg}`}>
+                <Icon className={`h-4 w-4 ${config.color}`} />
               </div>
-              <p className="text-sm text-muted-foreground">
-                {Object.entries(event.event_data)
-                  .slice(0, 3)
-                  .map(([k, v]) => `${k}: ${v}`)
-                  .join(' | ')}
-              </p>
+              <div>
+                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${config.bg} ${config.color}`}>
+                  {config.label}
+                </span>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {Object.entries(event.event_data)
+                    .slice(0, 2)
+                    .map(([k, v]) => `${k}: ${v}`)
+                    .join(' • ')}
+                </p>
+              </div>
             </div>
+            <p className="text-sm text-muted-foreground">
+              {new Date(event.created_at).toLocaleTimeString()}
+            </p>
           </div>
-          <p className="text-sm text-muted-foreground">
-            {new Date(event.created_at).toLocaleString()}
-          </p>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

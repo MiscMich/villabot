@@ -18,10 +18,10 @@ export const EMBEDDING_CONFIG = {
 
 // RAG configuration
 export const RAG_CONFIG = {
-  topK: 5,
+  topK: 15,              // Increased from 5 to return more relevant chunks
   vectorWeight: 0.5,
   keywordWeight: 0.5,
-  minSimilarity: 0.3,
+  minSimilarity: 0.2,    // Lowered from 0.3 to include more potential matches
 } as const;
 
 // Rate limiting

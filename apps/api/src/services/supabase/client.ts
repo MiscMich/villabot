@@ -2,7 +2,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { env } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
 
-// Database types will be generated from Supabase
+// Database types - explicit definitions without self-references
 export type Database = {
   public: {
     Tables: {
@@ -21,8 +21,28 @@ export type Database = {
           created_at: string;
           updated_at: string;
         };
-        Insert: Omit<Database['public']['Tables']['documents']['Row'], 'id' | 'created_at' | 'updated_at'>;
-        Update: Partial<Database['public']['Tables']['documents']['Insert']>;
+        Insert: {
+          drive_file_id?: string | null;
+          title: string;
+          file_type: string;
+          source_type: string;
+          source_url?: string | null;
+          content_hash: string;
+          last_modified: string;
+          last_synced?: string;
+          is_active?: boolean;
+        };
+        Update: {
+          drive_file_id?: string | null;
+          title?: string;
+          file_type?: string;
+          source_type?: string;
+          source_url?: string | null;
+          content_hash?: string;
+          last_modified?: string;
+          last_synced?: string;
+          is_active?: boolean;
+        };
       };
       document_chunks: {
         Row: {
@@ -34,8 +54,20 @@ export type Database = {
           metadata: Record<string, unknown>;
           created_at: string;
         };
-        Insert: Omit<Database['public']['Tables']['document_chunks']['Row'], 'id' | 'created_at'>;
-        Update: Partial<Database['public']['Tables']['document_chunks']['Insert']>;
+        Insert: {
+          document_id: string;
+          chunk_index: number;
+          content: string;
+          embedding?: number[] | null;
+          metadata?: Record<string, unknown>;
+        };
+        Update: {
+          document_id?: string;
+          chunk_index?: number;
+          content?: string;
+          embedding?: number[] | null;
+          metadata?: Record<string, unknown>;
+        };
       };
       thread_sessions: {
         Row: {
@@ -47,8 +79,19 @@ export type Database = {
           created_at: string;
           last_activity: string;
         };
-        Insert: Omit<Database['public']['Tables']['thread_sessions']['Row'], 'id' | 'created_at' | 'last_activity'>;
-        Update: Partial<Database['public']['Tables']['thread_sessions']['Insert']>;
+        Insert: {
+          slack_channel_id: string;
+          slack_thread_ts: string;
+          started_by_user_id: string;
+          is_active?: boolean;
+        };
+        Update: {
+          slack_channel_id?: string;
+          slack_thread_ts?: string;
+          started_by_user_id?: string;
+          is_active?: boolean;
+          last_activity?: string;
+        };
       };
       thread_messages: {
         Row: {
@@ -62,8 +105,23 @@ export type Database = {
           feedback_rating: number | null;
           created_at: string;
         };
-        Insert: Omit<Database['public']['Tables']['thread_messages']['Row'], 'id' | 'created_at'>;
-        Update: Partial<Database['public']['Tables']['thread_messages']['Insert']>;
+        Insert: {
+          session_id: string;
+          slack_user_id: string;
+          role: string;
+          content: string;
+          sources?: Record<string, unknown>[];
+          confidence_score?: number | null;
+        };
+        Update: {
+          session_id?: string;
+          slack_user_id?: string;
+          role?: string;
+          content?: string;
+          sources?: Record<string, unknown>[];
+          confidence_score?: number | null;
+          feedback_rating?: number | null;
+        };
       };
       bot_config: {
         Row: {
@@ -72,8 +130,14 @@ export type Database = {
           value: Record<string, unknown>;
           updated_at: string;
         };
-        Insert: Omit<Database['public']['Tables']['bot_config']['Row'], 'id' | 'updated_at'>;
-        Update: Partial<Database['public']['Tables']['bot_config']['Insert']>;
+        Insert: {
+          key: string;
+          value: Record<string, unknown>;
+        };
+        Update: {
+          key?: string;
+          value?: Record<string, unknown>;
+        };
       };
       analytics: {
         Row: {
@@ -82,8 +146,14 @@ export type Database = {
           event_data: Record<string, unknown>;
           created_at: string;
         };
-        Insert: Omit<Database['public']['Tables']['analytics']['Row'], 'id' | 'created_at'>;
-        Update: Partial<Database['public']['Tables']['analytics']['Insert']>;
+        Insert: {
+          event_type: string;
+          event_data: Record<string, unknown>;
+        };
+        Update: {
+          event_type?: string;
+          event_data?: Record<string, unknown>;
+        };
       };
       learned_facts: {
         Row: {
@@ -95,9 +165,24 @@ export type Database = {
           is_verified: boolean;
           created_at: string;
         };
-        Insert: Omit<Database['public']['Tables']['learned_facts']['Row'], 'id' | 'created_at'>;
-        Update: Partial<Database['public']['Tables']['learned_facts']['Insert']>;
+        Insert: {
+          fact: string;
+          source: string;
+          taught_by_user_id?: string | null;
+          embedding?: number[] | null;
+          is_verified?: boolean;
+        };
+        Update: {
+          fact?: string;
+          source?: string;
+          taught_by_user_id?: string | null;
+          embedding?: number[] | null;
+          is_verified?: boolean;
+        };
       };
+    };
+    Views: {
+      [_ in never]: never;
     };
     Functions: {
       hybrid_search: {
@@ -116,15 +201,35 @@ export type Database = {
           rank_score: number;
         }[];
       };
+      search_learned_facts: {
+        Args: {
+          query_embedding: number[];
+          match_count?: number;
+        };
+        Returns: {
+          id: string;
+          fact: string;
+          source: string;
+          similarity: number;
+        }[];
+      };
+    };
+    Enums: {
+      [_ in never]: never;
+    };
+    CompositeTypes: {
+      [_ in never]: never;
     };
   };
 };
 
-let supabaseClient: SupabaseClient<Database> | null = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let supabaseClient: SupabaseClient<any> | null = null;
 
-export function getSupabaseClient(): SupabaseClient<Database> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function getSupabaseClient(): SupabaseClient<any> {
   if (!supabaseClient) {
-    supabaseClient = createClient<Database>(
+    supabaseClient = createClient(
       env.SUPABASE_URL,
       env.SUPABASE_SERVICE_ROLE_KEY,
       {
@@ -138,6 +243,9 @@ export function getSupabaseClient(): SupabaseClient<Database> {
   }
   return supabaseClient;
 }
+
+// Exported singleton for convenience (lazy-initialized on first access)
+export const supabase = getSupabaseClient();
 
 export async function testSupabaseConnection(): Promise<boolean> {
   try {

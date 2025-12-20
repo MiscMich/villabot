@@ -97,23 +97,28 @@ export async function parseFile(
  */
 function formatCsvAsText(csv: string): string {
   const lines = csv.split('\n');
-  if (lines.length === 0) return '';
+  const firstLine = lines[0];
+  if (!firstLine) return '';
 
   // Get headers
-  const headers = parseCsvLine(lines[0]);
+  const headers = parseCsvLine(firstLine);
   if (!headers.length) return csv;
 
   // Format each row as key-value pairs
   const formattedRows: string[] = [];
 
   for (let i = 1; i < lines.length; i++) {
-    const values = parseCsvLine(lines[i]);
+    const line = lines[i];
+    if (!line) continue;
+    const values = parseCsvLine(line);
     if (values.length === 0 || values.every(v => !v.trim())) continue;
 
     const pairs: string[] = [];
     for (let j = 0; j < headers.length && j < values.length; j++) {
-      if (values[j].trim()) {
-        pairs.push(`${headers[j]}: ${values[j]}`);
+      const value = values[j];
+      const header = headers[j];
+      if (value?.trim() && header) {
+        pairs.push(`${header}: ${value}`);
       }
     }
 

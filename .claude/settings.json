@@ -1,0 +1,27 @@
+{
+  "plugins": {
+    "local": [
+      ".claude/plugins/commit-commands",
+      ".claude/plugins/code-review",
+      ".claude/plugins/feature-dev",
+      ".claude/plugins/frontend-design",
+      ".claude/plugins/pr-review-toolkit",
+      ".claude/plugins/security-guidance",
+      ".claude/plugins/hookify",
+      ".claude/plugins/plugin-dev"
+    ],
+    "skills": [
+      ".claude/skills/skill-creator",
+      ".claude/skills/webapp-testing",
+      ".claude/skills/docx",
+      ".claude/skills/pdf",
+      ".claude/skills/xlsx",
+      ".claude/skills/mcp-builder",
+      ".claude/skills/frontend-design",
+      ".claude/skills/internal-comms"
+    ]
+  },
+  "agents": {
+    "preferredModel": "sonnet"
+  }
+}

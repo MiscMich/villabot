@@ -27,6 +27,7 @@ const envSchema = z.object({
   // Optional
   COMPANY_WEBSITE_URL: z.string().url().optional(),
   DRIVE_POLL_INTERVAL_MS: z.string().transform(Number).default('300000'),
+  SCRAPE_SCHEDULE: z.string().default('0 3 * * 0'), // Cron: every Sunday at 3 AM
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 });
 

@@ -10,6 +10,7 @@ import { incrementalSync, fullSync } from '../google-drive/sync.js';
 import { closeInactiveSessions } from '../slack/threads.js';
 import { isDriveClientInitialized } from '../google-drive/client.js';
 import { supabase } from '../supabase/client.js';
+import { scrapeWebsite } from '../scraper/website.js';
 
 interface ScheduledJob {
   name: string;
@@ -40,6 +41,10 @@ export function initializeScheduler(): void {
 
   // Full sync - runs weekly on Sunday at 2 AM
   scheduleJob('full-sync', '0 2 * * 0', runFullSync);
+
+  // Website scraping - runs weekly on Sunday at 3 AM (or configured schedule)
+  const scrapeSchedule = env.SCRAPE_SCHEDULE ?? '0 3 * * 0';
+  scheduleJob('website-scrape', scrapeSchedule, runWebsiteScrape);
 
   logger.info(`Scheduler initialized with ${jobs.size} jobs`);
 }
@@ -148,6 +153,23 @@ async function runSessionCleanup(): Promise<void> {
 }
 
 /**
+ * Run website scraping
+ */
+async function runWebsiteScrape(): Promise<void> {
+  try {
+    const result = await scrapeWebsite();
+    logger.info('Website scrape completed', result);
+
+    await supabase.from('analytics').insert({
+      event_type: 'website_scrape_scheduled',
+      event_data: result,
+    });
+  } catch (error) {
+    logger.error('Website scrape failed', { error });
+  }
+}
+
+/**
  * Run daily analytics aggregation
  */
 async function runDailyAnalytics(): Promise<void> {
@@ -213,6 +235,18 @@ export async function triggerImmediateSync(): Promise<{
 }> {
   logger.info('Triggering immediate sync');
   return incrementalSync();
+}
+
+/**
+ * Trigger an immediate website scrape
+ */
+export async function triggerWebsiteScrape(): Promise<{
+  pagesScraped: number;
+  chunksCreated: number;
+  errors: string[];
+}> {
+  logger.info('Triggering immediate website scrape');
+  return scrapeWebsite();
 }
 
 /**

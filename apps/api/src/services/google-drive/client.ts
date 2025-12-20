@@ -242,9 +242,10 @@ export async function listChanges(pageToken: string): Promise<{
       for (const change of response.data.changes) {
         // Only include changes from our folder
         const parents = change.file?.parents ?? [];
+        const folderId = env.GOOGLE_DRIVE_FOLDER_ID;
         if (
           change.removed ||
-          parents.includes(env.GOOGLE_DRIVE_FOLDER_ID)
+          (folderId && parents.includes(folderId))
         ) {
           changes.push({
             fileId: change.fileId!,

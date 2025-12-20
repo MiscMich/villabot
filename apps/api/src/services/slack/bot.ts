@@ -3,7 +3,8 @@
  * Uses Bolt SDK with Socket Mode
  */
 
-import { App, LogLevel } from '@slack/bolt';
+import pkg from '@slack/bolt';
+const { App, LogLevel } = pkg;
 import { env } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
 import { detectIntent } from './intent.js';
@@ -20,8 +21,14 @@ import {
   handleCorrection,
 } from './response.js';
 import { supabase } from '../supabase/client.js';
+import { messageRateLimiter } from '../../utils/rate-limiter.js';
+import { errorTracker } from '../../utils/error-tracker.js';
+import { withTimeout, TimeoutError } from '../../utils/timeout.js';
 
-let slackApp: App | null = null;
+// Response timeout in milliseconds
+const RESPONSE_TIMEOUT_MS = 30000;
+
+let slackApp: InstanceType<typeof App> | null = null;
 let botUserId: string | null = null;
 
 /**
@@ -46,12 +53,116 @@ export async function initializeSlackBot(): Promise<void> {
   logger.info(`Slack bot initialized as ${authResult.user}`);
 
   // Register event handlers
+  registerMentionHandler();
   registerMessageHandler();
   registerReactionHandlers();
+
+  // Initialize error tracker
+  await errorTracker.initialize();
 
   // Start the bot
   await slackApp.start();
   logger.info('Slack bot connected via Socket Mode');
+}
+
+/**
+ * Register app mention handler - responds when @mentioned
+ */
+function registerMentionHandler(): void {
+  if (!slackApp) return;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  slackApp.event('app_mention', async ({ event, say }: { event: any; say: any }) => {
+    const messageText = event.text.replace(/<@[A-Z0-9]+>/g, '').trim(); // Remove mention
+    const channelId = event.channel;
+    const userId = event.user;
+    const threadTs = event.thread_ts ?? event.ts;
+
+    logger.info('Bot mentioned', { user: userId, channel: channelId, text: messageText });
+
+    // Check rate limit
+    const rateCheck = messageRateLimiter.check(userId);
+    if (!rateCheck.allowed) {
+      await errorTracker.trackRateLimit(userId, rateCheck.resetIn);
+      await say({
+        text: `⏳ You're asking questions too quickly. Please wait ${Math.ceil(rateCheck.resetIn / 1000)} seconds before asking again.`,
+        thread_ts: threadTs,
+      });
+      return;
+    }
+
+    try {
+      // Log analytics
+      await supabase.from('analytics').insert({
+        event_type: 'mention_received',
+        event_data: {
+          channel_id: channelId,
+          user_id: userId,
+        },
+      });
+
+      // Get or create session
+      const sessionId = await getOrCreateSession(channelId, threadTs, userId);
+
+      // Add user message to session
+      await addMessage(sessionId, userId, 'user', messageText);
+
+      // Generate response with timeout
+      const response = await withTimeout(
+        generateResponse(messageText),
+        RESPONSE_TIMEOUT_MS,
+        'generateResponse'
+      );
+
+      // Add bot response to session
+      const messageId = await addMessage(
+        sessionId,
+        botUserId!,
+        'assistant',
+        response.content,
+        response.sources,
+        response.confidence
+      );
+
+      // Send response in thread
+      await say({
+        text: response.content,
+        thread_ts: threadTs,
+        unfurl_links: false,
+        blocks: buildResponseBlocks(response.content, response.sources, response.confidence),
+      });
+
+      // Log response analytics
+      await supabase.from('analytics').insert({
+        event_type: 'response_sent',
+        event_data: {
+          session_id: sessionId,
+          message_id: messageId,
+          confidence: response.confidence,
+          source_count: response.sources.length,
+          triggered_by: 'mention',
+        },
+      });
+
+    } catch (error) {
+      const err = error as Error;
+
+      // Track error based on type
+      if (err instanceof TimeoutError) {
+        await errorTracker.trackTimeout('generateResponse', RESPONSE_TIMEOUT_MS, { userId, messageText });
+        await say({
+          text: "⏱️ My response is taking too long. Please try again or simplify your question.",
+          thread_ts: threadTs,
+        });
+      } else {
+        await errorTracker.track(err, 'slack', 'high', { userId, messageText, handler: 'mention' });
+        await say({
+          text: "I'm having trouble processing your request right now. Please try again in a moment.",
+          thread_ts: threadTs,
+        });
+      }
+    }
+  });
 }
 
 /**
@@ -60,7 +171,8 @@ export async function initializeSlackBot(): Promise<void> {
 function registerMessageHandler(): void {
   if (!slackApp) return;
 
-  slackApp.message(async ({ message, say, client }) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  slackApp.message(async ({ message, say, client: _client }: { message: any; say: any; client: any }) => {
     // Type guard for regular messages
     if (message.subtype || !('text' in message) || !message.text) {
       return;
@@ -71,11 +183,24 @@ function registerMessageHandler(): void {
       return;
     }
 
+    // Skip messages that mention the bot - these are handled by app_mention handler
+    if (botUserId && message.text.includes(`<@${botUserId}>`)) {
+      logger.info('Skipping message with bot mention (handled by app_mention)');
+      return;
+    }
+
     const messageText = message.text;
     const channelId = message.channel;
     const userId = message.user;
     const threadTs = message.thread_ts ?? message.ts;
     const isThreadReply = !!message.thread_ts;
+
+    logger.info('Message received', {
+      isThreadReply,
+      threadTs,
+      messageTs: message.ts,
+      textPreview: messageText.substring(0, 50),
+    });
 
     try {
       // Check if we've responded in this thread before
@@ -83,16 +208,36 @@ function registerMessageHandler(): void {
         ? await hasBotRespondedInThread(threadTs)
         : false;
 
+      logger.info('Thread check result', {
+        isThreadReply,
+        previousBotMessage,
+        threadTs,
+      });
+
       // Detect intent
       const intent = await detectIntent(messageText, isThreadReply, previousBotMessage);
 
-      logger.debug('Intent detected', {
+      logger.info('Intent detected', {
         intent: intent.intent,
         confidence: intent.confidence,
         shouldRespond: intent.shouldRespond,
+        isThreadReply,
+        previousBotMessage,
       });
 
       if (!intent.shouldRespond) {
+        logger.info('Not responding - intent check failed', { intent: intent.intent, confidence: intent.confidence });
+        return;
+      }
+
+      // Check rate limit
+      const rateCheck = messageRateLimiter.check(userId);
+      if (!rateCheck.allowed) {
+        await errorTracker.trackRateLimit(userId, rateCheck.resetIn);
+        await say({
+          text: `⏳ You're asking questions too quickly. Please wait ${Math.ceil(rateCheck.resetIn / 1000)} seconds before asking again.`,
+          thread_ts: threadTs,
+        });
         return;
       }
 
@@ -107,17 +252,13 @@ function registerMessageHandler(): void {
         },
       });
 
-      // Show typing indicator
-      // Note: Bolt doesn't have a direct typing indicator, but we can add reactions
-      // or use the web API if needed
-
       // Get or create session
       const sessionId = await getOrCreateSession(channelId, threadTs, userId);
 
       // Add user message to session
       await addMessage(sessionId, userId, 'user', messageText);
 
-      // Generate response based on intent
+      // Generate response based on intent with timeout
       let response;
 
       if (intent.intent === 'correction') {
@@ -130,27 +271,34 @@ function registerMessageHandler(): void {
         const lastUserQuestion = [...previousMessages].reverse().find(m => m.role === 'user');
 
         if (lastBotMsg && lastUserQuestion) {
-          const correctionResponse = await handleCorrection(
-            lastUserQuestion.content,
-            lastBotMsg.content,
-            messageText,
-            userId
+          const correctionResponse = await withTimeout(
+            handleCorrection(lastUserQuestion.content, lastBotMsg.content, messageText, userId),
+            RESPONSE_TIMEOUT_MS,
+            'handleCorrection'
           );
           response = { content: correctionResponse, sources: [], confidence: 0.9 };
         } else {
-          response = await generateResponse(messageText);
+          response = await withTimeout(
+            generateResponse(messageText),
+            RESPONSE_TIMEOUT_MS,
+            'generateResponse'
+          );
         }
       } else if (isThreadReply && previousBotMessage) {
         // Follow-up question in existing conversation
         const context = await getConversationContext(threadTs);
-        response = await generateFollowUpResponse(
-          messageText,
-          sessionId,
-          context?.messages ?? []
+        response = await withTimeout(
+          generateFollowUpResponse(messageText, sessionId, context?.messages ?? []),
+          RESPONSE_TIMEOUT_MS,
+          'generateFollowUpResponse'
         );
       } else {
         // New question
-        response = await generateResponse(messageText);
+        response = await withTimeout(
+          generateResponse(messageText),
+          RESPONSE_TIMEOUT_MS,
+          'generateResponse'
+        );
       }
 
       // Add bot response to session
@@ -164,7 +312,7 @@ function registerMessageHandler(): void {
       );
 
       // Send response in thread
-      const slackMessage = await say({
+      await say({
         text: response.content,
         thread_ts: threadTs,
         unfurl_links: false,
@@ -183,13 +331,22 @@ function registerMessageHandler(): void {
       });
 
     } catch (error) {
-      logger.error('Error handling message', { error, messageText });
+      const err = error as Error;
 
-      // Send error response
-      await say({
-        text: "I'm having trouble processing your request right now. Please try again in a moment.",
-        thread_ts: threadTs,
-      });
+      // Track error based on type
+      if (err instanceof TimeoutError) {
+        await errorTracker.trackTimeout('messageHandler', RESPONSE_TIMEOUT_MS, { userId, messageText });
+        await say({
+          text: "⏱️ My response is taking too long. Please try again or simplify your question.",
+          thread_ts: threadTs,
+        });
+      } else {
+        await errorTracker.track(err, 'slack', 'high', { userId, messageText, handler: 'message' });
+        await say({
+          text: "I'm having trouble processing your request right now. Please try again in a moment.",
+          thread_ts: threadTs,
+        });
+      }
     }
   });
 }
@@ -201,7 +358,8 @@ function registerReactionHandlers(): void {
   if (!slackApp) return;
 
   // Thumbs up = positive feedback
-  slackApp.event('reaction_added', async ({ event }) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  slackApp.event('reaction_added', async ({ event }: { event: any }) => {
     if (event.reaction === '+1' || event.reaction === 'thumbsup') {
       await handleFeedbackReaction(event.item.ts, 1);
     } else if (event.reaction === '-1' || event.reaction === 'thumbsdown') {
@@ -221,18 +379,20 @@ async function handleFeedbackReaction(messageTs: string, rating: number): Promis
       .select('id')
       .eq('slack_thread_ts', messageTs);
 
-    if (sessions && sessions.length > 0) {
+    const session = sessions?.[0];
+    if (session) {
       const { data: messages } = await supabase
         .from('thread_messages')
         .select('id, session_id')
-        .eq('session_id', sessions[0].id)
+        .eq('session_id', session.id)
         .eq('role', 'assistant')
         .order('created_at', { ascending: false })
         .limit(1);
 
-      if (messages && messages.length > 0) {
-        await recordFeedback(messages[0].session_id, messages[0].id, rating);
-        logger.info('Recorded feedback', { rating, messageId: messages[0].id });
+      const message = messages?.[0];
+      if (message) {
+        await recordFeedback(message.session_id, message.id, rating);
+        logger.info('Recorded feedback', { rating, messageId: message.id });
       }
     }
   } catch (error) {
@@ -241,22 +401,81 @@ async function handleFeedbackReaction(messageTs: string, rating: number): Promis
 }
 
 /**
+ * Split text into chunks at natural break points (paragraphs, sentences)
+ */
+function splitTextIntoChunks(text: string, maxLength: number): string[] {
+  const chunks: string[] = [];
+  let remaining = text;
+
+  while (remaining.length > maxLength) {
+    // Try to split at paragraph break first
+    let splitIndex = remaining.lastIndexOf('\n\n', maxLength);
+
+    // If no paragraph break, try single newline
+    if (splitIndex === -1 || splitIndex < maxLength * 0.5) {
+      splitIndex = remaining.lastIndexOf('\n', maxLength);
+    }
+
+    // If no newline, try sentence break
+    if (splitIndex === -1 || splitIndex < maxLength * 0.5) {
+      splitIndex = remaining.lastIndexOf('. ', maxLength);
+      if (splitIndex !== -1) splitIndex += 1; // Include the period
+    }
+
+    // If no sentence break, try word break
+    if (splitIndex === -1 || splitIndex < maxLength * 0.5) {
+      splitIndex = remaining.lastIndexOf(' ', maxLength);
+    }
+
+    // Fallback to hard break
+    if (splitIndex === -1 || splitIndex < maxLength * 0.3) {
+      splitIndex = maxLength;
+    }
+
+    chunks.push(remaining.slice(0, splitIndex).trim());
+    remaining = remaining.slice(splitIndex).trim();
+  }
+
+  if (remaining.length > 0) {
+    chunks.push(remaining);
+  }
+
+  return chunks;
+}
+
+/**
  * Build Slack blocks for response
+ * Handles long messages by splitting into multiple blocks (Slack limit: 3000 chars per block)
  */
 function buildResponseBlocks(
   content: string,
   sources: string[],
   confidence: number
 ): any[] {
-  const blocks: any[] = [
-    {
+  const blocks: any[] = [];
+  const MAX_BLOCK_LENGTH = 2900; // Leave buffer for safety
+
+  // Split long content into multiple blocks
+  if (content.length > MAX_BLOCK_LENGTH) {
+    const chunks = splitTextIntoChunks(content, MAX_BLOCK_LENGTH);
+    for (const chunk of chunks) {
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: chunk,
+        },
+      });
+    }
+  } else {
+    blocks.push({
       type: 'section',
       text: {
         type: 'mrkdwn',
         text: content,
       },
-    },
-  ];
+    });
+  }
 
   // Add sources if available
   if (sources.length > 0) {

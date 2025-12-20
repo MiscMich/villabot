@@ -10,7 +10,7 @@ import { QUESTION_HEURISTICS } from '@villa-paraiso/shared';
 
 // Initialize Gemini for classification
 const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
 export type IntentType =
   | 'question'      // User asking a question the bot should answer
@@ -64,7 +64,7 @@ export async function detectIntent(
     return { intent: 'ignore', confidence: 0.9, shouldRespond: false };
   }
 
-  // If this is a reply to the bot, it's likely relevant
+  // If this is a reply in a thread where bot previously responded
   if (isThreadReply && previousBotMessage) {
     // Check for feedback/correction patterns
     if (isFeedback(normalizedMessage)) {
@@ -75,6 +75,23 @@ export async function detectIntent(
     }
     // Follow-up question in thread
     return { intent: 'question', confidence: 0.8, shouldRespond: true };
+  }
+
+  // If this is a thread reply but we couldn't verify previous bot message,
+  // still be lenient if it looks like a question (user might be following up)
+  if (isThreadReply && !previousBotMessage) {
+    logger.info('Thread reply without verified bot message, checking if question-like');
+    // If it ends with ? or starts with question word, treat as follow-up
+    if (normalizedMessage.endsWith('?') || /^(how|what|when|where|why|who|can|could|would|should|does|do|is|are)\b/.test(normalizedMessage)) {
+      logger.info('Thread reply looks like a question, responding');
+      return { intent: 'question', confidence: 0.7, shouldRespond: true };
+    }
+    // Also respond if it contains domain keywords (likely about villa operations)
+    const hasDomainKeyword = [...DOMAIN_KEYWORDS].some(kw => normalizedMessage.includes(kw));
+    if (hasDomainKeyword) {
+      logger.info('Thread reply contains domain keywords, responding');
+      return { intent: 'question', confidence: 0.65, shouldRespond: true };
+    }
   }
 
   // Tier 1: Quick heuristics
@@ -117,7 +134,7 @@ function applyHeuristics(message: string): IntentResult {
   }
 
   // Check for question word at start
-  const firstWord = message.split(/\s+/)[0];
+  const firstWord = message.split(/\s+/)[0] ?? '';
   if (QUESTION_KEYWORDS.has(firstWord)) {
     const hasDomainKeyword = [...DOMAIN_KEYWORDS].some(kw => message.includes(kw));
     return {
