@@ -38,6 +38,9 @@ FROM node:20-alpine AS runner
 RUN apk add --no-cache dumb-init
 WORKDIR /app
 
+# Install pnpm for production install
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
 ENV NODE_ENV=production
 ENV PORT=3000
 
@@ -45,11 +48,22 @@ ENV PORT=3000
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 teambrain
 
+# Copy package files for production install
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/pnpm-lock.yaml ./
+COPY --from=builder /app/pnpm-workspace.yaml ./
+COPY --from=builder /app/apps/api/package.json ./apps/api/
+COPY --from=builder /app/packages/shared/package.json ./packages/shared/
+
+# Install production dependencies only
+RUN pnpm install --frozen-lockfile --prod
+
 # Copy built application
-COPY --from=builder --chown=teambrain:nodejs /app/apps/api/dist ./dist
-COPY --from=builder --chown=teambrain:nodejs /app/apps/api/package.json ./
-COPY --from=builder --chown=teambrain:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=teambrain:nodejs /app/apps/api/dist ./apps/api/dist
 COPY --from=builder --chown=teambrain:nodejs /app/packages/shared/dist ./packages/shared/dist
+
+# Set working directory to api
+WORKDIR /app/apps/api
 
 USER teambrain
 
