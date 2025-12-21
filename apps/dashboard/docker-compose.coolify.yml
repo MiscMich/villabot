@@ -34,3 +34,11 @@ services:
       retries: 3
       start_period: 40s
     restart: unless-stopped
+    networks:
+      - coolify
+    labels:
+      - "traefik.docker.network=coolify"
+
+networks:
+  coolify:
+    external: true
