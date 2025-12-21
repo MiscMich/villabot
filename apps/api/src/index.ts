@@ -69,7 +69,8 @@ app.use('/auth', authRouter); // Google Drive OAuth (legacy path)
 
 // Protected routes (with rate limiting)
 // Note: Rate limiters require authenticate + resolveWorkspace middleware on routes
-app.use('/api/workspaces', generalApiRateLimiter, workspacesRouter);
+// Workspaces router doesn't use resolveWorkspace (it manages workspaces directly)
+app.use('/api/workspaces', workspacesRouter);
 app.use('/api/team', generalApiRateLimiter, teamRouter);
 app.use('/api/config', generalApiRateLimiter, configRouter);
 app.use('/api/documents', documentSyncRateLimiter, documentsRouter);
