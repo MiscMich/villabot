@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useToast } from '@/components/ui/use-toast';
 import {
   Save,
   CheckCircle,
@@ -24,6 +25,7 @@ import {
 
 export default function SettingsPage() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [saving, setSaving] = useState(false);
 
   const { data: config, isLoading: configLoading } = useQuery({
@@ -78,6 +80,17 @@ export default function SettingsPage() {
     setSaving(true);
     try {
       await updateMutation.mutateAsync({ key: 'general', value: generalSettings });
+      toast({
+        title: 'Settings saved',
+        description: 'General settings have been updated successfully.',
+        variant: 'success',
+      });
+    } catch (error) {
+      toast({
+        title: 'Failed to save',
+        description: error instanceof Error ? error.message : 'An error occurred while saving settings.',
+        variant: 'destructive',
+      });
     } finally {
       setSaving(false);
     }
@@ -87,6 +100,17 @@ export default function SettingsPage() {
     setSaving(true);
     try {
       await updateMutation.mutateAsync({ key: 'ai', value: aiSettings });
+      toast({
+        title: 'Settings saved',
+        description: 'AI settings have been updated successfully.',
+        variant: 'success',
+      });
+    } catch (error) {
+      toast({
+        title: 'Failed to save',
+        description: error instanceof Error ? error.message : 'An error occurred while saving settings.',
+        variant: 'destructive',
+      });
     } finally {
       setSaving(false);
     }
@@ -96,6 +120,17 @@ export default function SettingsPage() {
     setSaving(true);
     try {
       await updateMutation.mutateAsync({ key: 'sync', value: syncSettings });
+      toast({
+        title: 'Settings saved',
+        description: 'Sync settings have been updated successfully.',
+        variant: 'success',
+      });
+    } catch (error) {
+      toast({
+        title: 'Failed to save',
+        description: error instanceof Error ? error.message : 'An error occurred while saving settings.',
+        variant: 'destructive',
+      });
     } finally {
       setSaving(false);
     }

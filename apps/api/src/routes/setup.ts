@@ -9,6 +9,9 @@ import { logger } from '../utils/logger.js';
 import { createBot } from '../services/bots/index.js';
 import { authenticate } from '../middleware/auth.js';
 import { TIER_CONFIGS } from '@teambrain/shared';
+import { fullSync as syncGoogleDrive } from '../services/google-drive/sync.js';
+import { isDriveClientInitialized } from '../services/google-drive/client.js';
+import { scrapeWebsite } from '../services/scraper/website.js';
 
 export const setupRouter = Router();
 
@@ -28,16 +31,32 @@ interface SetupStatus {
 
 /**
  * Get setup status - check if initial setup is complete for a workspace
+ * Supports both authenticated (workspace context) and unauthenticated (query param) modes
  */
 setupRouter.get('/status', async (req, res) => {
   try {
-    // TODO: Get workspaceId from authentication context
-    const workspaceId = req.query.workspaceId as string | undefined;
+    // Try to get workspaceId from auth context first, fall back to query param
+    let workspaceId: string | undefined;
+
+    // Check for workspace from auth middleware (if applied upstream)
+    if (req.workspace?.id) {
+      workspaceId = req.workspace.id;
+    } else {
+      // Fall back to query param for unauthenticated setup check
+      workspaceId = req.query.workspaceId as string | undefined;
+    }
 
     if (!workspaceId) {
-      return res.status(400).json({
-        success: false,
-        error: 'Workspace ID is required',
+      // Return default status for new users without workspace
+      return res.json({
+        completed: false,
+        completedAt: null,
+        steps: {
+          workspace: false,
+          slack: false,
+          googleDrive: false,
+          bot: false,
+        },
       });
     }
 
@@ -339,8 +358,39 @@ setupRouter.post('/complete', authenticate, async (req, res) => {
         updated_at: new Date().toISOString(),
       });
 
-    // TODO: Trigger initial sync if Google Drive is configured
-    // TODO: Trigger website scraping if website URL is provided
+    // Trigger initial sync operations in background (don't await)
+    // These run asynchronously so setup completes immediately
+    if (googleDrive?.authenticated && isDriveClientInitialized()) {
+      syncGoogleDrive({ workspaceId })
+        .then((result) => {
+          logger.info('Initial Google Drive sync completed', {
+            workspaceId,
+            added: result.added,
+            errors: result.errors.length,
+          });
+        })
+        .catch((error) => {
+          logger.error('Initial Google Drive sync failed', { workspaceId, error });
+        });
+    }
+
+    if (website?.url) {
+      scrapeWebsite({
+        workspaceId,
+        maxPages: website.maxPages ?? 200,
+      })
+        .then((result) => {
+          logger.info('Initial website scrape completed', {
+            workspaceId,
+            pagesScraped: result.pagesScraped,
+            chunksCreated: result.chunksCreated,
+            errors: result.errors.length,
+          });
+        })
+        .catch((error) => {
+          logger.error('Initial website scrape failed', { workspaceId, error });
+        });
+    }
 
     logger.info('Setup completed successfully', {
       workspaceId,

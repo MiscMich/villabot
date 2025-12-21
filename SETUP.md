@@ -1,18 +1,28 @@
-# TeamBrain AI - Setup Instructions
+# TeamBrain AI - Setup Guide
 
-Complete setup guide for the TeamBrain AI SaaS platform.
+Quick start guide for local development and production deployment.
 
 ## Prerequisites
 
-- Node.js 18+
-- pnpm (package manager)
-- Supabase account (for database and auth)
-- Stripe account (for billing)
-- Slack App credentials
-- Google Cloud Console credentials (for Drive integration)
-- Gemini API key (for AI)
+- **Node.js 20+** - [Download](https://nodejs.org/)
+- **pnpm 8+** - Install: `npm install -g pnpm`
+- **Docker** (for deployment) - [Download](https://docker.com/)
+- **Git** - [Download](https://git-scm.com/)
 
-## 1. Clone and Install
+## Required External Accounts
+
+| Service | Purpose | Where to Get |
+|---------|---------|--------------|
+| **Supabase** | Database + Auth | [supabase.com](https://supabase.com) or self-host |
+| **Google Cloud** | Drive API + Gemini AI | [console.cloud.google.com](https://console.cloud.google.com) |
+| **Stripe** | Billing | [stripe.com](https://stripe.com) |
+| **Slack** | Bot integration | [api.slack.com](https://api.slack.com) (per workspace) |
+
+---
+
+## Local Development Setup
+
+### 1. Clone Repository
 
 ```bash
 git clone https://github.com/MiscMich/teambrain-ai.git
@@ -20,9 +30,82 @@ cd teambrain-ai
 pnpm install
 ```
 
-## 2. Environment Setup
+### 2. Supabase Setup
 
-### API Server (`apps/api/.env`)
+#### Option A: Supabase Cloud (Recommended for development)
+
+1. Create account at [supabase.com](https://supabase.com)
+2. Create new project
+3. Go to Settings > API to get:
+   - Project URL → `SUPABASE_URL`
+   - anon public → `SUPABASE_ANON_KEY`
+   - service_role → `SUPABASE_SERVICE_ROLE_KEY`
+
+#### Option B: Self-Hosted Supabase
+
+```bash
+# Generate secrets
+./scripts/generate-keys.sh > .supabase.secrets
+cat .supabase.secrets >> .env
+
+# Start Supabase
+docker compose -f docker-compose.supabase.yml up -d
+```
+
+### 3. Run Database Migrations
+
+In Supabase SQL Editor (or using CLI), run each migration in order:
+
+```bash
+# Files in supabase/migrations/
+001_initial_schema.sql
+002_learned_facts_function.sql
+005_error_logs.sql
+006_multi_bot_platform.sql
+007_feedback_system.sql
+008_workspaces_foundation.sql
+009_add_workspace_id.sql
+010_rls_policies.sql
+011_subscriptions.sql
+012_usage_tracking.sql
+013_enforce_workspace_isolation.sql
+014_platform_admin.sql
+015_bot_health.sql
+```
+
+### 4. Google Cloud Setup
+
+#### Enable APIs
+1. Go to [Google Cloud Console](https://console.cloud.google.com)
+2. Create new project
+3. Enable APIs:
+   - Google Drive API
+   - Google Docs API
+   - Google Sheets API
+
+#### Create OAuth Credentials
+1. Go to APIs & Services > Credentials
+2. Configure OAuth consent screen
+3. Create OAuth 2.0 Client ID:
+   - Application type: Web application
+   - Authorized redirect URI: `http://localhost:3000/api/google-drive/callback`
+4. Copy Client ID and Secret
+
+#### Get Gemini API Key
+1. Go to [Google AI Studio](https://aistudio.google.com/app/apikey)
+2. Create API key
+
+### 5. Configure Environment
+
+```bash
+# API server config
+cp .env.example apps/api/.env
+
+# Dashboard config
+cp .env.example apps/dashboard/.env.local
+```
+
+Edit `apps/api/.env`:
 
 ```env
 # Supabase
@@ -30,105 +113,86 @@ SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 
-# AI Provider
-GEMINI_API_KEY=your-gemini-api-key
-
-# Google Drive OAuth
-GOOGLE_CLIENT_ID=your-client-id
+# Google
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your-client-secret
 GOOGLE_REDIRECT_URI=http://localhost:3000/api/google-drive/callback
+GEMINI_API_KEY=your-gemini-key
 
-# Stripe (for billing)
-STRIPE_SECRET_KEY=sk_test_...
-STRIPE_WEBHOOK_SECRET=whsec_...
-STRIPE_STARTER_PRICE_ID=price_...
-STRIPE_PRO_PRICE_ID=price_...
-STRIPE_BUSINESS_PRICE_ID=price_...
-
-# App Config
-APP_URL=http://localhost:3001
+# App URLs
 API_URL=http://localhost:3000
-NODE_ENV=development
+APP_URL=http://localhost:3001
 ```
 
-### Dashboard (`apps/dashboard/.env.local`)
+Edit `apps/dashboard/.env.local`:
 
 ```env
-# Supabase (client-side)
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-
-# API URL
 NEXT_PUBLIC_API_URL=http://localhost:3000
-
-# App Configuration
 NEXT_PUBLIC_APP_NAME=TeamBrain AI
 NEXT_PUBLIC_APP_URL=http://localhost:3001
 ```
 
-## 3. Database Setup
+### 6. Start Development Servers
 
-### Apply Migrations to Supabase
+```bash
+# Terminal 1: API server (port 3000)
+pnpm dev
 
-Run migrations in order in the Supabase SQL editor:
-
-1. `supabase/migrations/001_documents.sql` - Documents table
-2. `supabase/migrations/002_document_chunks.sql` - Vector embeddings
-3. `supabase/migrations/003_thread_sessions.sql` - Conversation threads
-4. `supabase/migrations/004_learned_facts.sql` - Knowledge corrections
-5. `supabase/migrations/005_analytics.sql` - Usage analytics
-6. `supabase/migrations/006_multi_bot_platform.sql` - Multi-bot support
-7. `supabase/migrations/007_feedback_system.sql` - User feedback
-8. `supabase/migrations/008_workspaces_foundation.sql` - Multi-tenant workspaces
-9. `supabase/migrations/009_add_workspace_id.sql` - Workspace isolation
-10. `supabase/migrations/010_rls_policies.sql` - Row-level security
-11. `supabase/migrations/011_subscriptions.sql` - Stripe billing
-12. `supabase/migrations/012_usage_tracking.sql` - Tier enforcement
-13. `supabase/migrations/013_enforce_workspace_isolation.sql` - NOT NULL constraints
-14. `supabase/migrations/014_platform_admin.sql` - Admin roles
-15. `supabase/migrations/015_bot_health.sql` - Health monitoring
-
-### Enable pgvector Extension
-
-In Supabase SQL editor:
-```sql
-CREATE EXTENSION IF NOT EXISTS vector;
+# Terminal 2: Dashboard (port 3001)
+pnpm dev:dashboard
 ```
 
-## 4. Supabase Auth Configuration
+### 7. Access Application
 
-1. Go to Supabase Dashboard → Authentication → Providers
-2. Enable Email provider
-3. Configure email templates for:
-   - Confirmation email
-   - Password reset email
-   - Magic link email
+- **Dashboard**: http://localhost:3001
+- **API**: http://localhost:3000
+- **API Health**: http://localhost:3000/health
 
-### Site URL Settings
+---
 
-1. Go to Authentication → URL Configuration
-2. Set Site URL: `http://localhost:3001`
-3. Add redirect URLs:
-   - `http://localhost:3001/auth/callback`
-   - `http://localhost:3001/setup`
+## Stripe Setup (For Billing)
 
-## 5. Stripe Configuration
+### 1. Create Stripe Account
+Go to [stripe.com](https://stripe.com) and register.
 
-### Create Products and Prices
+### 2. Get API Keys
+Dashboard > Developers > API keys
+- Use test keys for development (`sk_test_...`)
+- Use live keys for production (`sk_live_...`)
 
-1. Create three products in Stripe Dashboard:
-   - **Starter** - Basic tier
-   - **Pro** - Professional tier
-   - **Business** - Enterprise tier
+### 3. Create Products
 
-2. Create monthly prices for each product
+Create 3 products in Stripe Dashboard:
 
-3. Copy the price IDs to your `.env` file
+| Product | Price | Description |
+|---------|-------|-------------|
+| Starter | $19/mo | 500 queries, 100 docs, 1 bot |
+| Pro | $49/mo | 2000 queries, 500 docs, 3 bots |
+| Business | $149/mo | 10000 queries, unlimited docs, 10 bots |
 
-### Webhook Setup
+Copy each Price ID.
 
-1. Create a webhook endpoint: `https://your-api-domain.com/api/webhooks/stripe`
-2. Subscribe to events:
+### 4. Configure Webhook
+
+For local development:
+
+```bash
+# Install Stripe CLI
+brew install stripe/stripe-cli/stripe
+
+# Login
+stripe login
+
+# Forward webhooks to local server
+stripe listen --forward-to localhost:3000/api/stripe/webhook
+```
+
+For production:
+1. Go to Developers > Webhooks
+2. Add endpoint: `https://api.yourdomain.com/api/stripe/webhook`
+3. Select events:
    - `checkout.session.completed`
    - `customer.subscription.created`
    - `customer.subscription.updated`
@@ -136,170 +200,128 @@ CREATE EXTENSION IF NOT EXISTS vector;
    - `invoice.paid`
    - `invoice.payment_failed`
 
-## 6. Google OAuth Setup
+### 5. Add to Environment
 
-1. Go to Google Cloud Console
-2. Create OAuth 2.0 credentials
-3. Set authorized redirect URI: `http://localhost:3000/api/google-drive/callback`
-4. Enable Google Drive API
+```env
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_STARTER_PRICE_ID=price_...
+STRIPE_PRO_PRICE_ID=price_...
+STRIPE_BUSINESS_PRICE_ID=price_...
+```
 
-## 7. Slack App Configuration
+---
 
-### Create a Slack App
+## Slack App Setup
+
+Each workspace creates their own Slack app. Here's how:
+
+### 1. Create Slack App
 
 1. Go to [api.slack.com/apps](https://api.slack.com/apps)
-2. Click "Create New App" → "From scratch"
-3. Name your app and select workspace
+2. Create New App > From Manifest
+3. Use this manifest:
 
-### Configure Bot Token Scopes
-
-Under OAuth & Permissions → Bot Token Scopes, add:
-- `app_mentions:read`
-- `channels:history`
-- `channels:read`
-- `chat:write`
-- `groups:history`
-- `groups:read`
-- `im:history`
-- `im:read`
-- `users:read`
-
-### Enable Socket Mode
-
-1. Go to Socket Mode → Enable Socket Mode
-2. Generate an App-Level Token with `connections:write` scope
-3. This gives you the `SLACK_APP_TOKEN` (starts with `xapp-`)
-
-### Install to Workspace
-
-1. Go to Install App → Install to Workspace
-2. Copy the Bot User OAuth Token (`SLACK_BOT_TOKEN`, starts with `xoxb-`)
-
-### Event Subscriptions
-
-Under Event Subscriptions → Subscribe to bot events:
-- `app_mention`
-- `message.channels`
-- `message.groups`
-- `message.im`
-
-## 8. Running the Application
-
-### Development Mode
-
-```bash
-# Terminal 1 - API Server
-pnpm dev
-
-# Terminal 2 - Dashboard
-pnpm dev:dashboard
+```yaml
+display_information:
+  name: TeamBrain AI
+  description: AI-powered knowledge assistant
+  background_color: "#4A154B"
+features:
+  app_home:
+    home_tab_enabled: true
+    messages_tab_enabled: true
+  bot_user:
+    display_name: TeamBrain
+    always_online: true
+oauth_config:
+  scopes:
+    bot:
+      - app_mentions:read
+      - channels:history
+      - channels:read
+      - chat:write
+      - groups:history
+      - groups:read
+      - im:history
+      - im:read
+      - im:write
+      - mpim:history
+      - reactions:write
+      - users:read
+settings:
+  event_subscriptions:
+    bot_events:
+      - app_mention
+      - message.channels
+      - message.groups
+      - message.im
+  socket_mode_enabled: true
+  token_rotation_enabled: false
 ```
 
-### Production Mode
+### 2. Get Credentials
 
+- **Bot Token** (`xoxb-...`): OAuth & Permissions > Bot User OAuth Token
+- **App Token** (`xapp-...`): Basic Information > App-Level Tokens (create with `connections:write` scope)
+- **Signing Secret**: Basic Information > App Credentials
+
+### 3. Install to Workspace
+
+1. OAuth & Permissions > Install to Workspace
+2. Authorize the app
+3. Invite bot to channels: `/invite @TeamBrain`
+
+---
+
+## Verification
+
+### Check API Health
 ```bash
-# Build all packages
-pnpm build
-
-# Start API server
-cd apps/api && pnpm start
-
-# Start Dashboard
-cd apps/dashboard && pnpm start
+curl http://localhost:3000/health
+# Should return: {"status":"ok","timestamp":"..."}
 ```
 
-### Using Docker
-
+### Check Database Connection
 ```bash
-docker compose up -d --build
+curl http://localhost:3000/api/config
+# Should return workspace config (may need auth)
 ```
 
-## 9. First-Time Setup
+### Check Dashboard
+Open http://localhost:3001 - should see login page
 
-1. Open `http://localhost:3001` in your browser
-2. Click "Get Started" or "Sign Up"
-3. Create an account with your email
-4. Verify your email (check spam folder)
-5. Log in and complete the setup wizard:
-   - **Step 1**: Welcome
-   - **Step 2**: Create workspace (name & slug)
-   - **Step 3**: Connect Slack (paste tokens)
-   - **Step 4**: Connect Google Drive (OAuth flow)
-   - **Step 5**: Configure knowledge sources
-   - **Step 6**: Create your first bot
-   - **Step 7**: Review and launch
-
-## 10. Post-Setup Tasks
-
-### Sync Google Drive Documents
-
-The system will automatically sync documents from your connected Google Drive folders.
-
-### Test Your Bot
-
-1. Invite your bot to a Slack channel
-2. Mention the bot: `@YourBotName what documents do you have?`
-3. The bot should respond with information from your knowledge base
+---
 
 ## Troubleshooting
 
-### "Supabase environment variables not set"
-
-Ensure you have created `apps/dashboard/.env.local` with the `NEXT_PUBLIC_*` prefixed variables.
-
-### "Email address is invalid" during signup
-
-Supabase blocks some email domains by default. Use a real email address (not test@example.com).
-
-### Bot not responding in Slack
-
-1. Check that the bot is running: `pnpm dev`
-2. Verify Slack tokens are correct
-3. Check bot is invited to the channel
-4. Review logs for errors
-
-### Database connection errors
-
-1. Verify `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`
-2. Check that migrations have been applied
-3. Ensure pgvector extension is enabled
-
-### Type errors during build
-
+### "Cannot find module" errors
 ```bash
-# Clean and rebuild
-rm -rf node_modules apps/*/node_modules packages/*/node_modules
 pnpm install
 pnpm build
 ```
 
-## Architecture Overview
+### Database connection issues
+- Check Supabase is running
+- Verify URL and keys in `.env`
+- Check RLS policies are not blocking
 
-```
-┌─────────────────┐    ┌─────────────────┐
-│   Dashboard     │    │   Slack Apps    │
-│  (Next.js 15)   │    │  (Multiple)     │
-│   Port 3001     │    │                 │
-└────────┬────────┘    └────────┬────────┘
-         │                      │
-         └──────────┬───────────┘
-                    │
-         ┌──────────▼──────────┐
-         │      API Server      │
-         │    (Express.js)      │
-         │      Port 3000       │
-         └──────────┬───────────┘
-                    │
-    ┌───────────────┼───────────────┐
-    │               │               │
-    ▼               ▼               ▼
-┌────────┐   ┌──────────┐   ┌────────────┐
-│Supabase│   │  Gemini  │   │Google Drive│
-│(DB+Auth)│   │  (AI)    │   │   (Docs)   │
-└────────┘   └──────────┘   └────────────┘
-```
+### Google OAuth errors
+- Verify redirect URI matches exactly
+- Check OAuth consent screen is configured
+- Ensure APIs are enabled
 
-## Support
+### Stripe webhook issues
+- Use `stripe listen` for local development
+- Check webhook secret matches
+- Verify endpoint URL is correct
 
-For issues and feature requests, visit:
-https://github.com/MiscMich/teambrain-ai/issues
+---
+
+## Next Steps
+
+1. **Deploy to Production**: See [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)
+2. **Create First Workspace**: Sign up through dashboard
+3. **Configure Knowledge Sources**: Add Google Drive folder or website
+4. **Connect Slack Bot**: Add Slack credentials in bot settings
+5. **Invite Team**: Add team members to workspace

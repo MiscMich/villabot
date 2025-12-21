@@ -1,32 +1,60 @@
 # TeamBrain AI - Production Deployment Guide
 
-Complete guide for deploying TeamBrain AI to production on a Hetzner VPS with Docker, Traefik, and SSL.
+Complete guide for deploying TeamBrain AI on a Hetzner VPS with self-hosted Supabase.
+
+## Table of Contents
+
+1. [Prerequisites](#prerequisites)
+2. [Server Setup (Hetzner)](#server-setup-hetzner)
+3. [Self-Hosted Supabase](#self-hosted-supabase)
+4. [External Services Setup](#external-services-setup)
+5. [Application Deployment](#application-deployment)
+6. [DNS Configuration](#dns-configuration)
+7. [SSL/TLS Certificates](#ssltls-certificates)
+8. [Post-Deployment](#post-deployment)
+9. [Troubleshooting](#troubleshooting)
+
+---
 
 ## Prerequisites
 
-- Hetzner VPS (CX21 or higher recommended)
-- Domain name with DNS access
-- Docker and Docker Compose installed
-- Supabase project (cloud or self-hosted)
-- Google Cloud project with Drive API + OAuth
-- Stripe account with products/prices configured
-- Gemini API key
+### Required Accounts
+
+| Service | Purpose | Cost |
+|---------|---------|------|
+| **Hetzner Cloud** | VPS hosting | ~$10-20/mo |
+| **Google Cloud** | Gemini API + Drive OAuth | Pay-per-use |
+| **Stripe** | Billing/subscriptions | 2.9% + $0.30/txn |
+| **Domain registrar** | DNS management | ~$12/year |
+
+### Recommended Server Specs
+
+| Tier | RAM | CPU | Disk | Monthly |
+|------|-----|-----|------|---------|
+| **Starter** | 4GB | 2 vCPU | 80GB | ~$7 |
+| **Production** | 8GB | 4 vCPU | 160GB | ~$15 |
+| **Scale** | 16GB | 8 vCPU | 240GB | ~$30 |
+
+For self-hosted Supabase + Application: **minimum 8GB RAM recommended**.
+
+---
 
 ## Server Setup (Hetzner)
 
-### 1. Create Hetzner VPS
+### 1. Create VPS
 
-1. Log into Hetzner Cloud Console
-2. Create a new server:
-   - Location: Choose closest to your users
-   - Image: Ubuntu 22.04
-   - Type: CX21 (2 vCPU, 4GB RAM) or higher
-   - SSH Key: Add your public key
-3. Note the server IP address
+1. Log into [Hetzner Cloud Console](https://console.hetzner.cloud)
+2. Create new project or select existing
+3. Add Server:
+   - Location: Choose nearest to your users
+   - Image: **Ubuntu 24.04**
+   - Type: **CX22** (4GB RAM) minimum, **CX32** (8GB) recommended
+   - SSH keys: Add your public key
+   - Name: \`teambrain-prod\`
 
 ### 2. Initial Server Configuration
 
-```bash
+\`\`\`bash
 # SSH into server
 ssh root@YOUR_SERVER_IP
 
@@ -36,362 +64,314 @@ apt update && apt upgrade -y
 # Install Docker
 curl -fsSL https://get.docker.com | sh
 
-# Install Docker Compose plugin
+# Install Docker Compose
 apt install docker-compose-plugin -y
 
-# Add your user to docker group (if not root)
-usermod -aG docker $USER
+# Verify installation
+docker --version
+docker compose version
 
-# Install required tools
-apt install -y git wget curl htop
-```
+# Create deploy user
+useradd -m -s /bin/bash deploy
+usermod -aG docker deploy
 
-### 3. Configure DNS
+# Allow SSH for deploy user
+mkdir -p /home/deploy/.ssh
+cp ~/.ssh/authorized_keys /home/deploy/.ssh/
+chown -R deploy:deploy /home/deploy/.ssh
 
-Point your domain to the server:
+# Switch to deploy user for remaining steps
+su - deploy
+\`\`\`
 
-| Record | Type | Value |
-|--------|------|-------|
-| `@` | A | YOUR_SERVER_IP |
-| `api` | A | YOUR_SERVER_IP |
-| `traefik` | A | YOUR_SERVER_IP (optional) |
+### 3. Configure Firewall
 
-Wait for DNS propagation (5-30 minutes).
+\`\`\`bash
+# Using ufw (as root)
+ufw default deny incoming
+ufw default allow outgoing
+ufw allow ssh
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw enable
+\`\`\`
 
-## Deployment
+### 4. Create Application Directory
 
-### 1. Clone Repository
+\`\`\`bash
+# As deploy user
+mkdir -p ~/teambrain
+cd ~/teambrain
+\`\`\`
 
-```bash
-cd /opt
-git clone https://github.com/MiscMich/teambrain-ai.git
-cd teambrain-ai
-```
+---
 
-### 2. Configure Environment
+## Self-Hosted Supabase
 
-```bash
-# Copy environment template
+Self-hosted Supabase provides full data sovereignty. The stack includes:
+- PostgreSQL 15 with pgvector extension
+- GoTrue (Authentication)
+- PostgREST (API)
+- Storage API
+- Kong (API Gateway)
+- Studio (Admin UI)
+
+### 1. Generate Secrets
+
+Run the generate-keys.sh script (included in scripts/):
+
+\`\`\`bash
+cd ~/teambrain
+./scripts/generate-keys.sh > .secrets
+cat .secrets
+# IMPORTANT: Save these values securely!
+\`\`\`
+
+### 2. Download Supabase Docker Files
+
+\`\`\`bash
+# Get official Supabase self-hosted config
+git clone --depth 1 https://github.com/supabase/supabase
+cp -r supabase/docker/* ./supabase-docker/
+rm -rf supabase
+
+cd supabase-docker
 cp .env.example .env
+\`\`\`
 
+### 3. Configure Supabase Environment
+
+Edit \`supabase-docker/.env\` with the generated secrets:
+
+\`\`\`env
+############
+# Secrets
+############
+POSTGRES_PASSWORD=your_generated_password
+JWT_SECRET=your_generated_jwt_secret
+ANON_KEY=your_generated_anon_key
+SERVICE_ROLE_KEY=your_generated_service_role_key
+
+############
+# URLs
+############
+SITE_URL=https://teambrain.app
+API_EXTERNAL_URL=https://supabase.teambrain.app
+
+############
+# Auth (SMTP via Resend recommended)
+############
+GOTRUE_SMTP_HOST=smtp.resend.com
+GOTRUE_SMTP_PORT=465
+GOTRUE_SMTP_USER=resend
+GOTRUE_SMTP_PASS=your_resend_api_key
+GOTRUE_SMTP_SENDER_NAME=TeamBrain AI
+\`\`\`
+
+### 4. Enable pgvector Extension
+
+\`\`\`bash
+mkdir -p volumes/db/init
+cat > volumes/db/init/01-extensions.sql << 'EOF'
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS btree_gin;
+EOF
+\`\`\`
+
+### 5. Start Supabase
+
+\`\`\`bash
+docker compose up -d
+docker compose ps
+\`\`\`
+
+### 6. Run Migrations
+
+Access Supabase Studio and run each migration from \`supabase/migrations/\` in order (001 through 015).
+
+---
+
+## External Services Setup
+
+### 1. Google Cloud Setup
+
+#### Enable APIs
+1. Go to [Google Cloud Console](https://console.cloud.google.com)
+2. Create project: \`teambrain-prod\`
+3. Enable: Google Drive API, Google Docs API, Google Sheets API
+
+#### Create OAuth Credentials
+1. Configure OAuth consent screen (External)
+2. Create OAuth 2.0 Client ID:
+   - Authorized redirect: \`https://api.teambrain.app/api/google-drive/callback\`
+3. Save Client ID and Secret
+
+#### Get Gemini API Key
+1. Go to [Google AI Studio](https://aistudio.google.com/app/apikey)
+2. Create and save API key
+
+### 2. Stripe Setup
+
+#### Create Products
+| Product | Price | Billing |
+|---------|-------|---------|
+| **Starter** | $19/mo | Monthly |
+| **Pro** | $49/mo | Monthly |
+| **Business** | $149/mo | Monthly |
+
+#### Configure Webhooks
+1. Endpoint: \`https://api.teambrain.app/api/stripe/webhook\`
+2. Events: \`checkout.session.completed\`, \`customer.subscription.*\`, \`invoice.*\`
+3. Save webhook signing secret
+
+### 3. Slack App Template
+
+Create from manifest (see docs/SLACK_MANIFEST.yaml)
+
+---
+
+## Application Deployment
+
+### 1. Clone and Configure
+
+\`\`\`bash
+cd ~/teambrain
+git clone https://github.com/MiscMich/teambrain-ai.git app
+cd app
+
+# Create .env from example
+cp .env.example .env
 # Edit with your values
-nano .env
-```
+\`\`\`
 
-**Required Environment Variables:**
+### 2. Required Environment Variables
 
-```env
-# Domain Configuration
+\`\`\`env
+# Domain
 DOMAIN=teambrain.app
 ACME_EMAIL=admin@teambrain.app
 
-# Traefik Dashboard Auth (generate with: htpasswd -nb admin password)
-TRAEFIK_AUTH=admin:$$apr1$$...
+# Supabase (Self-Hosted)
+SUPABASE_URL=https://supabase.teambrain.app
+SUPABASE_ANON_KEY=your_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 
-# Supabase
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your-anon-key
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+# Google Cloud
+GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your_client_secret
+GEMINI_API_KEY=your_gemini_api_key
 
-# Google OAuth
-GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=your-client-secret
-
-# Gemini AI
-GEMINI_API_KEY=your-gemini-api-key
-
-# Stripe Billing
+# Stripe
 STRIPE_SECRET_KEY=sk_live_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 STRIPE_STARTER_PRICE_ID=price_...
 STRIPE_PRO_PRICE_ID=price_...
 STRIPE_BUSINESS_PRICE_ID=price_...
-```
 
-### 3. Deploy Services
+# Traefik (generate with: htpasswd -nb admin yourpassword)
+TRAEFIK_AUTH=admin:$$apr1$$...
+\`\`\`
 
-```bash
-# Build and start all services
-docker compose up -d --build
+### 3. Deploy
 
-# View logs
-docker compose logs -f
-
-# Check service health
+\`\`\`bash
+docker compose build
+docker compose up -d
 docker compose ps
-```
+\`\`\`
 
-### 4. Verify Deployment
+---
 
-- Dashboard: `https://teambrain.app`
-- API Health: `https://api.teambrain.app/health`
-- Traefik Dashboard: `https://traefik.teambrain.app` (if enabled)
+## DNS Configuration
 
-## Architecture
+| Type | Name | Value | TTL |
+|------|------|-------|-----|
+| A | @ | YOUR_SERVER_IP | 300 |
+| A | api | YOUR_SERVER_IP | 300 |
+| A | supabase | YOUR_SERVER_IP | 300 |
+| CNAME | www | teambrain.app | 300 |
 
-```
-Internet
-    │
-    ▼
-┌─────────────────────────────────────────────────────────┐
-│                     Hetzner VPS                          │
-├─────────────────────────────────────────────────────────┤
-│  ┌──────────────┐                                        │
-│  │   Traefik    │◄─── :80/:443                          │
-│  │  (Reverse    │                                        │
-│  │   Proxy)     │                                        │
-│  └──────┬───────┘                                        │
-│         │                                                │
-│    ┌────┴────┬─────────────────┐                        │
-│    │         │                 │                        │
-│    ▼         ▼                 ▼                        │
-│ ┌──────┐ ┌──────────┐ ┌─────────────┐                  │
-│ │ API  │ │Dashboard │ │  (Future)   │                  │
-│ │:3000 │ │  :3001   │ │  Supabase   │                  │
-│ └──────┘ └──────────┘ └─────────────┘                  │
-│                                                          │
-│  Docker Network: teambrain-network                       │
-└─────────────────────────────────────────────────────────┘
-          │
-          ▼
-┌─────────────────────────────────────────────────────────┐
-│               External Services                          │
-├─────────────────────────────────────────────────────────┤
-│  • Supabase (Database + Auth)                           │
-│  • Google Gemini (AI/Embeddings)                        │
-│  • Google Drive (Document Source)                        │
-│  • Slack API (Bot Platform)                             │
-│  • Stripe (Billing)                                     │
-└─────────────────────────────────────────────────────────┘
-```
+---
 
-## SSL Certificates
+## SSL/TLS Certificates
 
-Traefik automatically obtains SSL certificates from Let's Encrypt:
+Traefik automatically obtains Let's Encrypt certificates. Verify:
 
-- Certificates are stored in the `letsencrypt` Docker volume
-- Auto-renewal happens before expiration
-- HTTP-01 challenge is used (requires ports 80/443 open)
+\`\`\`bash
+curl -vI https://teambrain.app 2>&1 | grep -i "SSL\|issuer"
+\`\`\`
 
-### Troubleshooting SSL
+---
 
-```bash
-# Check certificate status
-docker compose logs traefik | grep -i certificate
+## Post-Deployment
 
-# Force certificate renewal
-docker compose restart traefik
-```
+### 1. Create Platform Admin
 
-## Service Management
+\`\`\`sql
+-- In Supabase SQL Editor after user signs up:
+INSERT INTO platform_admins (user_id, role, is_active)
+SELECT id, 'super_admin', true
+FROM auth.users WHERE email = 'admin@teambrain.app';
+\`\`\`
 
-### View Logs
+### 2. Configure Backups
 
-```bash
-# All services
-docker compose logs -f
+\`\`\`bash
+# Daily backup cron
+0 2 * * * ~/teambrain/scripts/backup.sh
+\`\`\`
 
-# Specific service
-docker compose logs -f api
-docker compose logs -f dashboard
+### 3. Health Monitoring
 
-# Last 100 lines
-docker compose logs --tail 100 api
-```
-
-### Restart Services
-
-```bash
-# Restart all
-docker compose restart
-
-# Restart specific service
-docker compose restart api
-
-# Full rebuild
-docker compose down && docker compose up -d --build
-```
-
-### Update Deployment
-
-```bash
-# Pull latest changes
-cd /opt/teambrain-ai
-git pull
-
-# Rebuild and restart
-docker compose up -d --build
-```
-
-## Monitoring
-
-### Health Checks
-
-```bash
-# API health
+\`\`\`bash
 curl https://api.teambrain.app/health
-
-# Expected response
-{
-  "status": "healthy",
-  "uptime": 12345,
-  "services": {
-    "supabase": true,
-    "gemini": true
-  }
-}
-```
-
-### Resource Usage
-
-```bash
-# Container stats
-docker stats
-
-# Disk usage
-df -h
-
-# Memory usage
-free -m
-```
-
-### Process Management
-
-```bash
-# Running containers
 docker compose ps
+docker stats
+\`\`\`
 
-# Container resource limits
-docker inspect teambrain-api | grep -A 10 HostConfig
-```
-
-## Backups
-
-### Database Backup (Supabase Cloud)
-
-Supabase Cloud handles automatic backups. For self-hosted:
-
-```bash
-# Export database
-pg_dump -h localhost -U postgres -d postgres > backup_$(date +%Y%m%d).sql
-
-# Compress
-gzip backup_$(date +%Y%m%d).sql
-```
-
-### Application Backup
-
-```bash
-# Backup environment and volumes
-tar -czvf teambrain-backup-$(date +%Y%m%d).tar.gz \
-  /opt/teambrain-ai/.env \
-  /var/lib/docker/volumes/teambrain-ai_letsencrypt
-```
-
-## Security
-
-### Firewall (UFW)
-
-```bash
-# Allow required ports
-ufw allow 22/tcp    # SSH
-ufw allow 80/tcp    # HTTP (redirect)
-ufw allow 443/tcp   # HTTPS
-ufw enable
-```
-
-### Environment Variables
-
-- Never commit `.env` files to git
-- Use strong, unique passwords
-- Rotate API keys periodically
-- Use separate Stripe keys for test/production
-
-### Docker Security
-
-```bash
-# Run containers as non-root (already configured)
-# Limit container resources
-# Use read-only mounts where possible
-```
+---
 
 ## Troubleshooting
 
-### Container Won't Start
-
-```bash
-# Check logs
+### Container Issues
+\`\`\`bash
 docker compose logs api
+docker compose logs dashboard
+docker compose logs traefik
+\`\`\`
 
-# Check configuration
-docker compose config
+### SSL Issues
+\`\`\`bash
+docker compose logs traefik | grep -i "certificate\|acme"
+\`\`\`
 
-# Rebuild from scratch
-docker compose down -v
-docker compose build --no-cache
-docker compose up -d
-```
+### Database Issues
+\`\`\`bash
+docker compose -f supabase-docker/docker-compose.yml logs db
+\`\`\`
 
-### API Not Responding
+### Useful Commands
+\`\`\`bash
+docker compose restart        # Restart services
+docker compose build && docker compose up -d  # Rebuild
+docker compose exec api sh    # Shell access
+\`\`\`
 
-1. Check container is running: `docker compose ps`
-2. Check health: `curl http://localhost:3000/health`
-3. Check logs: `docker compose logs api`
-4. Verify environment variables
+---
 
-### SSL Certificate Issues
+## Security Checklist
 
-1. Verify DNS is pointing to server
-2. Check port 80 is accessible
-3. Review Traefik logs for ACME errors
-4. Ensure ACME_EMAIL is valid
+- [ ] SSH key-only authentication
+- [ ] Firewall configured (ufw)
+- [ ] All secrets in \`.env\` only
+- [ ] Traefik dashboard password protected
+- [ ] Regular backups configured
+- [ ] SSL certificates valid
+- [ ] RLS policies active
 
-### Database Connection Failed
-
-1. Verify SUPABASE_URL is correct
-2. Check SUPABASE_SERVICE_ROLE_KEY
-3. Ensure IP is whitelisted (if applicable)
-4. Test connection: `curl $SUPABASE_URL/rest/v1/`
-
-### Slack Bot Not Connecting
-
-1. Verify Socket Mode is enabled in Slack
-2. Check bot tokens are correct
-3. Review API logs for Slack errors
-4. Test bot health in dashboard
-
-## Scaling
-
-### Vertical Scaling
-
-Upgrade Hetzner VPS to higher tier:
-- CX31: 2 vCPU, 8GB RAM
-- CX41: 4 vCPU, 16GB RAM
-- CX51: 8 vCPU, 32GB RAM
-
-### Horizontal Scaling (Future)
-
-For high-traffic deployments:
-1. Use external load balancer
-2. Run multiple API replicas
-3. Use Redis for session storage
-4. Consider managed Kubernetes (Hetzner K3s)
-
-## Cost Estimation
-
-| Component | Monthly Cost |
-|-----------|--------------|
-| Hetzner CX21 | ~$5 |
-| Domain | ~$1 |
-| Supabase Pro | $25 |
-| **Total** | ~$31/month |
-
-Additional costs:
-- Gemini API: Usage-based
-- Stripe: 2.9% + $0.30 per transaction
+---
 
 ## Support
 
-- Documentation: See `docs/` folder
-- Issues: https://github.com/MiscMich/teambrain-ai/issues
-- Email: support@teambrain.app
+Issues: https://github.com/MiscMich/teambrain-ai/issues

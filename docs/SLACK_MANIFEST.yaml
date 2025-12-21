@@ -1,0 +1,79 @@
+# TeamBrain AI - Slack App Manifest
+# Use this when creating new Slack apps for workspaces
+#
+# Instructions:
+# 1. Go to https://api.slack.com/apps
+# 2. Click "Create New App" > "From an app manifest"
+# 3. Select your workspace
+# 4. Paste this YAML
+# 5. Review and create
+# 6. Install to workspace
+# 7. Copy tokens to TeamBrain dashboard
+
+display_information:
+  name: TeamBrain AI
+  description: AI-powered knowledge assistant for your team
+  background_color: "#4A154B"
+  long_description: |
+    TeamBrain AI is an intelligent knowledge assistant that learns from your 
+    documentation, SOPs, and team knowledge. Ask questions in natural language 
+    and get accurate answers with source citations.
+    
+    Features:
+    - Natural language Q&A powered by AI
+    - Learns from Google Drive documents
+    - Remembers corrections and updates
+    - Provides source citations for all answers
+    - Works in channels, groups, and DMs
+
+features:
+  app_home:
+    home_tab_enabled: true
+    messages_tab_enabled: true
+    messages_tab_read_only_enabled: false
+  bot_user:
+    display_name: TeamBrain
+    always_online: true
+
+oauth_config:
+  scopes:
+    bot:
+      # Read messages
+      - app_mentions:read
+      - channels:history
+      - channels:read
+      - groups:history
+      - groups:read
+      - im:history
+      - im:read
+      - mpim:history
+      
+      # Send messages
+      - chat:write
+      - im:write
+      
+      # Reactions
+      - reactions:write
+      
+      # User info (for displaying names)
+      - users:read
+
+settings:
+  event_subscriptions:
+    bot_events:
+      # Respond to @mentions
+      - app_mention
+      
+      # Listen in channels bot is invited to
+      - message.channels
+      - message.groups
+      
+      # DM support
+      - message.im
+      
+  interactivity:
+    is_enabled: true
+    
+  org_deploy_enabled: false
+  socket_mode_enabled: true
+  token_rotation_enabled: false

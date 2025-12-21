@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { Providers } from './providers';
 import { ConditionalLayout } from '@/components/conditional-layout';
+import { Toaster } from '@/components/ui/toaster';
 
 export const metadata: Metadata = {
   title: 'TeamBrain AI',
@@ -33,6 +34,7 @@ export default function RootLayout({
       <body className="font-sans antialiased">
         <Providers>
           <ConditionalLayout>{children}</ConditionalLayout>
+          <Toaster />
         </Providers>
       </body>
     </html>

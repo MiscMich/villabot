@@ -47,12 +47,19 @@ apps/
 └── dashboard/                 # Next.js admin UI
     ├── Dockerfile            # Production Docker build
     └── src/app/
-        ├── page.tsx          # Overview dashboard
+        ├── dashboard/        # Overview dashboard
         ├── documents/        # Document management
+        ├── bots/             # Bot management
         ├── knowledge/        # Learned facts
-        ├── analytics/        # Usage charts
+        ├── analytics/        # Usage analytics
         ├── conversations/    # Thread viewer
-        └── settings/         # Configuration
+        ├── feedback/         # Feedback review
+        ├── team/             # Team management & invites
+        ├── billing/          # Subscription & billing
+        ├── settings/         # Configuration
+        ├── setup/            # Onboarding wizard
+        ├── admin/            # Platform admin panel
+        └── auth/             # Authentication pages
 
 packages/
 └── shared/                    # Shared types and constants
@@ -99,12 +106,14 @@ Key constants in `packages/shared/src/constants.ts`:
 4. `pnpm build` - Must build successfully
 
 ## Key Files
-- `apps/api/src/services/slack/bot.ts` - Slack bot initialization
-- `apps/api/src/services/slack/handlers.ts` - Message handling logic
+- `apps/api/src/services/slack/bot.ts` - Slack bot initialization and message handlers
+- `apps/api/src/services/slack/manager.ts` - Multi-bot instance management
+- `apps/api/src/services/slack/response.ts` - Response generation with RAG
 - `apps/api/src/services/rag/search.ts` - Hybrid search implementation
 - `apps/api/src/services/rag/chunking.ts` - Document chunking
 - `apps/api/src/services/google-drive/sync.ts` - Drive sync logic
 - `apps/api/src/services/scraper/website.ts` - Website scraper (configurable limit)
+- `apps/api/src/services/email/index.ts` - Email notifications via Supabase Edge Functions
 - `packages/shared/src/constants.ts` - RAG configuration
 
 ## Environment Variables
@@ -134,10 +143,11 @@ See `.env.example` for required configuration:
 - Each bot has access to specific document categories
 - Shared knowledge base with bot-specific priorities
 
-### Coming Soon
-- Landing page for marketing
-- Bot management dashboard page
-- Feedback review dashboard page
+### All Features Complete
+- Bot management dashboard (complete)
+- Feedback review dashboard (complete)
+- Team invites with email notifications (complete)
+- Platform admin panel (complete)
 
 ## Available Plugins
 Use `/commit` for git commits, `/code-review` for PR reviews, `/feature-dev` for feature development workflow.

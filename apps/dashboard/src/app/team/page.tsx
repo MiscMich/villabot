@@ -21,6 +21,7 @@ import {
   Trash2,
   Settings,
   X,
+  Clock,
 } from 'lucide-react';
 import type { WorkspaceMemberRole } from '@teambrain/shared';
 
@@ -78,15 +79,18 @@ export default function TeamPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [removingMember, setRemovingMember] = useState<string | null>(null);
+  const [revokingInvite, setRevokingInvite] = useState<string | null>(null);
 
   // Fetch team data
   useEffect(() => {
     const fetchTeam = async () => {
       try {
-        const data = await api.getTeamMembers();
-        setMembers(data.members as TeamMember[]);
-        // Note: invites would need a separate API endpoint
-        // For now, we'll show pending invites if the API returns them
+        const [membersData, invitesData] = await Promise.all([
+          api.getTeamMembers(),
+          canManageTeam ? api.getTeamInvites().catch(() => ({ invites: [] })) : Promise.resolve({ invites: [] }),
+        ]);
+        setMembers(membersData.members as TeamMember[]);
+        setInvites(invitesData.invites as TeamInvite[]);
       } catch (err) {
         console.error('Failed to fetch team:', err);
         setError('Failed to load team members');
@@ -96,7 +100,7 @@ export default function TeamPage() {
     };
 
     fetchTeam();
-  }, []);
+  }, [canManageTeam]);
 
   const handleInvite = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -104,7 +108,18 @@ export default function TeamPage() {
     setIsInviting(true);
 
     try {
-      await api.inviteMember(inviteEmail, inviteRole);
+      const result = await api.inviteMember(inviteEmail, inviteRole);
+      // Add the new invite to the list
+      if (result.invite) {
+        const newInvite: TeamInvite = {
+          id: result.invite.id,
+          email: result.invite.email,
+          role: inviteRole,
+          created_at: new Date().toISOString(),
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        };
+        setInvites([newInvite, ...invites]);
+      }
       setInviteEmail('');
       setInviteRole('member');
       setShowInviteForm(false);
@@ -115,6 +130,21 @@ export default function TeamPage() {
       setError('Failed to send invitation. Please try again.');
     } finally {
       setIsInviting(false);
+    }
+  };
+
+  const handleRevokeInvite = async (inviteId: string) => {
+    setRevokingInvite(inviteId);
+    try {
+      await api.revokeInvite(inviteId);
+      setInvites(invites.filter((i) => i.id !== inviteId));
+      setSuccess('Invitation revoked');
+      setTimeout(() => setSuccess(null), 5000);
+    } catch (err) {
+      console.error('Failed to revoke invite:', err);
+      setError('Failed to revoke invitation');
+    } finally {
+      setRevokingInvite(null);
     }
   };
 
@@ -310,6 +340,78 @@ export default function TeamPage() {
                 </Button>
               </div>
             </form>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Pending Invites */}
+      {canManageTeam && invites.length > 0 && (
+        <Card className="bg-slate-800/50 border-slate-700">
+          <CardHeader>
+            <CardTitle className="text-slate-100 flex items-center gap-2">
+              <Clock className="h-5 w-5 text-amber-500" />
+              Pending Invitations ({invites.length})
+            </CardTitle>
+            <CardDescription className="text-slate-400">
+              Invitations awaiting acceptance
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {invites.map((invite) => {
+                const expiresAt = new Date(invite.expires_at);
+                const daysUntilExpiry = Math.ceil(
+                  (expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+                );
+                const isExpiringSoon = daysUntilExpiry <= 2;
+
+                return (
+                  <div
+                    key={invite.id}
+                    className="flex items-center justify-between p-4 bg-slate-900/50 rounded-lg border border-slate-700/50"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-full bg-amber-500/20 flex items-center justify-center">
+                        <Mail className="h-5 w-5 text-amber-500" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-slate-100">{invite.email}</p>
+                        <div className="flex items-center gap-2 text-sm text-slate-400">
+                          <Badge
+                            variant="outline"
+                            className={`${
+                              invite.role === 'admin'
+                                ? 'border-blue-500 text-blue-400'
+                                : 'border-slate-500 text-slate-400'
+                            }`}
+                          >
+                            {roleIcons[invite.role]}
+                            <span className="ml-1">{roleLabels[invite.role]}</span>
+                          </Badge>
+                          <span className="text-slate-500">•</span>
+                          <span className={isExpiringSoon ? 'text-amber-400' : ''}>
+                            Expires in {daysUntilExpiry} day{daysUntilExpiry !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRevokeInvite(invite.id)}
+                      disabled={revokingInvite === invite.id}
+                      className="text-slate-400 hover:text-red-400 hover:bg-red-500/10"
+                    >
+                      {revokingInvite === invite.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
           </CardContent>
         </Card>
       )}

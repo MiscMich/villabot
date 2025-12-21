@@ -31,6 +31,9 @@ COPY . .
 ARG NEXT_PUBLIC_API_URL=http://localhost:3000
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
+# Build the shared package first
+RUN pnpm --filter @teambrain/shared build
+
 # Build the dashboard
 RUN pnpm --filter @teambrain/dashboard build
 

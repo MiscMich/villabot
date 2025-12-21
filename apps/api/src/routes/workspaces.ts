@@ -14,6 +14,7 @@ import {
   getUsageSummary,
 } from '../middleware/index.js';
 import { TIER_CONFIGS } from '@teambrain/shared';
+import { cancelSubscription, isStripeConfigured } from '../services/billing/stripe.js';
 import type {
   CreateWorkspaceRequest,
   UpdateWorkspaceRequest,
@@ -291,11 +292,22 @@ workspacesRouter.delete(
     try {
       // Cancel any active subscription first
       const stripeSubId = req.workspace!.stripe_subscription_id;
-      if (stripeSubId) {
-        // TODO: Cancel Stripe subscription
-        logger.info('Would cancel subscription', {
-          subscriptionId: stripeSubId,
-        });
+      if (stripeSubId && isStripeConfigured()) {
+        try {
+          await cancelSubscription(req.workspace!.id, true); // Cancel immediately
+          logger.info('Stripe subscription cancelled', {
+            workspaceId: req.workspace!.id,
+            subscriptionId: stripeSubId,
+          });
+        } catch (stripeError) {
+          logger.error('Failed to cancel Stripe subscription', {
+            workspaceId: req.workspace!.id,
+            subscriptionId: stripeSubId,
+            error: stripeError,
+          });
+          // Continue with deletion even if Stripe fails
+          // The subscription will be orphaned but workspace will be deleted
+        }
       }
 
       // Delete workspace (cascades to members, bots, documents, etc.)

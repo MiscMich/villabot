@@ -8,18 +8,14 @@ import {
   ThumbsDown,
   MessageSquare,
   TrendingUp,
-  Search,
-  Filter,
   CheckCircle,
-  XCircle,
   Clock,
   Eye,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+import { api } from '@/lib/api';
 
 interface FeedbackItem {
   id: string;
@@ -43,30 +39,13 @@ interface FeedbackAnalytics {
     satisfaction_rate: number;
   };
   byBot: Record<string, { botName: string; stats: { satisfaction_rate: number } }>;
-  recentUnhelpful: FeedbackItem[];
-}
-
-async function fetchFeedback(page: number, limit: number) {
-  const offset = (page - 1) * limit;
-  const res = await fetch(`${API_BASE}/api/feedback?limit=${limit}&offset=${offset}`);
-  if (!res.ok) throw new Error('Failed to fetch feedback');
-  return res.json();
-}
-
-async function fetchAnalytics() {
-  const res = await fetch(`${API_BASE}/api/feedback/analytics`);
-  if (!res.ok) throw new Error('Failed to fetch analytics');
-  return res.json();
-}
-
-async function markAsReviewed(id: string, isReviewed: boolean) {
-  const res = await fetch(`${API_BASE}/api/feedback/${id}/review`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ isReviewed, reviewedBy: 'dashboard-user' }),
-  });
-  if (!res.ok) throw new Error('Failed to mark as reviewed');
-  return res.json();
+  recentUnhelpful: Array<{
+    id: string;
+    is_helpful: boolean;
+    feedback_text: string | null;
+    query_text: string | null;
+    created_at: string;
+  }>;
 }
 
 export default function FeedbackPage() {
@@ -77,17 +56,17 @@ export default function FeedbackPage() {
 
   const { data: analyticsData, isLoading: analyticsLoading } = useQuery<FeedbackAnalytics>({
     queryKey: ['feedback-analytics'],
-    queryFn: fetchAnalytics,
+    queryFn: () => api.getFeedbackAnalytics(),
   });
 
   const { data: feedbackData, isLoading: feedbackLoading } = useQuery({
     queryKey: ['feedback', page, filter],
-    queryFn: () => fetchFeedback(page, limit),
+    queryFn: () => api.getFeedback({ limit, offset: (page - 1) * limit }),
   });
 
   const reviewMutation = useMutation({
     mutationFn: ({ id, isReviewed }: { id: string; isReviewed: boolean }) =>
-      markAsReviewed(id, isReviewed),
+      api.markFeedbackReviewed(id, isReviewed),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['feedback'] });
       queryClient.invalidateQueries({ queryKey: ['feedback-analytics'] });
@@ -338,10 +317,10 @@ export default function FeedbackPage() {
         </div>
 
         {/* Pagination */}
-        {feedbackData?.total > limit && (
+        {(feedbackData?.total ?? 0) > limit && (
           <div className="flex items-center justify-between p-4 border-t border-border/50">
             <p className="text-sm text-muted-foreground">
-              Showing {((page - 1) * limit) + 1} to {Math.min(page * limit, feedbackData.total)} of {feedbackData.total}
+              Showing {((page - 1) * limit) + 1} to {Math.min(page * limit, feedbackData?.total ?? 0)} of {feedbackData?.total ?? 0}
             </p>
             <div className="flex items-center gap-2">
               <Button
@@ -353,13 +332,13 @@ export default function FeedbackPage() {
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <span className="text-sm font-medium px-3">
-                Page {page} of {Math.ceil(feedbackData.total / limit)}
+                Page {page} of {Math.ceil((feedbackData?.total ?? 0) / limit)}
               </span>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setPage((p) => p + 1)}
-                disabled={page * limit >= feedbackData.total}
+                disabled={page * limit >= (feedbackData?.total ?? 0)}
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>

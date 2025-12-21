@@ -80,6 +80,7 @@ services:
       - "traefik.http.routers.api.rule=Host(`api.${DOMAIN}`)"
       - "traefik.http.routers.api.entrypoints=websecure"
       - "traefik.http.routers.api.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.api.middlewares=security-headers@file,cors-api@file,rate-limit@file,compress@file"
       - "traefik.http.services.api.loadbalancer.server.port=3000"
 
   # Dashboard Service (Next.js Admin UI)
@@ -111,9 +112,10 @@ services:
       - teambrain-network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.dashboard.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.dashboard.rule=Host(`${DOMAIN}`) || Host(`www.${DOMAIN}`)"
       - "traefik.http.routers.dashboard.entrypoints=websecure"
       - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.dashboard.middlewares=security-headers@file,compress@file"
       - "traefik.http.services.dashboard.loadbalancer.server.port=3001"
 
 networks:

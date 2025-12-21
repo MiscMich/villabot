@@ -410,28 +410,47 @@ export const api = {
   deactivateBot: (id: string) => fetchApi(`/api/bots/${id}/deactivate`, { method: 'POST' }),
 
   // Feedback
-  getFeedback: (page = 1, limit = 20) => fetchApi<{
+  getFeedback: (options: { limit?: number; offset?: number } = {}) => fetchApi<{
     feedback: Array<{
       id: string;
-      message_id: string;
-      rating: number;
-      comment: string | null;
-      response_quality: string | null;
-      source_quality: string | null;
+      is_helpful: boolean;
+      feedback_category: string | null;
+      feedback_text: string | null;
+      query_text: string | null;
+      response_text: string | null;
+      sources_used: string[];
+      slack_user_id: string;
+      slack_channel_id: string;
+      is_reviewed: boolean;
       created_at: string;
-      message: {
-        content: string;
-        role: string;
-        sources: string[];
-      } | null;
     }>;
-    pagination: {
-      page: number;
-      limit: number;
-      total: number;
-      totalPages: number;
+    total: number;
+    limit: number;
+    offset: number;
+  }>(`/api/feedback?limit=${options.limit ?? 20}&offset=${options.offset ?? 0}`),
+
+  getFeedbackAnalytics: () => fetchApi<{
+    overall: {
+      total_feedback: number;
+      helpful_count: number;
+      unhelpful_count: number;
+      satisfaction_rate: number;
     };
-  }>(`/api/feedback?page=${page}&limit=${limit}`),
+    byBot: Record<string, { botName: string; stats: { satisfaction_rate: number } }>;
+    recentUnhelpful: Array<{
+      id: string;
+      is_helpful: boolean;
+      feedback_text: string | null;
+      query_text: string | null;
+      created_at: string;
+    }>;
+  }>('/api/feedback/analytics'),
+
+  markFeedbackReviewed: (id: string, isReviewed: boolean, reviewedBy?: string) =>
+    fetchApi(`/api/feedback/${id}/review`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isReviewed, reviewedBy: reviewedBy ?? 'dashboard-user' }),
+    }),
 
   getFeedbackStats: () => fetchApi<{
     stats: {
@@ -499,19 +518,32 @@ export const api = {
         email?: string;
       } | null;
     }>;
-  }>('/api/team'),
+  }>('/api/team/members'),
+
+  getTeamInvites: () => fetchApi<{
+    invites: Array<{
+      id: string;
+      email: string;
+      role: string;
+      created_at: string;
+      expires_at: string;
+    }>;
+  }>('/api/team/invites'),
 
   inviteMember: (email: string, role: string = 'member') =>
-    fetchApi<{ invite: { id: string; email: string }; invite_link: string }>('/api/team/invite', {
+    fetchApi<{ invite: { id: string; email: string }; invite_link: string }>('/api/team/invites', {
       method: 'POST',
       body: JSON.stringify({ email, role }),
     }),
 
+  revokeInvite: (inviteId: string) =>
+    fetchApi(`/api/team/invites/${inviteId}`, { method: 'DELETE' }),
+
   removeMember: (memberId: string) =>
-    fetchApi(`/api/team/${memberId}`, { method: 'DELETE' }),
+    fetchApi(`/api/team/members/${memberId}`, { method: 'DELETE' }),
 
   updateMemberRole: (memberId: string, role: string) =>
-    fetchApi(`/api/team/${memberId}`, {
+    fetchApi(`/api/team/members/${memberId}`, {
       method: 'PATCH',
       body: JSON.stringify({ role }),
     }),

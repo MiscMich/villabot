@@ -1,0 +1,68 @@
+# Traefik Dynamic Configuration - Routers
+# Additional router configurations for production
+
+http:
+  routers:
+    # API Router with security headers
+    api-secure:
+      rule: "Host(`api.{{env "DOMAIN"}}`)"
+      entryPoints:
+        - websecure
+      middlewares:
+        - security-headers
+        - cors-api
+        - rate-limit
+        - compress
+      service: api
+      tls:
+        certResolver: letsencrypt
+
+    # Dashboard Router
+    dashboard-secure:
+      rule: "Host(`{{env "DOMAIN"}}`) || Host(`www.{{env "DOMAIN"}}`)"
+      entryPoints:
+        - websecure
+      middlewares:
+        - security-headers
+        - compress
+      service: dashboard
+      tls:
+        certResolver: letsencrypt
+
+    # WWW to non-WWW redirect
+    www-redirect:
+      rule: "Host(`www.{{env "DOMAIN"}}`)"
+      entryPoints:
+        - websecure
+      middlewares:
+        - www-to-non-www
+      service: dashboard
+      tls:
+        certResolver: letsencrypt
+
+  middlewares:
+    # WWW to non-WWW redirect
+    www-to-non-www:
+      redirectRegex:
+        regex: "^https://www\\.(.*)"
+        replacement: "https://${1}"
+        permanent: true
+
+  services:
+    api:
+      loadBalancer:
+        servers:
+          - url: "http://api:3000"
+        healthCheck:
+          path: /health
+          interval: 30s
+          timeout: 10s
+
+    dashboard:
+      loadBalancer:
+        servers:
+          - url: "http://dashboard:3001"
+        healthCheck:
+          path: /
+          interval: 30s
+          timeout: 10s

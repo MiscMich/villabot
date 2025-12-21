@@ -1,6 +1,25 @@
 /**
  * Rate Limiting Middleware
  * Implements tier-based and endpoint-specific rate limiting
+ *
+ * IMPORTANT: Current Implementation Uses In-Memory Storage
+ * =========================================================
+ * This implementation uses an LRU cache for rate limit tracking.
+ * This works well for single-server deployments but has limitations:
+ *
+ * - Rate limits reset when the server restarts
+ * - Does not sync across multiple server instances (load balancing)
+ * - Memory usage increases with unique workspace/user count
+ *
+ * For production with multiple instances, consider:
+ * 1. Set REDIS_URL environment variable
+ * 2. Update initializeRedis() to connect to Redis
+ * 3. Update incrementRateLimit() to use Redis INCR with TTL
+ *
+ * The current in-memory approach is acceptable for:
+ * - Single-server deployments
+ * - Development/staging environments
+ * - MVP launch with expected low-medium traffic
  */
 
 import { Request, Response, NextFunction, RequestHandler } from 'express';

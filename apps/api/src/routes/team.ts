@@ -14,6 +14,7 @@ import {
 } from '../middleware/index.js';
 import { randomBytes } from 'crypto';
 import { env } from '../config/env.js';
+import { sendInviteEmail } from '../services/email/index.js';
 import type {
   InviteMemberRequest,
   WorkspaceMemberRole,
@@ -334,7 +335,22 @@ teamRouter.post(
       // Generate invite link
       const inviteLink = `${env.APP_URL}/invite/${inviteToken}`;
 
-      // TODO: Send invite email
+      // Get inviter and workspace names for email
+      const { data: inviterProfile } = await supabase
+        .from('user_profiles')
+        .select('full_name')
+        .eq('id', req.user!.id)
+        .single();
+
+      // Send invite email (async, don't block response)
+      sendInviteEmail({
+        email: email.toLowerCase(),
+        inviteLink,
+        workspaceName: req.workspace!.name,
+        inviterName: inviterProfile?.full_name ?? undefined,
+      }).catch((err) => {
+        logger.error('Failed to send invite email', { error: err, email });
+      });
 
       logger.info('Invite created', {
         workspaceId: req.workspace!.id,
