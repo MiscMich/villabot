@@ -24,6 +24,7 @@ services:
       - "3000"
     labels:
       - "traefik.docker.network=coolify"
+      - "traefik.http.services.dashboard.loadbalancer.server.port=3000"
     environment:
       - NODE_ENV=production
       - PORT=3000
