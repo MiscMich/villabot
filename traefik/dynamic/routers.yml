@@ -1,11 +1,11 @@
 # Traefik Dynamic Configuration - Routers
-# Additional router configurations for production
+# Production routers for cluebase.ai
 
 http:
   routers:
-    # API Router with security headers
+    # API Router
     api-secure:
-      rule: "Host(`api.{{env "DOMAIN"}}`)"
+      rule: "Host(`api.cluebase.ai`)"
       entryPoints:
         - websecure
       middlewares:
@@ -19,7 +19,7 @@ http:
 
     # Dashboard Router
     dashboard-secure:
-      rule: "Host(`{{env "DOMAIN"}}`) || Host(`www.{{env "DOMAIN"}}`)"
+      rule: "Host(`cluebase.ai`)"
       entryPoints:
         - websecure
       middlewares:
@@ -29,24 +29,35 @@ http:
       tls:
         certResolver: letsencrypt
 
-    # WWW to non-WWW redirect
-    www-redirect:
-      rule: "Host(`www.{{env "DOMAIN"}}`)"
+    # Supabase Gateway (Kong) Router
+    supabase-secure:
+      rule: "Host(`supabase.cluebase.ai`)"
       entryPoints:
         - websecure
       middlewares:
-        - www-to-non-www
-      service: dashboard
+        - security-headers
+        - cors-supabase
+      service: kong
       tls:
         certResolver: letsencrypt
 
   middlewares:
-    # WWW to non-WWW redirect
-    www-to-non-www:
-      redirectRegex:
-        regex: "^https://www\\.(.*)"
-        replacement: "https://${1}"
-        permanent: true
+    # CORS for Supabase
+    cors-supabase:
+      headers:
+        accessControlAllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - OPTIONS
+        accessControlAllowHeaders:
+          - "*"
+        accessControlAllowOriginList:
+          - "https://cluebase.ai"
+          - "https://www.cluebase.ai"
+        accessControlAllowCredentials: true
+        accessControlMaxAge: 100
 
   services:
     api:
@@ -62,6 +73,15 @@ http:
       loadBalancer:
         servers:
           - url: "http://dashboard:3001"
+        healthCheck:
+          path: /
+          interval: 30s
+          timeout: 10s
+
+    kong:
+      loadBalancer:
+        servers:
+          - url: "http://kong:8000"
         healthCheck:
           path: /
           interval: 30s
