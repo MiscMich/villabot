@@ -22,6 +22,8 @@ services:
         - NEXT_PUBLIC_APP_URL=https://cluebase.ai
     expose:
       - "3000"
+    labels:
+      - "traefik.docker.network=coolify"
     environment:
       - NODE_ENV=production
       - PORT=3000
