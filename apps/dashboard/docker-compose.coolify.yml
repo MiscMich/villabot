@@ -34,6 +34,11 @@ services:
       retries: 3
       start_period: 40s
     restart: unless-stopped
+    labels:
+      # Service port - required for Traefik to know which port to forward to
+      - "traefik.http.services.dashboard.loadbalancer.server.port=3000"
+      # Network - required when container is on multiple networks
+      - "traefik.docker.network=coolify"
     networks:
       - coolify
 
