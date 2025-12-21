@@ -21,17 +21,14 @@ services:
         - NEXT_PUBLIC_APP_NAME=Cluebase AI
         - NEXT_PUBLIC_APP_URL=https://cluebase.ai
     expose:
-      - "3001"
-    labels:
-      # Explicit Traefik service port configuration
-      - "traefik.http.services.dashboard-m8s04gk4w0osko0sgw48cw4s.loadbalancer.server.port=3001"
+      - "3000"
     environment:
       - NODE_ENV=production
-      - PORT=3001
+      - PORT=3000
       # API URL for server-side calls (using external URL since containers are on separate networks)
       - API_URL=${API_URL:-https://api.cluebase.ai}
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
       interval: 30s
       timeout: 10s
       retries: 3

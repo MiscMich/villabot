@@ -52,7 +52,7 @@ RUN apk add --no-cache dumb-init
 WORKDIR /app
 
 ENV NODE_ENV=production
-ENV PORT=3001
+ENV PORT=3000
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Create non-root user
@@ -66,7 +66,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/apps/dashboard/.next/static ./app
 
 USER nextjs
 
-EXPOSE 3001
+EXPOSE 3000
 
 ENV HOSTNAME="0.0.0.0"
 
