@@ -61,12 +61,19 @@ services:
       - GOOGLE_REDIRECT_URI=https://api.${DOMAIN}/api/google-drive/callback
       # Gemini AI
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      # Stripe Billing
-      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
-      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
-      - STRIPE_STARTER_PRICE_ID=${STRIPE_STARTER_PRICE_ID}
-      - STRIPE_PRO_PRICE_ID=${STRIPE_PRO_PRICE_ID}
-      - STRIPE_BUSINESS_PRICE_ID=${STRIPE_BUSINESS_PRICE_ID}
+      # Stripe Billing (optional)
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      - STRIPE_STARTER_PRICE_ID=${STRIPE_STARTER_PRICE_ID:-}
+      - STRIPE_PRO_PRICE_ID=${STRIPE_PRO_PRICE_ID:-}
+      - STRIPE_BUSINESS_PRICE_ID=${STRIPE_BUSINESS_PRICE_ID:-}
+      # Slack
+      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN:-}
+      - SLACK_SIGNING_SECRET=${SLACK_SIGNING_SECRET:-}
+      - SLACK_APP_TOKEN=${SLACK_APP_TOKEN:-}
+      # Optional
+      - COMPANY_WEBSITE_URL=${COMPANY_WEBSITE_URL:-}
+      - GOOGLE_DRIVE_FOLDER_ID=${GOOGLE_DRIVE_FOLDER_ID:-}
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
       interval: 30s

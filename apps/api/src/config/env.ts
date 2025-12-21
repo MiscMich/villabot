@@ -1,10 +1,20 @@
 import { z } from 'zod';
 
 // Helper to convert empty strings to undefined for optional fields
-const optionalString = z.string().transform(val => val === '' ? undefined : val).optional();
-const optionalUrl = z.string().transform(val => val === '' ? undefined : val).pipe(z.string().url().optional());
+const emptyToUndefined = z.string().optional().transform(val => val === '' ? undefined : val);
+
+const optionalString = emptyToUndefined;
+
+const optionalUrl = z.preprocess(
+  (val) => (val === '' ? undefined : val),
+  z.string().url().optional()
+);
+
 const optionalStartsWith = (prefix: string) =>
-  z.string().transform(val => val === '' ? undefined : val).pipe(z.string().startsWith(prefix).optional());
+  z.preprocess(
+    (val) => (val === '' ? undefined : val),
+    z.string().startsWith(prefix).optional()
+  );
 
 const envSchema = z.object({
   // Server
