@@ -1,5 +1,11 @@
 import { z } from 'zod';
 
+// Helper to convert empty strings to undefined for optional fields
+const optionalString = z.string().transform(val => val === '' ? undefined : val).optional();
+const optionalUrl = z.string().transform(val => val === '' ? undefined : val).pipe(z.string().url().optional());
+const optionalStartsWith = (prefix: string) =>
+  z.string().transform(val => val === '' ? undefined : val).pipe(z.string().startsWith(prefix).optional());
+
 const envSchema = z.object({
   // Server
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -11,32 +17,32 @@ const envSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
 
   // Google (optional - Drive sync won't work without these)
-  GOOGLE_CLIENT_ID: z.string().min(1).optional(),
-  GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
+  GOOGLE_CLIENT_ID: optionalString,
+  GOOGLE_CLIENT_SECRET: optionalString,
   GOOGLE_REDIRECT_URI: z.string().url().default('http://localhost:3000/auth/google/callback'),
-  GOOGLE_DRIVE_FOLDER_ID: z.string().optional(),
+  GOOGLE_DRIVE_FOLDER_ID: optionalString,
 
   // Gemini
   GEMINI_API_KEY: z.string().min(1),
 
   // Slack (optional - bot won't start without these)
-  SLACK_BOT_TOKEN: z.string().startsWith('xoxb-').optional(),
-  SLACK_SIGNING_SECRET: z.string().min(1).optional(),
-  SLACK_APP_TOKEN: z.string().startsWith('xapp-').optional(),
+  SLACK_BOT_TOKEN: optionalStartsWith('xoxb-'),
+  SLACK_SIGNING_SECRET: optionalString,
+  SLACK_APP_TOKEN: optionalStartsWith('xapp-'),
 
-  // Stripe (required for billing)
-  STRIPE_SECRET_KEY: z.string().startsWith('sk_').optional(),
-  STRIPE_WEBHOOK_SECRET: z.string().startsWith('whsec_').optional(),
-  STRIPE_STARTER_PRICE_ID: z.string().startsWith('price_').optional(),
-  STRIPE_PRO_PRICE_ID: z.string().startsWith('price_').optional(),
-  STRIPE_BUSINESS_PRICE_ID: z.string().startsWith('price_').optional(),
+  // Stripe (optional for billing - empty string means disabled)
+  STRIPE_SECRET_KEY: optionalStartsWith('sk_'),
+  STRIPE_WEBHOOK_SECRET: optionalStartsWith('whsec_'),
+  STRIPE_STARTER_PRICE_ID: optionalStartsWith('price_'),
+  STRIPE_PRO_PRICE_ID: optionalStartsWith('price_'),
+  STRIPE_BUSINESS_PRICE_ID: optionalStartsWith('price_'),
 
-  // App URLs
-  APP_URL: z.string().url().default('http://localhost:3001'),
-  API_URL: z.string().url().default('http://localhost:3000'),
+  // App URLs - handle empty DOMAIN gracefully
+  APP_URL: z.string().transform(val => val === '' || val === 'https://' ? 'http://localhost:3001' : val).pipe(z.string().url()),
+  API_URL: z.string().transform(val => val === '' || val === 'https://api.' ? 'http://localhost:3000' : val).pipe(z.string().url()),
 
   // Optional
-  COMPANY_WEBSITE_URL: z.string().url().optional(),
+  COMPANY_WEBSITE_URL: optionalUrl,
   DRIVE_POLL_INTERVAL_MS: z.string().transform(Number).default('300000'),
   SCRAPE_SCHEDULE: z.string().default('0 3 * * 0'), // Cron: every Sunday at 3 AM
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
