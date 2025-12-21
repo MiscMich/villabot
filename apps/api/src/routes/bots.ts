@@ -13,7 +13,7 @@ import {
   requireWorkspaceAdmin,
   checkUsageLimit,
 } from '../middleware/index.js';
-import type { BotCreateInput, BotUpdateInput } from '@teambrain/shared';
+import type { BotCreateInput, BotUpdateInput } from '@cluebase/shared';
 
 export const botsRouter = Router();
 

@@ -4,7 +4,7 @@
 
 import pdfParse from 'pdf-parse';
 import { logger } from '../../../utils/logger.js';
-import { FILE_LIMITS } from '@teambrain/shared';
+import { FILE_LIMITS } from '@cluebase/shared';
 
 export interface ParsedDocument {
   content: string;
@@ -25,7 +25,7 @@ export async function parsePdf(buffer: Buffer): Promise<ParsedDocument> {
     });
 
     // Clean up the text
-    let content = data.text
+    const content = data.text
       .replace(/\s+/g, ' ')  // Normalize whitespace
       .replace(/\n{3,}/g, '\n\n')  // Max 2 newlines
       .trim();

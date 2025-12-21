@@ -163,7 +163,7 @@ export function Sidebar() {
           </div>
         </div>
         <div>
-          <h1 className="font-display text-xl font-bold tracking-tight">TeamBrain AI</h1>
+          <h1 className="font-display text-xl font-bold tracking-tight">Cluebase AI</h1>
           <p className="text-xs text-muted-foreground font-medium">Knowledge Assistant</p>
         </div>
       </div>
@@ -293,7 +293,7 @@ export function Sidebar() {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs font-medium text-muted-foreground">
-              TeamBrain AI
+              Cluebase AI
             </p>
             <p className="text-xs text-muted-foreground/60">v1.0.0</p>
           </div>

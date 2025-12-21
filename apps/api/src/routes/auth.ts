@@ -7,6 +7,7 @@ import { Router } from 'express';
 import { getAuthUrl, exchangeCodeForTokens, initializeDriveClient } from '../services/google-drive/client.js';
 import { supabase } from '../services/supabase/client.js';
 import { logger } from '../utils/logger.js';
+import { env } from '../config/env.js';
 
 export const authRouter = Router();
 
@@ -55,8 +56,7 @@ authRouter.get('/google/callback', async (req, res) => {
     logger.info('Google Drive connected successfully');
 
     // Redirect to dashboard or return success
-    const dashboardUrl = process.env.DASHBOARD_URL ?? 'http://localhost:3001';
-    res.redirect(`${dashboardUrl}/settings?google_connected=true`);
+    res.redirect(`${env.APP_URL}/settings?google_connected=true`);
   } catch (error) {
     logger.error('OAuth callback failed', { error });
     res.status(500).json({ error: 'Failed to complete OAuth flow' });

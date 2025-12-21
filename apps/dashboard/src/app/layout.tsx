@@ -5,7 +5,7 @@ import { ConditionalLayout } from '@/components/conditional-layout';
 import { Toaster } from '@/components/ui/toaster';
 
 export const metadata: Metadata = {
-  title: 'TeamBrain AI',
+  title: 'Cluebase AI',
   description: 'AI-powered knowledge assistant for your team',
 };
 

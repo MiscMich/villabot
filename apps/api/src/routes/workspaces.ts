@@ -13,12 +13,12 @@ import {
   requireWorkspaceOwner,
   getUsageSummary,
 } from '../middleware/index.js';
-import { TIER_CONFIGS } from '@teambrain/shared';
+import { TIER_CONFIGS } from '@cluebase/shared';
 import { cancelSubscription, isStripeConfigured } from '../services/billing/stripe.js';
 import type {
   CreateWorkspaceRequest,
   UpdateWorkspaceRequest,
-} from '@teambrain/shared';
+} from '@cluebase/shared';
 
 export const workspacesRouter = Router();
 

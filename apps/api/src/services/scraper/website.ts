@@ -328,7 +328,7 @@ async function findInternalLinks(
   const baseHost = new URL(baseUrl).host;
 
   // This function runs in browser context via Puppeteer
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const links: string[] = await page.evaluate((() => {
     // Browser context - document and HTMLAnchorElement are available
     const anchors = document.querySelectorAll('a[href]');

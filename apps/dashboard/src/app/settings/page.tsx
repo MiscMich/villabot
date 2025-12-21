@@ -39,7 +39,7 @@ export default function SettingsPage() {
   });
 
   const [generalSettings, setGeneralSettings] = useState({
-    botName: 'TeamBrain',
+    botName: 'Cluebase',
     timezone: 'America/Los_Angeles',
   });
 

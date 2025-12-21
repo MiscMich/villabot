@@ -1,4 +1,4 @@
-# TeamBrain AI API - Dockerfile
+# Cluebase AI API - Dockerfile
 # Multi-stage build for production
 
 # Stage 1: Dependencies
@@ -28,10 +28,10 @@ COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_module
 COPY . .
 
 # Build the shared package (only if .d.ts files don't exist)
-RUN if [ ! -f packages/shared/dist/index.d.ts ]; then pnpm --filter @teambrain/shared build; fi
+RUN if [ ! -f packages/shared/dist/index.d.ts ]; then pnpm --filter @cluebase/shared build; fi
 
 # Build the API
-RUN pnpm --filter @teambrain/api build
+RUN pnpm --filter @cluebase/api build
 
 # Stage 3: Runner
 FROM node:20-alpine AS runner
@@ -46,7 +46,7 @@ ENV PORT=3000
 
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 teambrain
+RUN adduser --system --uid 1001 cluebase
 
 # Copy package files for production install
 COPY --from=builder /app/package.json ./
@@ -59,16 +59,16 @@ COPY --from=builder /app/packages/shared/package.json ./packages/shared/
 RUN pnpm install --frozen-lockfile --prod
 
 # Copy built application
-COPY --from=builder --chown=teambrain:nodejs /app/apps/api/dist ./apps/api/dist
-COPY --from=builder --chown=teambrain:nodejs /app/packages/shared/dist ./packages/shared/dist
+COPY --from=builder --chown=cluebase:nodejs /app/apps/api/dist ./apps/api/dist
+COPY --from=builder --chown=cluebase:nodejs /app/packages/shared/dist ./packages/shared/dist
 
 # Set working directory to api
 WORKDIR /app/apps/api
 
 # Create logs directory with correct ownership
-RUN mkdir -p logs && chown -R teambrain:nodejs logs
+RUN mkdir -p logs && chown -R cluebase:nodejs logs
 
-USER teambrain
+USER cluebase
 
 EXPOSE 3000
 

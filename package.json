@@ -1,8 +1,8 @@
 {
-  "name": "teambrain-ai",
+  "name": "cluebase-ai",
   "version": "1.0.0",
   "private": true,
-  "description": "Multi-tenant SaaS platform for AI-powered Slack bots with RAG",
+  "description": "Cluebase AI - Multi-tenant SaaS platform for AI-powered Slack bots with RAG",
   "scripts": {
     "dev": "pnpm --filter api dev",
     "dev:dashboard": "pnpm --filter dashboard dev",
@@ -22,7 +22,7 @@
     "saas",
     "multi-tenant"
   ],
-  "author": "TeamBrain AI",
+  "author": "Cluebase AI",
   "license": "UNLICENSED",
   "engines": {
     "node": ">=20.0.0",

@@ -160,7 +160,7 @@ export async function incrementalSync(options: SyncOptions): Promise<SyncResult>
 
   try {
     // Get stored page token for this workspace
-    let pageToken = await getStoredPageToken(workspaceId);
+    const pageToken = await getStoredPageToken(workspaceId);
 
     if (!pageToken) {
       logger.info('No page token found, performing full sync', { workspaceId });

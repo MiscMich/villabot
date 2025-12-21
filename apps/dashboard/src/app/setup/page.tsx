@@ -87,7 +87,7 @@ const STEPS: StepConfig[] = [
   {
     id: 0,
     name: 'Welcome',
-    title: 'Welcome to TeamBrain AI',
+    title: 'Welcome to Cluebase AI',
     description: 'Let\'s set up your AI-powered knowledge assistant',
     icon: Sparkles,
   },
@@ -328,7 +328,7 @@ function WelcomeStep({ onNext }: { onNext: () => void }) {
           transition={{ delay: 0.2 }}
           className="text-4xl md:text-5xl font-bold font-display tracking-tight"
         >
-          Welcome to <span className="text-gradient">TeamBrain AI</span>
+          Welcome to <span className="text-gradient">Cluebase AI</span>
         </motion.h1>
         <motion.p
           initial={{ opacity: 0, y: 20 }}
@@ -418,7 +418,7 @@ function WorkspaceStep({
           <div className="space-y-1 text-sm">
             <p className="font-medium text-amber-700 dark:text-amber-300">SaaS Platform</p>
             <p className="text-amber-600/80 dark:text-amber-400/80">
-              TeamBrain AI is a fully managed platform. Infrastructure, AI, and database are provided and managed for you.
+              Cluebase AI is a fully managed platform. Infrastructure, AI, and database are provided and managed for you.
             </p>
           </div>
         </div>
@@ -650,7 +650,7 @@ function GoogleDriveStep({
           <div className="space-y-2">
             <h3 className="text-lg font-semibold">Connect Google Drive</h3>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              Allow TeamBrain AI to access your Google Drive to ingest documents and SOPs into the knowledge base.
+              Allow Cluebase AI to access your Google Drive to ingest documents and SOPs into the knowledge base.
             </p>
           </div>
           {error && (
@@ -762,7 +762,7 @@ function KnowledgeSourcesStep({
                 className="w-full px-4 py-3 rounded-xl border border-border/50 bg-secondary/50 font-mono text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all"
               />
               <p className="text-xs text-muted-foreground">
-                TeamBrain AI will crawl and index your website content
+                Cluebase AI will crawl and index your website content
               </p>
             </div>
 
@@ -829,7 +829,7 @@ function FirstBotStep({
             onChange={(e) => {
               onUpdate({ name: e.target.value, slug: generateSlug(e.target.value) });
             }}
-            placeholder="TeamBrain"
+            placeholder="Cluebase"
             className="w-full px-4 py-3 rounded-xl border border-border/50 bg-secondary/50 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all"
           />
         </div>
@@ -842,7 +842,7 @@ function FirstBotStep({
             type="text"
             value={config.slug}
             onChange={(e) => onUpdate({ slug: e.target.value })}
-            placeholder="teambrain"
+            placeholder="cluebase"
             className="w-full px-4 py-3 rounded-xl border border-border/50 bg-secondary/50 font-mono text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all"
           />
         </div>
@@ -953,7 +953,7 @@ function CompleteStep({
             <Bot className="w-7 h-7 text-white" />
           </div>
           <div>
-            <p className="text-lg font-semibold">{config.bot.name || 'TeamBrain'}</p>
+            <p className="text-lg font-semibold">{config.bot.name || 'Cluebase'}</p>
             <p className="text-sm text-muted-foreground">{config.bot.personality || 'Friendly and professional'}</p>
           </div>
         </div>
@@ -1029,7 +1029,7 @@ export default function SetupWizard() {
     slack: { botToken: '', appToken: '', signingSecret: '', connected: false, tested: false },
     googleDrive: { authenticated: false, selectedFolders: [] },
     knowledgeSources: { driveEnabled: true, websiteEnabled: false, websiteUrl: '', maxPages: 200 },
-    bot: { name: 'TeamBrain', slug: 'teambrain', personality: 'Friendly and professional', instructions: '' },
+    bot: { name: 'Cluebase', slug: 'cluebase', personality: 'Friendly and professional', instructions: '' },
   });
 
   const updateConfig = useCallback(

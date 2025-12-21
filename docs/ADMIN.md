@@ -1,6 +1,6 @@
-# TeamBrain AI - Platform Admin Guide
+# Cluebase AI - Platform Admin Guide
 
-Guide for platform administrators managing the TeamBrain AI SaaS platform.
+Guide for platform administrators managing the Cluebase AI SaaS platform.
 
 ## Accessing Admin Panel
 

@@ -1,4 +1,4 @@
-# TeamBrain AI Dashboard - Dockerfile
+# Cluebase AI Dashboard - Dockerfile
 # Multi-stage build for production Next.js
 
 # Stage 1: Dependencies
@@ -41,10 +41,10 @@ ENV NEXT_PUBLIC_APP_NAME=$NEXT_PUBLIC_APP_NAME
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 
 # Build the shared package first
-RUN pnpm --filter @teambrain/shared build
+RUN pnpm --filter @cluebase/shared build
 
 # Build the dashboard
-RUN pnpm --filter @teambrain/dashboard build
+RUN pnpm --filter @cluebase/dashboard build
 
 # Stage 3: Runner
 FROM node:20-alpine AS runner

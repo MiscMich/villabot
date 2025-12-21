@@ -1,4 +1,4 @@
-# TeamBrain AI - Docker Compose Configuration (Development)
+# Cluebase AI - Docker Compose Configuration (Development)
 # Local development without Traefik/SSL
 
 services:
@@ -7,7 +7,7 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    container_name: teambrain-api-dev
+    container_name: cluebase-api-dev
     restart: unless-stopped
     ports:
       - "${API_PORT:-3000}:3000"
@@ -41,7 +41,7 @@ services:
       retries: 3
       start_period: 40s
     networks:
-      - teambrain-dev-network
+      - cluebase-dev-network
 
   # Dashboard Service (Next.js Admin UI)
   dashboard:
@@ -52,9 +52,9 @@ services:
         - NEXT_PUBLIC_API_URL=http://localhost:3000
         - NEXT_PUBLIC_SUPABASE_URL=${SUPABASE_URL}
         - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
-        - NEXT_PUBLIC_APP_NAME=TeamBrain AI
+        - NEXT_PUBLIC_APP_NAME=Cluebase AI
         - NEXT_PUBLIC_APP_URL=http://localhost:3001
-    container_name: teambrain-dashboard-dev
+    container_name: cluebase-dashboard-dev
     restart: unless-stopped
     ports:
       - "${DASHBOARD_PORT:-3001}:3001"
@@ -71,8 +71,8 @@ services:
       retries: 3
       start_period: 40s
     networks:
-      - teambrain-dev-network
+      - cluebase-dev-network
 
 networks:
-  teambrain-dev-network:
+  cluebase-dev-network:
     driver: bridge

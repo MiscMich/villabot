@@ -121,7 +121,7 @@ In Coolify UI:
 
 1. **Resources** → **+ New** → **Docker Compose**
 2. Configure Git:
-   - **Repository**: `https://github.com/MiscMich/teambrain-ai`
+   - **Repository**: `https://github.com/MiscMich/cluebase-ai`
    - **Branch**: `main`
    - **Compose file path**: `apps/api/docker-compose.coolify.yml`
 3. **Domain**: `api.cluebase.ai`
@@ -163,7 +163,7 @@ In Coolify UI:
 
 1. **Resources** → **+ New** → **Docker Compose**
 2. Configure Git:
-   - **Repository**: `https://github.com/MiscMich/teambrain-ai`
+   - **Repository**: `https://github.com/MiscMich/cluebase-ai`
    - **Branch**: `main`
    - **Compose file path**: `apps/dashboard/docker-compose.coolify.yml`
 3. **Domain**: `cluebase.ai`
@@ -362,4 +362,4 @@ git push origin main
 
 - **Coolify Docs**: https://coolify.io/docs
 - **Supabase Docs**: https://supabase.com/docs
-- **GitHub Issues**: https://github.com/MiscMich/teambrain-ai/issues
+- **GitHub Issues**: https://github.com/MiscMich/cluebase-ai/issues

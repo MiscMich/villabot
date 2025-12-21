@@ -212,7 +212,7 @@ toast({ title: 'Error', description: error.message, variant: 'destructive' });
 ### 5.2 Deploy API Service
 
 1. **Resources** → **+ New** → **Docker Compose**
-2. Git: `https://github.com/MiscMich/teambrain-ai`, branch `main`
+2. Git: `https://github.com/MiscMich/cluebase-ai`, branch `main`
 3. Compose file: `apps/api/docker-compose.coolify.yml`
 4. Domain: `api.cluebase.ai`
 5. Environment variables (from .env.example + Supabase creds)
@@ -220,7 +220,7 @@ toast({ title: 'Error', description: error.message, variant: 'destructive' });
 ### 5.3 Deploy Dashboard Service
 
 1. **Resources** → **+ New** → **Docker Compose**
-2. Git: `https://github.com/MiscMich/teambrain-ai`, branch `main`
+2. Git: `https://github.com/MiscMich/cluebase-ai`, branch `main`
 3. Compose file: `apps/dashboard/docker-compose.coolify.yml`
 4. Domain: `cluebase.ai`
 5. Environment variables:

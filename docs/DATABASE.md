@@ -1,4 +1,4 @@
-# TeamBrain AI - Database Schema
+# Cluebase AI - Database Schema
 
 PostgreSQL database schema with pgvector extension for semantic search.
 

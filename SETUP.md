@@ -1,4 +1,4 @@
-# TeamBrain AI - Setup Guide
+# Cluebase AI - Setup Guide
 
 Quick start guide for local development and production deployment.
 
@@ -25,8 +25,8 @@ Quick start guide for local development and production deployment.
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/MiscMich/teambrain-ai.git
-cd teambrain-ai
+git clone https://github.com/MiscMich/cluebase-ai.git
+cd cluebase-ai
 pnpm install
 ```
 
@@ -130,7 +130,7 @@ Edit `apps/dashboard/.env.local`:
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 NEXT_PUBLIC_API_URL=http://localhost:3000
-NEXT_PUBLIC_APP_NAME=TeamBrain AI
+NEXT_PUBLIC_APP_NAME=Cluebase AI
 NEXT_PUBLIC_APP_URL=http://localhost:3001
 ```
 
@@ -224,7 +224,7 @@ Each workspace creates their own Slack app. Here's how:
 
 ```yaml
 display_information:
-  name: TeamBrain AI
+  name: Cluebase AI
   description: AI-powered knowledge assistant
   background_color: "#4A154B"
 features:
@@ -232,7 +232,7 @@ features:
     home_tab_enabled: true
     messages_tab_enabled: true
   bot_user:
-    display_name: TeamBrain
+    display_name: Cluebase
     always_online: true
 oauth_config:
   scopes:
@@ -270,7 +270,7 @@ settings:
 
 1. OAuth & Permissions > Install to Workspace
 2. Authorize the app
-3. Invite bot to channels: `/invite @TeamBrain`
+3. Invite bot to channels: `/invite @Cluebase`
 
 ---
 

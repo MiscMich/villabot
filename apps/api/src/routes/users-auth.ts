@@ -7,7 +7,8 @@ import { Router } from 'express';
 import { supabase } from '../services/supabase/client.js';
 import { logger } from '../utils/logger.js';
 import { authenticate } from '../middleware/auth.js';
-import { TIER_CONFIGS } from '@teambrain/shared';
+import { env } from '../config/env.js';
+import { TIER_CONFIGS } from '@cluebase/shared';
 import type {
   SignUpRequest,
   SignUpResponse,
@@ -18,7 +19,7 @@ import type {
   UpdatePasswordRequest,
   UpdateProfileRequest,
   WorkspaceWithRole,
-} from '@teambrain/shared';
+} from '@cluebase/shared';
 
 export const usersAuthRouter = Router();
 
@@ -326,7 +327,7 @@ usersAuthRouter.post('/forgot-password', async (req, res) => {
     }
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${process.env.APP_URL || 'http://localhost:3001'}/auth/reset-password`,
+      redirectTo: `${env.APP_URL}/auth/reset-password`,
     });
 
     if (error) {

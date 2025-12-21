@@ -6,7 +6,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { env } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
-import { EMBEDDING_CONFIG } from '@teambrain/shared';
+import { EMBEDDING_CONFIG } from '@cluebase/shared';
 import { embeddingCache, generateCacheKey } from '../../utils/cache.js';
 import { withTimeout, withRetry } from '../../utils/timeout.js';
 

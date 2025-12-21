@@ -8,7 +8,8 @@ import { supabase } from '../services/supabase/client.js';
 import { logger } from '../utils/logger.js';
 import { createBot } from '../services/bots/index.js';
 import { authenticate } from '../middleware/auth.js';
-import { TIER_CONFIGS } from '@teambrain/shared';
+import { env } from '../config/env.js';
+import { TIER_CONFIGS } from '@cluebase/shared';
 import { fullSync as syncGoogleDrive } from '../services/google-drive/sync.js';
 import { isDriveClientInitialized } from '../services/google-drive/client.js';
 import { scrapeWebsite } from '../services/scraper/website.js';
@@ -422,7 +423,7 @@ setupRouter.post('/complete', authenticate, async (req, res) => {
  */
 setupRouter.delete('/reset', async (req, res) => {
   try {
-    if (process.env.NODE_ENV === 'production') {
+    if (env.NODE_ENV === 'production') {
       return res.status(403).json({
         success: false,
         error: 'Setup reset is not allowed in production',

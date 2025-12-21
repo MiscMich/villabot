@@ -1,4 +1,4 @@
-# TeamBrain AI - Knowledge Management Platform
+# Cluebase AI - Knowledge Management Platform
 
 ## Project Overview
 
@@ -31,7 +31,7 @@ A multi-tenant SaaS platform for AI-powered knowledge management that:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              TEAMBRAIN AI                                   │
+│                              CLUEBASE AI                                    │
 └─────────────────────────────────────────────────────────────────────────────┘
 
 ┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
@@ -772,7 +772,7 @@ Every 5 minutes:
 ## Project Structure
 
 ```
-teambrain-ai/
+cluebase-ai/
 ├── apps/
 │   ├── api/                          # Backend API server
 │   │   ├── src/
@@ -1177,7 +1177,7 @@ DRIVE_POLL_INTERVAL_MS=600000  # 10 minutes
 Maria: Hey does anyone know what the check-in process is for guests?
 
     └─ Thread:
-       TeamBrain: Based on our SOPs, here's the check-in process:
+       Cluebase: Based on our SOPs, here's the check-in process:
 
        1. **Pre-arrival** (24 hours before):
           - Send welcome email with property access codes
@@ -1205,7 +1205,7 @@ Maria: Hey does anyone know what the check-in process is for guests?
 Carlos: What's the pool cleaning schedule?
 
     └─ Thread:
-       TeamBrain: Pool cleaning is scheduled as follows:
+       Cluebase: Pool cleaning is scheduled as follows:
        - Casa Luna: Monday & Thursday, 8 AM
        - Villa Sol: Tuesday & Friday, 9 AM
        - Casa del Mar: Wednesday & Saturday, 8 AM
@@ -1216,7 +1216,7 @@ Carlos: What's the pool cleaning schedule?
 
        Carlos: What about Casa Luna specifically if there's a guest checkout?
 
-       TeamBrain: Great follow-up! For Casa Luna post-checkout:
+       Cluebase: Great follow-up! For Casa Luna post-checkout:
        - Emergency pool cleaning within 4 hours of checkout
        - Full chemical balance check
        - Skim and vacuum
@@ -1230,7 +1230,7 @@ Carlos: What's the pool cleaning schedule?
 
        Carlos: Perfect, thanks!
 
-       TeamBrain: You're welcome! Let me know if you have other questions. 😊
+       Cluebase: You're welcome! Let me know if you have other questions. 😊
 ```
 
 ### Self-Learning Example
@@ -1240,7 +1240,7 @@ Carlos: What's the pool cleaning schedule?
 Sofia: Actually the check-in time changed to 3 PM, not 4 PM
 
     └─ Thread:
-       TeamBrain: Thanks for the update! I've noted that:
+       Cluebase: Thanks for the update! I've noted that:
 
        ✅ **Learned:** Check-in time is now 3 PM (previously 4 PM)
 
@@ -1533,7 +1533,7 @@ Metrics to track:
 
 ---
 
-*TeamBrain AI - Multi-tenant Knowledge Management Platform*
+*Cluebase AI - Multi-tenant Knowledge Management Platform*
 
 ---
 
@@ -1760,7 +1760,7 @@ const DEFAULT_SCRAPER_CONFIG: ScraperConfig = {
   ],
   category: 'company_knowledge',
   timeout: 30000,
-  userAgent: 'TeamBrain/1.0 (+https://teambrain.ai/bot)'
+  userAgent: 'Cluebase/1.0 (+https://cluebase.ai/bot)'
 };
 ```
 
@@ -1893,21 +1893,21 @@ ALTER TABLE documents ADD COLUMN bot_id UUID REFERENCES bots(id);
 ```yaml
 # Operations Bot (example)
 operations_bot:
-  name: "TeamBrain Operations"
+  name: "Cluebase Operations"
   slug: "operations"
   categories:
     - company_knowledge: { priority: 5 }
     - internal_sops: { priority: 10 }      # Highest priority
     - operations: { priority: 8 }
   system_prompt: |
-    You are TeamBrain, the operations assistant for your organization.
+    You are Cluebase, the operations assistant for your organization.
     Focus on SOPs, procedures, and operational questions.
     Always prioritize internal SOPs when answering operational questions.
     Cite your sources with the category prefix.
 
 # Marketing Bot
 marketing_bot:
-  name: "TeamBrain Marketing"
+  name: "Cluebase Marketing"
   slug: "marketing"
   categories:
     - company_knowledge: { priority: 5 }
@@ -1920,7 +1920,7 @@ marketing_bot:
 
 # General Knowledge Bot
 general_bot:
-  name: "TeamBrain General"
+  name: "Cluebase General"
   slug: "general"
   categories:
     - company_knowledge: { priority: 10 }
@@ -2214,7 +2214,7 @@ When user clicks 👎:
 
 ### Phase SaaS: Multi-Tenant Transformation ✅ COMPLETE
 
-**Goal**: Transform single-tenant VillaBot into multi-tenant TeamBrain AI SaaS platform
+**Goal**: Transform single-tenant VillaBot into multi-tenant Cluebase AI SaaS platform
 
 **Status**: Fully implemented across 8 sub-phases
 
@@ -2227,13 +2227,13 @@ When user clicks 👎:
 | 5. Billing | Stripe integration with checkout, webhooks | ✅ |
 | 6. Dashboard Contexts | AuthContext, WorkspaceContext, protected routes | ✅ |
 | 7. Dashboard Pages | Auth pages, billing, team management | ✅ |
-| 8. Branding | TeamBrain AI branding throughout | ✅ |
+| 8. Branding | Cluebase AI branding throughout | ✅ |
 
 ---
 
 ### Phase Landing: Public Landing Page ✅ COMPLETE
 
-**Goal**: Create a marketing landing page for TeamBrain AI
+**Goal**: Create a marketing landing page for Cluebase AI
 
 **Status**: Fully implemented at `/` (root route)
 
@@ -2476,4 +2476,4 @@ const folderCategoryMap = {
 
 ---
 
-*TeamBrain AI Enhancement Plan v2.0 - Last Updated: December 2024*
+*Cluebase AI Enhancement Plan v2.0 - Last Updated: December 2024*

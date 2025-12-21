@@ -16,7 +16,7 @@ import type {
   AdminWorkspaceFilters,
   PaginatedResponse,
   AdminAuditLogEntry,
-} from '@teambrain/shared';
+} from '@cluebase/shared';
 
 const router = Router();
 

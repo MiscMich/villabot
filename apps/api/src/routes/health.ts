@@ -21,7 +21,7 @@ interface HealthStatus {
 }
 
 // Track service status
-let serviceStatus = {
+const serviceStatus = {
   supabase: false,
   slack: false,
   gemini: false,

@@ -1,12 +1,12 @@
-# TeamBrain AI - Dashboard User Guide
+# Cluebase AI - Dashboard User Guide
 
-Complete guide for using the TeamBrain AI dashboard.
+Complete guide for using the Cluebase AI dashboard.
 
 ## Getting Started
 
 ### Creating an Account
 
-1. Navigate to your TeamBrain AI instance
+1. Navigate to your Cluebase AI instance
 2. Click "Get Started" or "Sign Up"
 3. Enter your email and password
 4. Check your email for verification link
@@ -356,5 +356,5 @@ Visual progress bars for:
 
 - **Documentation**: This guide and linked docs
 - **In-App Help**: Click help icon in header
-- **Support**: Email support@teambrain.ai
+- **Support**: Email support@cluebase.ai
 - **GitHub**: Report issues on GitHub

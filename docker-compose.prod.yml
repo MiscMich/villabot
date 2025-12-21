@@ -1,4 +1,4 @@
-# TeamBrain AI - Production Docker Compose
+# Cluebase AI - Production Docker Compose
 # Complete self-hosted SaaS stack with all dependencies
 #
 # Usage:
@@ -13,7 +13,7 @@
 #   - Dashboard (Next.js Admin UI)
 #   - Traefik (Reverse Proxy + SSL)
 
-name: teambrain-prod
+name: cluebase-prod
 
 services:
   # ============================================
@@ -23,7 +23,7 @@ services:
   # PostgreSQL Database with pgvector
   db:
     image: supabase/postgres:15.1.1.78
-    container_name: teambrain-db
+    container_name: cluebase-db
     restart: unless-stopped
     ports:
       - "5432:5432"
@@ -42,12 +42,12 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - teambrain-internal
+      - cluebase-internal
 
   # Redis for caching and job queue
   redis:
     image: redis:7-alpine
-    container_name: teambrain-redis
+    container_name: cluebase-redis
     restart: unless-stopped
     ports:
       - "6379:6379"
@@ -60,12 +60,12 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - teambrain-internal
+      - cluebase-internal
 
   # PostgREST API
   rest:
     image: postgrest/postgrest:v12.0.2
-    container_name: teambrain-rest
+    container_name: cluebase-rest
     restart: unless-stopped
     depends_on:
       db:
@@ -77,12 +77,12 @@ services:
       PGRST_JWT_SECRET: ${JWT_SECRET}
       PGRST_DB_USE_LEGACY_GUCS: "false"
     networks:
-      - teambrain-internal
+      - cluebase-internal
 
   # GoTrue Auth
   auth:
     image: supabase/gotrue:v2.151.0
-    container_name: teambrain-auth
+    container_name: cluebase-auth
     restart: unless-stopped
     depends_on:
       db:
@@ -108,18 +108,18 @@ services:
       GOTRUE_SMTP_USER: ${SMTP_USER:-resend}
       GOTRUE_SMTP_PASS: ${SMTP_PASS:-}
       GOTRUE_SMTP_ADMIN_EMAIL: ${SMTP_ADMIN_EMAIL:-}
-      GOTRUE_SMTP_SENDER_NAME: ${SMTP_SENDER_NAME:-TeamBrain AI}
+      GOTRUE_SMTP_SENDER_NAME: ${SMTP_SENDER_NAME:-Cluebase AI}
       GOTRUE_MAILER_URLPATHS_INVITE: /auth/v1/verify
       GOTRUE_MAILER_URLPATHS_CONFIRMATION: /auth/v1/verify
       GOTRUE_MAILER_URLPATHS_RECOVERY: /auth/v1/verify
       GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: /auth/v1/verify
     networks:
-      - teambrain-internal
+      - cluebase-internal
 
   # Realtime subscriptions
   realtime:
     image: supabase/realtime:v2.28.23
-    container_name: teambrain-realtime
+    container_name: cluebase-realtime
     restart: unless-stopped
     depends_on:
       db:
@@ -141,12 +141,12 @@ services:
       ENABLE_TAILSCALE: "false"
       DNS_NODES: "''"
     networks:
-      - teambrain-internal
+      - cluebase-internal
 
   # Storage API
   storage:
     image: supabase/storage-api:v1.0.6
-    container_name: teambrain-storage
+    container_name: cluebase-storage
     restart: unless-stopped
     depends_on:
       db:
@@ -170,12 +170,12 @@ services:
     volumes:
       - storage-data:/var/lib/storage
     networks:
-      - teambrain-internal
+      - cluebase-internal
 
   # Kong API Gateway (exposes Supabase APIs)
   kong:
     image: kong:2.8.1
-    container_name: teambrain-kong
+    container_name: cluebase-kong
     restart: unless-stopped
     depends_on:
       auth:
@@ -194,13 +194,13 @@ services:
     volumes:
       - ./supabase/kong.yml:/var/lib/kong/kong.yml:ro
     networks:
-      - teambrain-internal
-      - teambrain-public
+      - cluebase-internal
+      - cluebase-public
 
   # Supabase Studio (optional - admin UI)
   studio:
     image: supabase/studio:20240422-5cf8f30
-    container_name: teambrain-studio
+    container_name: cluebase-studio
     restart: unless-stopped
     depends_on:
       kong:
@@ -210,19 +210,19 @@ services:
     environment:
       STUDIO_PG_META_URL: http://meta:8080
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      DEFAULT_ORGANIZATION_NAME: ${STUDIO_DEFAULT_ORGANIZATION:-TeamBrain}
-      DEFAULT_PROJECT_NAME: ${STUDIO_DEFAULT_PROJECT:-TeamBrain AI}
+      DEFAULT_ORGANIZATION_NAME: ${STUDIO_DEFAULT_ORGANIZATION:-Cluebase}
+      DEFAULT_PROJECT_NAME: ${STUDIO_DEFAULT_PROJECT:-Cluebase AI}
       SUPABASE_URL: http://kong:8000
       SUPABASE_PUBLIC_URL: ${SUPABASE_URL}
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
     networks:
-      - teambrain-internal
+      - cluebase-internal
 
   # Postgres Meta (for Studio)
   meta:
     image: supabase/postgres-meta:v0.80.0
-    container_name: teambrain-meta
+    container_name: cluebase-meta
     restart: unless-stopped
     depends_on:
       db:
@@ -235,7 +235,7 @@ services:
       PG_META_DB_USER: supabase_admin
       PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
     networks:
-      - teambrain-internal
+      - cluebase-internal
 
   # ============================================
   # APPLICATION LAYER
@@ -246,7 +246,7 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    container_name: teambrain-api
+    container_name: cluebase-api
     restart: unless-stopped
     depends_on:
       db:
@@ -290,8 +290,8 @@ services:
       retries: 3
       start_period: 60s
     networks:
-      - teambrain-internal
-      - teambrain-public
+      - cluebase-internal
+      - cluebase-public
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.api.rule=Host(`api.${DOMAIN}`)"
@@ -304,7 +304,7 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    container_name: teambrain-worker
+    container_name: cluebase-worker
     restart: unless-stopped
     depends_on:
       db:
@@ -329,7 +329,7 @@ services:
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
     command: ["dumb-init", "node", "dist/worker.js"]
     networks:
-      - teambrain-internal
+      - cluebase-internal
 
   # Dashboard Service (Next.js Admin UI)
   dashboard:
@@ -342,7 +342,7 @@ services:
         - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
         - NEXT_PUBLIC_APP_NAME=Cluebase AI
         - NEXT_PUBLIC_APP_URL=https://${DOMAIN:-cluebase.ai}
-    container_name: teambrain-dashboard
+    container_name: cluebase-dashboard
     restart: unless-stopped
     depends_on:
       api:
@@ -360,8 +360,8 @@ services:
       retries: 3
       start_period: 40s
     networks:
-      - teambrain-internal
-      - teambrain-public
+      - cluebase-internal
+      - cluebase-public
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.dashboard.rule=Host(`${DOMAIN}`) || Host(`www.${DOMAIN}`)"
@@ -376,13 +376,13 @@ services:
   # Traefik Reverse Proxy
   traefik:
     image: traefik:v3.0
-    container_name: teambrain-traefik
+    container_name: cluebase-traefik
     restart: unless-stopped
     command:
       - "--api.dashboard=true"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
-      - "--providers.docker.network=teambrain-public"
+      - "--providers.docker.network=cluebase-public"
       - "--providers.file.directory=/etc/traefik/dynamic"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
@@ -400,7 +400,7 @@ services:
       - ./traefik/dynamic:/etc/traefik/dynamic:ro
       - letsencrypt:/letsencrypt
     networks:
-      - teambrain-public
+      - cluebase-public
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.${DOMAIN}`)"
@@ -421,7 +421,7 @@ volumes:
   letsencrypt:
 
 networks:
-  teambrain-internal:
+  cluebase-internal:
     driver: bridge
-  teambrain-public:
+  cluebase-public:
     driver: bridge

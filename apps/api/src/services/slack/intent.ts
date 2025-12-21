@@ -6,7 +6,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { env } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
-import { QUESTION_HEURISTICS } from '@teambrain/shared';
+import { QUESTION_HEURISTICS } from '@cluebase/shared';
 
 // Initialize Gemini for classification
 const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);

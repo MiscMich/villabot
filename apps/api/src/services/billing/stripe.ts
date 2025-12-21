@@ -7,8 +7,8 @@ import Stripe from 'stripe';
 import { env } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
 import { supabase } from '../supabase/client.js';
-import { TIER_CONFIGS } from '@teambrain/shared';
-import type { SubscriptionTier } from '@teambrain/shared';
+import { TIER_CONFIGS } from '@cluebase/shared';
+import type { SubscriptionTier } from '@cluebase/shared';
 
 // Initialize Stripe client
 let stripe: Stripe | null = null;

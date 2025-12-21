@@ -57,7 +57,7 @@ export default function AdminDashboardPage() {
             <h1 className="text-4xl font-display font-bold">Platform Overview</h1>
           </div>
           <p className="text-lg text-muted-foreground">
-            TeamBrain AI platform administration and monitoring
+            Cluebase AI platform administration and monitoring
           </p>
         </div>
         <Button

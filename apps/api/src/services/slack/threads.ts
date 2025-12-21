@@ -5,7 +5,7 @@
 
 import { supabase } from '../supabase/client.js';
 import { logger } from '../../utils/logger.js';
-import { THREAD_CONFIG } from '@teambrain/shared';
+import { THREAD_CONFIG } from '@cluebase/shared';
 
 export interface ConversationContext {
   sessionId: string;

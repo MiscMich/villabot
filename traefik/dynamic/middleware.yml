@@ -38,8 +38,8 @@ http:
           - Authorization
           - X-Workspace-ID
         accessControlAllowOriginList:
-          - "https://teambrain.app"
-          - "https://www.teambrain.app"
+          - "https://cluebase.ai"
+          - "https://www.cluebase.ai"
           # Local development
           - "http://localhost:3000"
           - "http://localhost:3001"

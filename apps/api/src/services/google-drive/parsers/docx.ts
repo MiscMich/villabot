@@ -20,7 +20,7 @@ export async function parseDocx(buffer: Buffer): Promise<ParsedDocument> {
     const result = await mammoth.extractRawText({ buffer });
 
     // Clean up the text
-    let content = result.value
+    const content = result.value
       .replace(/\s+/g, ' ')  // Normalize whitespace
       .replace(/\n{3,}/g, '\n\n')  // Max 2 newlines
       .trim();

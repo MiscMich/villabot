@@ -24,7 +24,7 @@ import {
   X,
   Clock,
 } from 'lucide-react';
-import type { WorkspaceMemberRole } from '@teambrain/shared';
+import type { WorkspaceMemberRole } from '@cluebase/shared';
 
 const roleLabels: Record<WorkspaceMemberRole, string> = {
   owner: 'Owner',

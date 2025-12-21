@@ -72,8 +72,8 @@ cluebase-ai/
 
 ```bash
 # Clone repository
-git clone https://github.com/MiscMich/teambrain-ai.git
-cd teambrain-ai
+git clone https://github.com/MiscMich/cluebase-ai.git
+cd cluebase-ai
 
 # Install dependencies
 pnpm install

@@ -1,7 +1,7 @@
-# Codebase Structure: TeamBrain AI
+# Codebase Structure: Cluebase AI
 
 ## Root Files
-- `package.json` - Root monorepo config (teambrain-ai@1.0.0)
+- `package.json` - Root monorepo config (cluebase-ai@1.0.0)
 - `pnpm-workspace.yaml` - Workspace definition (apps/*, packages/*)
 - `tsconfig.base.json` - Shared TypeScript config
 - `.env.example` - Environment variable template
@@ -21,7 +21,7 @@ docs/
 └── ADMIN_BACKEND_SUMMARY.md
 ```
 
-## apps/api (Backend API Server - @teambrain/api)
+## apps/api (Backend API Server - @cluebase/api)
 ```
 src/
 ├── index.ts              # Entry point, Express app setup
@@ -76,10 +76,10 @@ src/
 │       └── index.ts      # Cron jobs
 └── utils/
     ├── logger.ts         # Winston logger
-    └── errorTracker.ts   # Error tracking utility
+    └── error-tracker.ts  # Error tracking utility
 ```
 
-## apps/dashboard (Next.js Admin UI - @teambrain/dashboard)
+## apps/dashboard (Next.js Admin UI - @cluebase/dashboard)
 ```
 src/
 ├── app/                  # Next.js App Router pages
@@ -112,7 +112,7 @@ src/
     └── supabase.ts       # Supabase client
 ```
 
-## packages/shared (@teambrain/shared)
+## packages/shared (@cluebase/shared)
 ```
 src/
 ├── index.ts              # Main export

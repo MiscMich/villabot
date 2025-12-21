@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Workspace Context for TeamBrain AI Dashboard
+ * Workspace Context for Cluebase AI Dashboard
  * Manages current workspace, usage tracking, and workspace operations
  */
 
@@ -13,8 +13,8 @@ import type {
   UsageSummary,
   WorkspaceWithRole,
   SubscriptionTier,
-} from '@teambrain/shared';
-import { TIER_CONFIGS } from '@teambrain/shared';
+} from '@cluebase/shared';
+import { TIER_CONFIGS } from '@cluebase/shared';
 
 // Workspace state
 interface WorkspaceState {
@@ -51,7 +51,7 @@ type WorkspaceContextType = WorkspaceState & WorkspaceActions & WorkspaceCompute
 
 const WorkspaceContext = createContext<WorkspaceContextType | undefined>(undefined);
 
-const WORKSPACE_STORAGE_KEY = 'teambrain_current_workspace';
+const WORKSPACE_STORAGE_KEY = 'cluebase_current_workspace';
 
 interface WorkspaceProviderProps {
   children: React.ReactNode;

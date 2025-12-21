@@ -1,4 +1,5 @@
 export * from './admin.js';
+export * from './analytics.js';
 export * from './auth.js';
 export * from './bots.js';
 export * from './config.js';

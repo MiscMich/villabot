@@ -2,7 +2,7 @@
 
 ## Overview
 
-The TeamBrain AI API implements comprehensive rate limiting to prevent abuse and ensure fair usage across all workspaces based on their subscription tiers.
+The Cluebase AI API implements comprehensive rate limiting to prevent abuse and ensure fair usage across all workspaces based on their subscription tiers.
 
 ## Rate Limit Types
 

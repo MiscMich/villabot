@@ -16,8 +16,8 @@ import {
   Building,
   Rocket,
 } from 'lucide-react';
-import { TIER_CONFIGS } from '@teambrain/shared';
-import type { SubscriptionTier } from '@teambrain/shared';
+import { TIER_CONFIGS } from '@cluebase/shared';
+import type { SubscriptionTier } from '@cluebase/shared';
 
 interface BillingOverview {
   subscription: {

@@ -6,8 +6,34 @@
 import { supabase } from '../supabase/client.js';
 import { generateQueryEmbedding } from './embeddings.js';
 import { logger } from '../../utils/logger.js';
-import { RAG_CONFIG } from '@teambrain/shared';
-import type { DocumentCategory } from '@teambrain/shared';
+import { RAG_CONFIG } from '@cluebase/shared';
+import type { DocumentCategory } from '@cluebase/shared';
+
+// Type for chunks returned from hybrid_search RPC
+interface HybridSearchChunk {
+  id: string;
+  content: string;
+  document_id: string;
+  source_title?: string;
+  similarity: number;
+  rank_score: number;
+  category?: string;
+}
+
+// Type for chunks returned from match_documents RPC
+interface MatchDocumentChunk {
+  id: string;
+  content: string;
+  document_id: string;
+  similarity: number;
+}
+
+// Type for learned facts returned from match_learned_facts RPC
+interface LearnedFact {
+  id: string;
+  fact: string;
+  similarity: number;
+}
 import { searchCache, generateCacheKey } from '../../utils/cache.js';
 import { withTimeout } from '../../utils/timeout.js';
 import { errorTracker } from '../../utils/error-tracker.js';
@@ -125,8 +151,11 @@ export async function hybridSearch(
       return await vectorSearchFallback(query, queryEmbedding, topK, minSimilarity, workspaceId);
     }
 
+    // Type assertion for chunks returned from RPC
+    const typedChunks = chunks as HybridSearchChunk[];
+
     // Fetch document metadata for results (source_url not returned by new function)
-    const documentIds = [...new Set(chunks.map((c: any) => c.document_id))];
+    const documentIds = [...new Set(typedChunks.map(c => c.document_id))];
     const { data: documents } = await supabase
       .from('documents')
       .select('id, source_url')
@@ -136,9 +165,9 @@ export async function hybridSearch(
 
     // Build results with document info
     // The new hybrid_search function returns category and source_title directly
-    let results: SearchResult[] = chunks
-      .filter((chunk: any) => chunk.similarity >= minSimilarity)
-      .map((chunk: any) => {
+    let results: SearchResult[] = typedChunks
+      .filter(chunk => chunk.similarity >= minSimilarity)
+      .map(chunk => {
         const doc = docMap.get(chunk.document_id);
         return {
           id: chunk.id,
@@ -217,7 +246,9 @@ async function vectorSearchFallback(
     throw error;
   }
 
-  const documentIds = [...new Set(chunks.map((c: any) => c.document_id))];
+  // Type assertion for chunks returned from RPC
+  const typedChunks = chunks as MatchDocumentChunk[];
+  const documentIds = [...new Set(typedChunks.map(c => c.document_id))];
   const { data: documents } = await supabase
     .from('documents')
     .select('id, title, source_url')
@@ -226,9 +257,9 @@ async function vectorSearchFallback(
 
   const docMap = new Map(documents?.map(d => [d.id, d]) ?? []);
 
-  return chunks
-    .filter((chunk: any) => chunk.similarity >= minSimilarity)
-    .map((chunk: any) => {
+  return typedChunks
+    .filter(chunk => chunk.similarity >= minSimilarity)
+    .map(chunk => {
       const doc = docMap.get(chunk.document_id);
       return {
         id: chunk.id,
@@ -263,7 +294,9 @@ async function searchLearnedFacts(
       return [];
     }
 
-    return (facts ?? []).map((fact: any) => ({
+    // Type assertion for facts returned from RPC
+    const typedFacts = (facts ?? []) as LearnedFact[];
+    return typedFacts.map(fact => ({
       id: fact.id,
       content: fact.fact,
       documentId: 'learned',
@@ -300,7 +333,9 @@ export async function vectorSearch(
     throw error;
   }
 
-  const documentIds = [...new Set(chunks.map((c: any) => c.document_id))];
+  // Type assertion for chunks returned from RPC
+  const typedChunks = chunks as MatchDocumentChunk[];
+  const documentIds = [...new Set(typedChunks.map(c => c.document_id))];
   const { data: documents } = await supabase
     .from('documents')
     .select('id, title, source_url')
@@ -309,7 +344,7 @@ export async function vectorSearch(
 
   const docMap = new Map(documents?.map(d => [d.id, d]) ?? []);
 
-  return chunks.map((chunk: any) => {
+  return typedChunks.map(chunk => {
     const doc = docMap.get(chunk.document_id);
     return {
       id: chunk.id,

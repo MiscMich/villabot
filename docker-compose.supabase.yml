@@ -1,4 +1,4 @@
-# TeamBrain AI - Self-Hosted Supabase Stack
+# Cluebase AI - Self-Hosted Supabase Stack
 # Use this for complete data sovereignty
 #
 # Usage:
@@ -8,13 +8,13 @@
 #
 # Access Studio: http://localhost:8080 (or https://supabase.yourdomain.com)
 
-name: teambrain-supabase
+name: cluebase-supabase
 
 services:
   # PostgreSQL Database with pgvector
   db:
     image: supabase/postgres:15.1.1.78
-    container_name: teambrain-supabase-db
+    container_name: cluebase-supabase-db
     restart: unless-stopped
     ports:
       - "5432:5432"
@@ -33,12 +33,12 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - teambrain-network
+      - cluebase-network
 
   # PostgREST API
   rest:
     image: postgrest/postgrest:v12.0.2
-    container_name: teambrain-supabase-rest
+    container_name: cluebase-supabase-rest
     restart: unless-stopped
     depends_on:
       db:
@@ -50,12 +50,12 @@ services:
       PGRST_JWT_SECRET: ${JWT_SECRET}
       PGRST_DB_USE_LEGACY_GUCS: "false"
     networks:
-      - teambrain-network
+      - cluebase-network
 
   # GoTrue Auth
   auth:
     image: supabase/gotrue:v2.151.0
-    container_name: teambrain-supabase-auth
+    container_name: cluebase-supabase-auth
     restart: unless-stopped
     depends_on:
       db:
@@ -81,7 +81,7 @@ services:
       GOTRUE_SMTP_USER: ${SMTP_USER:-resend}
       GOTRUE_SMTP_PASS: ${SMTP_PASS}
       GOTRUE_SMTP_ADMIN_EMAIL: ${SMTP_ADMIN_EMAIL}
-      GOTRUE_SMTP_SENDER_NAME: ${SMTP_SENDER_NAME:-TeamBrain AI}
+      GOTRUE_SMTP_SENDER_NAME: ${SMTP_SENDER_NAME:-Cluebase AI}
       GOTRUE_MAILER_URLPATHS_INVITE: /auth/v1/verify
       GOTRUE_MAILER_URLPATHS_CONFIRMATION: /auth/v1/verify
       GOTRUE_MAILER_URLPATHS_RECOVERY: /auth/v1/verify
@@ -89,12 +89,12 @@ services:
       GOTRUE_EXTERNAL_PHONE_ENABLED: "false"
       GOTRUE_SMS_AUTOCONFIRM: "true"
     networks:
-      - teambrain-network
+      - cluebase-network
 
   # Realtime
   realtime:
     image: supabase/realtime:v2.28.23
-    container_name: teambrain-supabase-realtime
+    container_name: cluebase-supabase-realtime
     restart: unless-stopped
     depends_on:
       db:
@@ -116,12 +116,12 @@ services:
       ENABLE_TAILSCALE: "false"
       DNS_NODES: "''"
     networks:
-      - teambrain-network
+      - cluebase-network
 
   # Storage API
   storage:
     image: supabase/storage-api:v1.0.6
-    container_name: teambrain-supabase-storage
+    container_name: cluebase-supabase-storage
     restart: unless-stopped
     depends_on:
       db:
@@ -145,12 +145,12 @@ services:
     volumes:
       - supabase-storage:/var/lib/storage
     networks:
-      - teambrain-network
+      - cluebase-network
 
   # Image Transformation
   imgproxy:
     image: darthsim/imgproxy:v3.24
-    container_name: teambrain-supabase-imgproxy
+    container_name: cluebase-supabase-imgproxy
     restart: unless-stopped
     environment:
       IMGPROXY_BIND: ":8080"
@@ -160,12 +160,12 @@ services:
     volumes:
       - supabase-storage:/var/lib/storage:ro
     networks:
-      - teambrain-network
+      - cluebase-network
 
   # Kong API Gateway
   kong:
     image: kong:2.8.1
-    container_name: teambrain-supabase-kong
+    container_name: cluebase-supabase-kong
     restart: unless-stopped
     depends_on:
       auth:
@@ -187,12 +187,12 @@ services:
     volumes:
       - ./supabase/kong.yml:/var/lib/kong/kong.yml:ro
     networks:
-      - teambrain-network
+      - cluebase-network
 
   # Supabase Studio (Admin UI)
   studio:
     image: supabase/studio:20240422-5cf8f30
-    container_name: teambrain-supabase-studio
+    container_name: cluebase-supabase-studio
     restart: unless-stopped
     depends_on:
       kong:
@@ -200,8 +200,8 @@ services:
     environment:
       STUDIO_PG_META_URL: http://meta:8080
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      DEFAULT_ORGANIZATION_NAME: ${STUDIO_DEFAULT_ORGANIZATION:-TeamBrain}
-      DEFAULT_PROJECT_NAME: ${STUDIO_DEFAULT_PROJECT:-TeamBrain AI}
+      DEFAULT_ORGANIZATION_NAME: ${STUDIO_DEFAULT_ORGANIZATION:-Cluebase}
+      DEFAULT_PROJECT_NAME: ${STUDIO_DEFAULT_PROJECT:-Cluebase AI}
       SUPABASE_URL: http://kong:8000
       SUPABASE_PUBLIC_URL: ${SUPABASE_URL}
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
@@ -211,14 +211,14 @@ services:
       NEXT_PUBLIC_ENABLE_LOGS: "true"
       NEXT_ANALYTICS_BACKEND_PROVIDER: postgres
     networks:
-      - teambrain-network
+      - cluebase-network
     ports:
       - "3080:3000"
 
   # Postgres Meta
   meta:
     image: supabase/postgres-meta:v0.80.0
-    container_name: teambrain-supabase-meta
+    container_name: cluebase-supabase-meta
     restart: unless-stopped
     depends_on:
       db:
@@ -231,12 +231,12 @@ services:
       PG_META_DB_USER: supabase_admin
       PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
     networks:
-      - teambrain-network
+      - cluebase-network
 
   # Analytics (optional)
   analytics:
     image: supabase/logflare:1.4.0
-    container_name: teambrain-supabase-analytics
+    container_name: cluebase-supabase-analytics
     restart: unless-stopped
     depends_on:
       db:
@@ -257,12 +257,12 @@ services:
       POSTGRES_BACKEND_SCHEMA: _analytics
       LOGFLARE_FEATURE_FLAG_OVERRIDE: multibackend=true
     networks:
-      - teambrain-network
+      - cluebase-network
 
 volumes:
   supabase-db:
   supabase-storage:
 
 networks:
-  teambrain-network:
+  cluebase-network:
     external: true

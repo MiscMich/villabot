@@ -4,7 +4,7 @@
  */
 
 import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
-import { CHUNK_CONFIG } from '@teambrain/shared';
+import { CHUNK_CONFIG } from '@cluebase/shared';
 import { logger } from '../../utils/logger.js';
 
 export interface ChunkMetadata {

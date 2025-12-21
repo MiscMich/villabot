@@ -43,3 +43,7 @@ coverage/
 *.key
 credentials.json
 token.json
+
+# Compiled TypeScript in shared package (should be in dist/ only)
+packages/shared/src/**/*.js
+packages/shared/src/**/*.js.map

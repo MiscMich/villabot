@@ -18,7 +18,7 @@ import { sendInviteEmail } from '../services/email/index.js';
 import type {
   InviteMemberRequest,
   WorkspaceMemberRole,
-} from '@teambrain/shared';
+} from '@cluebase/shared';
 
 export const teamRouter = Router();
 

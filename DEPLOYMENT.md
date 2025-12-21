@@ -105,12 +105,12 @@ docker compose version
 
 ```bash
 # Create app directory
-sudo mkdir -p /opt/teambrain
-sudo chown $USER:$USER /opt/teambrain
-cd /opt/teambrain
+sudo mkdir -p /opt/cluebase
+sudo chown $USER:$USER /opt/cluebase
+cd /opt/cluebase
 
 # Clone with PAT (or use SSH)
-git clone https://github.com/MiscMich/teambrain-ai.git .
+git clone https://github.com/MiscMich/cluebase-ai.git .
 ```
 
 ### 3. Generate Secrets

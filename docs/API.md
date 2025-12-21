@@ -1,11 +1,11 @@
-# TeamBrain AI - API Reference
+# Cluebase AI - API Reference
 
-Complete API documentation for the TeamBrain AI platform.
+Complete API documentation for the Cluebase AI platform.
 
 ## Base URL
 
 - **Development**: `http://localhost:3000/api`
-- **Production**: `https://api.teambrain.app/api`
+- **Production**: `https://api.cluebase.ai/api`
 
 ## Authentication
 

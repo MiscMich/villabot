@@ -11,7 +11,7 @@ import {
   resolveWorkspace,
   requireWorkspaceAdmin,
 } from '../middleware/index.js';
-import type { FeedbackSubmitInput, FeedbackReviewInput } from '@teambrain/shared';
+import type { FeedbackSubmitInput, FeedbackReviewInput } from '@cluebase/shared';
 
 export const feedbackRouter = Router();
 

@@ -8,7 +8,7 @@ import { supabase } from '../supabase/client.js';
 import { logger } from '../../utils/logger.js';
 import { errorTracker } from '../../utils/error-tracker.js';
 import { BotInstance, BotInstanceConfig } from './instance.js';
-import type { Bot, DocumentCategory } from '@teambrain/shared';
+import type { Bot, DocumentCategory } from '@cluebase/shared';
 
 // Health monitoring configuration
 const HEALTH_CHECK_INTERVAL_MS = 30_000; // 30 seconds

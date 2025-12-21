@@ -162,4 +162,4 @@ See `.env.example` for required configuration:
 Use `/commit` for git commits, `/code-review` for PR reviews, `/feature-dev` for feature development workflow.
 
 ## Repository
-GitHub: https://github.com/MiscMich/teambrain-ai
+GitHub: https://github.com/MiscMich/cluebase-ai

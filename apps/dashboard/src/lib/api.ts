@@ -1,5 +1,5 @@
 /**
- * API client for TeamBrain AI Dashboard
+ * API client for Cluebase AI Dashboard
  * Handles authenticated requests with workspace context
  */
 
@@ -8,7 +8,7 @@ import { getSupabase, isSupabaseConfigured } from './supabase';
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
 // Workspace ID storage key (synced with WorkspaceContext)
-const WORKSPACE_STORAGE_KEY = 'teambrain_current_workspace';
+const WORKSPACE_STORAGE_KEY = 'cluebase_current_workspace';
 
 /**
  * Get current workspace ID from localStorage

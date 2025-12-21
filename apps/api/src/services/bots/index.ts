@@ -16,7 +16,7 @@ import type {
   BotStats,
   BotWithStats,
   DocumentCategory,
-} from '@teambrain/shared';
+} from '@cluebase/shared';
 
 /**
  * Converts snake_case database row to camelCase Bot type

@@ -6,7 +6,7 @@
 import { google, drive_v3 } from 'googleapis';
 import { env } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
-import { SUPPORTED_FILE_TYPES, FILE_LIMITS } from '@teambrain/shared';
+import { SUPPORTED_FILE_TYPES, FILE_LIMITS } from '@cluebase/shared';
 
 // OAuth2 client
 const oauth2Client = new google.auth.OAuth2(

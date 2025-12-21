@@ -37,7 +37,7 @@ function Navigation() {
               <Brain className="relative h-8 w-8 text-amber-500" />
             </div>
             <span className="font-display text-xl font-bold text-white">
-              TeamBrain<span className="text-amber-500">AI</span>
+              Cluebase<span className="text-amber-500">AI</span>
             </span>
           </Link>
 
@@ -177,7 +177,7 @@ function HeroSection() {
                     <span className="font-medium text-white">John Doe</span>
                     <span className="text-xs text-slate-500">2:34 PM</span>
                   </div>
-                  <p className="text-slate-300">@TeamBrain What&apos;s our refund policy for enterprise customers?</p>
+                  <p className="text-slate-300">@Cluebase What&apos;s our refund policy for enterprise customers?</p>
                 </div>
               </div>
               {/* Bot Response */}
@@ -187,7 +187,7 @@ function HeroSection() {
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="font-medium text-amber-500">TeamBrain</span>
+                    <span className="font-medium text-amber-500">Cluebase</span>
                     <span className="text-xs bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded">APP</span>
                     <span className="text-xs text-slate-500">2:34 PM</span>
                   </div>
@@ -564,7 +564,7 @@ function PricingSection() {
 function TestimonialsSection() {
   const testimonials = [
     {
-      quote: "TeamBrain has completely transformed how our support team handles internal questions. What used to take 15 minutes of searching now takes seconds.",
+      quote: "Cluebase has completely transformed how our support team handles internal questions. What used to take 15 minutes of searching now takes seconds.",
       author: 'Sarah Chen',
       role: 'Head of Operations',
       company: 'TechStart',
@@ -692,7 +692,7 @@ function Footer() {
             <Link href="/" className="flex items-center gap-2.5 mb-4">
               <Brain className="h-7 w-7 text-amber-500" />
               <span className="font-display text-lg font-bold text-white">
-                TeamBrain<span className="text-amber-500">AI</span>
+                Cluebase<span className="text-amber-500">AI</span>
               </span>
             </Link>
             <p className="text-sm text-slate-400 mb-6">
@@ -756,7 +756,7 @@ function Footer() {
 
         <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-sm text-slate-500">
-            © {new Date().getFullYear()} TeamBrain AI. All rights reserved.
+            © {new Date().getFullYear()} Cluebase AI. All rights reserved.
           </p>
           <div className="flex items-center gap-6">
             <a href="#" className="text-sm text-slate-500 hover:text-white transition-colors">

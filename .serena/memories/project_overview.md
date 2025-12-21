@@ -1,4 +1,4 @@
-# Project Overview: TeamBrain AI
+# Project Overview: Cluebase AI
 
 ## Purpose
 A multi-tenant SaaS platform for AI-powered knowledge management that:
@@ -30,7 +30,7 @@ A multi-tenant SaaS platform for AI-powered knowledge management that:
 - **Monorepo** using pnpm workspaces
 - `apps/api` - Backend Express API server (port 3000)
 - `apps/dashboard` - Next.js admin dashboard (port 3001)
-- `packages/shared` - Shared types and constants (@teambrain/shared)
+- `packages/shared` - Shared types and constants (@cluebase/shared)
 - `supabase/migrations` - 15 database migrations
 - `docs/` - Documentation (API, Database, Admin, Dashboard)
 
@@ -47,10 +47,10 @@ A multi-tenant SaaS platform for AI-powered knowledge management that:
 - Stripe billing with Starter/Pro/Business tiers
 
 ## Package Names
-- `teambrain-ai` (root)
-- `@teambrain/api` (backend)
-- `@teambrain/dashboard` (frontend)
-- `@teambrain/shared` (shared types)
+- `cluebase-ai` (root)
+- `@cluebase/api` (backend)
+- `@cluebase/dashboard` (frontend)
+- `@cluebase/shared` (shared types)
 
 ## Implementation Status
 All major phases complete:

@@ -6,8 +6,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { supabase } from '../services/supabase/client.js';
 import { logger } from '../utils/logger.js';
-import type { AuthUser, UserProfile, AuthSession } from '@teambrain/shared';
-import { TIER_CONFIGS } from '@teambrain/shared';
+import type { AuthUser, UserProfile, AuthSession } from '@cluebase/shared';
+import { TIER_CONFIGS } from '@cluebase/shared';
 
 // Extend Express Request to include auth context
 declare global {
@@ -250,8 +250,9 @@ export async function optionalAuth(
       };
       req.profile = profile as UserProfile;
     }
-  } catch {
-    // Ignore errors for optional auth
+  } catch (error) {
+    // Log but don't fail for optional auth
+    logger.debug('Optional auth error (non-blocking)', { error: error instanceof Error ? error.message : 'Unknown error' });
   }
 
   next();

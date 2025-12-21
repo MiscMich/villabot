@@ -1,6 +1,6 @@
-# TeamBrain AI - Production Deployment Guide
+# Cluebase AI - Production Deployment Guide
 
-Complete guide for deploying TeamBrain AI on a Hetzner VPS with self-hosted Supabase.
+Complete guide for deploying Cluebase AI on a Hetzner VPS with self-hosted Supabase.
 
 ## Table of Contents
 
@@ -50,7 +50,7 @@ For self-hosted Supabase + Application: **minimum 8GB RAM recommended**.
    - Image: **Ubuntu 24.04**
    - Type: **CX22** (4GB RAM) minimum, **CX32** (8GB) recommended
    - SSH keys: Add your public key
-   - Name: \`teambrain-prod\`
+   - Name: \`cluebase-prod\`
 
 ### 2. Initial Server Configuration
 
@@ -100,8 +100,8 @@ ufw enable
 
 \`\`\`bash
 # As deploy user
-mkdir -p ~/teambrain
-cd ~/teambrain
+mkdir -p ~/cluebase
+cd ~/cluebase
 \`\`\`
 
 ---
@@ -121,7 +121,7 @@ Self-hosted Supabase provides full data sovereignty. The stack includes:
 Run the generate-keys.sh script (included in scripts/):
 
 \`\`\`bash
-cd ~/teambrain
+cd ~/cluebase
 ./scripts/generate-keys.sh > .secrets
 cat .secrets
 # IMPORTANT: Save these values securely!
@@ -155,8 +155,8 @@ SERVICE_ROLE_KEY=your_generated_service_role_key
 ############
 # URLs
 ############
-SITE_URL=https://teambrain.app
-API_EXTERNAL_URL=https://supabase.teambrain.app
+SITE_URL=https://cluebase.ai
+API_EXTERNAL_URL=https://supabase.cluebase.ai
 
 ############
 # Auth (SMTP via Resend recommended)
@@ -165,7 +165,7 @@ GOTRUE_SMTP_HOST=smtp.resend.com
 GOTRUE_SMTP_PORT=465
 GOTRUE_SMTP_USER=resend
 GOTRUE_SMTP_PASS=your_resend_api_key
-GOTRUE_SMTP_SENDER_NAME=TeamBrain AI
+GOTRUE_SMTP_SENDER_NAME=Cluebase AI
 \`\`\`
 
 ### 4. Enable pgvector Extension
@@ -198,13 +198,13 @@ Access Supabase Studio and run each migration from \`supabase/migrations/\` in o
 
 #### Enable APIs
 1. Go to [Google Cloud Console](https://console.cloud.google.com)
-2. Create project: \`teambrain-prod\`
+2. Create project: \`cluebase-prod\`
 3. Enable: Google Drive API, Google Docs API, Google Sheets API
 
 #### Create OAuth Credentials
 1. Configure OAuth consent screen (External)
 2. Create OAuth 2.0 Client ID:
-   - Authorized redirect: \`https://api.teambrain.app/api/google-drive/callback\`
+   - Authorized redirect: \`https://api.cluebase.ai/api/google-drive/callback\`
 3. Save Client ID and Secret
 
 #### Get Gemini API Key
@@ -221,7 +221,7 @@ Access Supabase Studio and run each migration from \`supabase/migrations/\` in o
 | **Business** | $149/mo | Monthly |
 
 #### Configure Webhooks
-1. Endpoint: \`https://api.teambrain.app/api/stripe/webhook\`
+1. Endpoint: \`https://api.cluebase.ai/api/stripe/webhook\`
 2. Events: \`checkout.session.completed\`, \`customer.subscription.*\`, \`invoice.*\`
 3. Save webhook signing secret
 
@@ -236,8 +236,8 @@ Create from manifest (see docs/SLACK_MANIFEST.yaml)
 ### 1. Clone and Configure
 
 \`\`\`bash
-cd ~/teambrain
-git clone https://github.com/MiscMich/teambrain-ai.git app
+cd ~/cluebase
+git clone https://github.com/MiscMich/cluebase-ai.git app
 cd app
 
 # Create .env from example
@@ -249,11 +249,11 @@ cp .env.example .env
 
 \`\`\`env
 # Domain
-DOMAIN=teambrain.app
-ACME_EMAIL=admin@teambrain.app
+DOMAIN=cluebase.ai
+ACME_EMAIL=admin@cluebase.ai
 
 # Supabase (Self-Hosted)
-SUPABASE_URL=https://supabase.teambrain.app
+SUPABASE_URL=https://supabase.cluebase.ai
 SUPABASE_ANON_KEY=your_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 
@@ -290,7 +290,7 @@ docker compose ps
 | A | @ | YOUR_SERVER_IP | 300 |
 | A | api | YOUR_SERVER_IP | 300 |
 | A | supabase | YOUR_SERVER_IP | 300 |
-| CNAME | www | teambrain.app | 300 |
+| CNAME | www | cluebase.ai | 300 |
 
 ---
 
@@ -299,7 +299,7 @@ docker compose ps
 Traefik automatically obtains Let's Encrypt certificates. Verify:
 
 \`\`\`bash
-curl -vI https://teambrain.app 2>&1 | grep -i "SSL\|issuer"
+curl -vI https://cluebase.ai 2>&1 | grep -i "SSL\|issuer"
 \`\`\`
 
 ---
@@ -312,20 +312,20 @@ curl -vI https://teambrain.app 2>&1 | grep -i "SSL\|issuer"
 -- In Supabase SQL Editor after user signs up:
 INSERT INTO platform_admins (user_id, role, is_active)
 SELECT id, 'super_admin', true
-FROM auth.users WHERE email = 'admin@teambrain.app';
+FROM auth.users WHERE email = 'admin@cluebase.ai';
 \`\`\`
 
 ### 2. Configure Backups
 
 \`\`\`bash
 # Daily backup cron
-0 2 * * * ~/teambrain/scripts/backup.sh
+0 2 * * * ~/cluebase/scripts/backup.sh
 \`\`\`
 
 ### 3. Health Monitoring
 
 \`\`\`bash
-curl https://api.teambrain.app/health
+curl https://api.cluebase.ai/health
 docker compose ps
 docker stats
 \`\`\`
@@ -374,4 +374,4 @@ docker compose exec api sh    # Shell access
 
 ## Support
 
-Issues: https://github.com/MiscMich/teambrain-ai/issues
+Issues: https://github.com/MiscMich/cluebase-ai/issues
