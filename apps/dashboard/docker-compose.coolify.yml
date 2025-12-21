@@ -34,5 +34,11 @@ services:
       retries: 3
       start_period: 40s
     restart: unless-stopped
+    networks:
+      - coolify
     # Note: Coolify manages Traefik routing automatically
     # Do not add custom traefik labels - they conflict with Coolify's configuration
+
+networks:
+  coolify:
+    external: true
