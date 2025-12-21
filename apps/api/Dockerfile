@@ -27,6 +27,9 @@ COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
 COPY . .
 
+# Build the shared package first
+RUN pnpm --filter @teambrain/shared build
+
 # Build the API
 RUN pnpm --filter @teambrain/api build
 
