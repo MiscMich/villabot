@@ -41,18 +41,8 @@ services:
       retries: 3
       start_period: 60s
     restart: unless-stopped
-    labels:
-      # Enable Traefik for this container
-      - "traefik.enable=true"
-      # Service with unique name to avoid conflicts
-      - "traefik.http.services.cluebase-api.loadbalancer.server.port=3000"
-      # Network - required when container is on multiple networks
-      - "traefik.docker.network=coolify"
-      # Link Coolify's auto-generated routers to our service
-      - "traefik.http.routers.http-0-hs0k84sswkswssk0ccgw8488-api.service=cluebase-api"
-      - "traefik.http.routers.https-0-hs0k84sswkswssk0ccgw8488-api.service=cluebase-api"
-    networks:
-      - coolify
+    # Note: Coolify manages Traefik routing automatically
+    # Do not add custom traefik labels - they conflict with Coolify's configuration
 
   # Background worker (optional - can run in same container or separate)
   worker:
