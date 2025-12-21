@@ -27,8 +27,8 @@ COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
 COPY . .
 
-# Build the shared package first
-RUN pnpm --filter @teambrain/shared build
+# Build the shared package (only if .d.ts files don't exist)
+RUN if [ ! -f packages/shared/dist/index.d.ts ]; then pnpm --filter @teambrain/shared build; fi
 
 # Build the API
 RUN pnpm --filter @teambrain/api build
@@ -64,6 +64,9 @@ COPY --from=builder --chown=teambrain:nodejs /app/packages/shared/dist ./package
 
 # Set working directory to api
 WORKDIR /app/apps/api
+
+# Create logs directory with correct ownership
+RUN mkdir -p logs && chown -R teambrain:nodejs logs
 
 USER teambrain
 
