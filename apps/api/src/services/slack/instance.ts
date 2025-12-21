@@ -25,7 +25,7 @@ import { messageRateLimiter } from '../../utils/rate-limiter.js';
 import { errorTracker } from '../../utils/error-tracker.js';
 import { withTimeout, TimeoutError } from '../../utils/timeout.js';
 import { trackQueryUsage } from '../../middleware/rateLimit.js';
-import type { Bot } from '@villa-paraiso/shared';
+import type { Bot } from '@teambrain/shared';
 
 // Response timeout in milliseconds
 const RESPONSE_TIMEOUT_MS = 30000;

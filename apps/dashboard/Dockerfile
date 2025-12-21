@@ -1,4 +1,4 @@
-# Villa Paraiso Dashboard - Dockerfile
+# TeamBrain AI Dashboard - Dockerfile
 # Multi-stage build for production Next.js
 
 # Stage 1: Dependencies
@@ -32,7 +32,7 @@ ARG NEXT_PUBLIC_API_URL=http://localhost:3000
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
 # Build the dashboard
-RUN pnpm --filter @villa-paraiso/dashboard build
+RUN pnpm --filter @teambrain/dashboard build
 
 # Stage 3: Runner
 FROM node:20-alpine AS runner

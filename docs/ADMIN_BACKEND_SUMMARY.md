@@ -106,7 +106,7 @@ GET /api/admin/audit-log
 #### Dependencies
 - Uses existing authentication middleware from `middleware/auth.ts`
 - Uses Supabase client from `services/supabase/client.ts`
-- Uses shared types from `@villa-paraiso/shared/types/admin.ts`
+- Uses shared types from `@teambrain/shared/types/admin.ts`
 - Uses logger from `utils/logger.ts`
 
 #### Rate Limiting

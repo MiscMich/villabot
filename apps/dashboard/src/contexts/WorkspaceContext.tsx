@@ -13,8 +13,8 @@ import type {
   UsageSummary,
   WorkspaceWithRole,
   SubscriptionTier,
-} from '@villa-paraiso/shared';
-import { TIER_CONFIGS } from '@villa-paraiso/shared';
+} from '@teambrain/shared';
+import { TIER_CONFIGS } from '@teambrain/shared';
 
 // Workspace state
 interface WorkspaceState {

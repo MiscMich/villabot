@@ -58,4 +58,4 @@ import { logger } from './utils/logger.js';
 ## Type Exports
 - Shared types in `packages/shared/src/types/`
 - Re-exported from main index files
-- Use workspace imports: `@villa-paraiso/shared`
+- Use workspace imports: `@teambrain/shared`

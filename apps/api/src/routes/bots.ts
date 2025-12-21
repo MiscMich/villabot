@@ -13,7 +13,7 @@ import {
   requireWorkspaceAdmin,
   checkUsageLimit,
 } from '../middleware/index.js';
-import type { BotCreateInput, BotUpdateInput } from '@villa-paraiso/shared';
+import type { BotCreateInput, BotUpdateInput } from '@teambrain/shared';
 
 export const botsRouter = Router();
 

@@ -8,7 +8,7 @@ import { supabase } from '../services/supabase/client.js';
 import { logger } from '../utils/logger.js';
 import { createBot } from '../services/bots/index.js';
 import { authenticate } from '../middleware/auth.js';
-import { TIER_CONFIGS } from '@villa-paraiso/shared';
+import { TIER_CONFIGS } from '@teambrain/shared';
 
 export const setupRouter = Router();
 

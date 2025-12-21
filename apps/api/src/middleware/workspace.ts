@@ -6,7 +6,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { supabase } from '../services/supabase/client.js';
 import { logger } from '../utils/logger.js';
-import type { Workspace, WorkspaceMember } from '@villa-paraiso/shared';
+import type { Workspace, WorkspaceMember } from '@teambrain/shared';
 
 // Extend Express Request to include workspace context
 declare global {

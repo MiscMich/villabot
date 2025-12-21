@@ -7,8 +7,8 @@ import Stripe from 'stripe';
 import { supabase } from '../supabase/client.js';
 import { logger } from '../../utils/logger.js';
 import { getTierFromPriceId, getStripeClient } from './stripe.js';
-import { TIER_CONFIGS } from '@villa-paraiso/shared';
-import type { SubscriptionStatus, SubscriptionTier } from '@villa-paraiso/shared';
+import { TIER_CONFIGS } from '@teambrain/shared';
+import type { SubscriptionStatus, SubscriptionTier } from '@teambrain/shared';
 
 /**
  * Log billing event for audit trail

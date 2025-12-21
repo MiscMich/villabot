@@ -4,7 +4,7 @@
 
 import pdfParse from 'pdf-parse';
 import { logger } from '../../../utils/logger.js';
-import { FILE_LIMITS } from '@villa-paraiso/shared';
+import { FILE_LIMITS } from '@teambrain/shared';
 
 export interface ParsedDocument {
   content: string;

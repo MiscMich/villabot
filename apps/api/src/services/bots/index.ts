@@ -16,7 +16,7 @@ import type {
   BotStats,
   BotWithStats,
   DocumentCategory,
-} from '@villa-paraiso/shared';
+} from '@teambrain/shared';
 
 /**
  * Converts snake_case database row to camelCase Bot type

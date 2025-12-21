@@ -6,8 +6,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { supabase } from '../services/supabase/client.js';
 import { logger } from '../utils/logger.js';
-import { TIER_CONFIGS } from '@villa-paraiso/shared';
-import type { SubscriptionTier, TierLimits } from '@villa-paraiso/shared';
+import { TIER_CONFIGS } from '@teambrain/shared';
+import type { SubscriptionTier, TierLimits } from '@teambrain/shared';
 
 // Extend Express Request to include usage context
 declare global {

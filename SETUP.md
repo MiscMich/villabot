@@ -15,8 +15,8 @@ Complete setup guide for the TeamBrain AI SaaS platform.
 ## 1. Clone and Install
 
 ```bash
-git clone https://github.com/MiscMich/villabot.git
-cd villabot
+git clone https://github.com/MiscMich/teambrain-ai.git
+cd teambrain-ai
 pnpm install
 ```
 
@@ -302,4 +302,4 @@ pnpm build
 ## Support
 
 For issues and feature requests, visit:
-https://github.com/MiscMich/villabot/issues
+https://github.com/MiscMich/teambrain-ai/issues

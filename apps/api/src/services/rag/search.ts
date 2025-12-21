@@ -6,8 +6,8 @@
 import { supabase } from '../supabase/client.js';
 import { generateQueryEmbedding } from './embeddings.js';
 import { logger } from '../../utils/logger.js';
-import { RAG_CONFIG } from '@villa-paraiso/shared';
-import type { DocumentCategory } from '@villa-paraiso/shared';
+import { RAG_CONFIG } from '@teambrain/shared';
+import type { DocumentCategory } from '@teambrain/shared';
 import { searchCache, generateCacheKey } from '../../utils/cache.js';
 import { withTimeout } from '../../utils/timeout.js';
 import { errorTracker } from '../../utils/error-tracker.js';

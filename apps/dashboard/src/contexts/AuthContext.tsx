@@ -9,7 +9,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { useRouter } from 'next/navigation';
 import type { User, Session, AuthError, AuthChangeEvent } from '@supabase/supabase-js';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
-import type { UserProfile, WorkspaceWithRole } from '@villa-paraiso/shared';
+import type { UserProfile, WorkspaceWithRole } from '@teambrain/shared';
 
 // Auth state
 interface AuthState {

@@ -17,7 +17,7 @@ import { env } from '../config/env.js';
 import type {
   InviteMemberRequest,
   WorkspaceMemberRole,
-} from '@villa-paraiso/shared';
+} from '@teambrain/shared';
 
 export const teamRouter = Router();
 

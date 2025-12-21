@@ -1,6 +1,6 @@
 {
-  "name": "@villa-paraiso/api",
-  "version": "0.1.0",
+  "name": "@teambrain/api",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
@@ -19,7 +19,7 @@
     "@google/generative-ai": "^0.21.0",
     "@slack/bolt": "^3.22.0",
     "@supabase/supabase-js": "^2.47.10",
-    "@villa-paraiso/shared": "workspace:*",
+    "@teambrain/shared": "workspace:*",
     "cheerio": "^1.0.0",
     "cors": "^2.8.5",
     "express": "^4.21.2",

@@ -13,11 +13,11 @@ import {
   requireWorkspaceOwner,
   getUsageSummary,
 } from '../middleware/index.js';
-import { TIER_CONFIGS } from '@villa-paraiso/shared';
+import { TIER_CONFIGS } from '@teambrain/shared';
 import type {
   CreateWorkspaceRequest,
   UpdateWorkspaceRequest,
-} from '@villa-paraiso/shared';
+} from '@teambrain/shared';
 
 export const workspacesRouter = Router();
 

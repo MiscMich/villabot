@@ -1,43 +1,61 @@
-# Project Overview: Villa Paraiso Slack AI Assistant
+# Project Overview: TeamBrain AI
 
 ## Purpose
-An intelligent Slack bot for Villa Paraiso Vacation Rentals that:
-- Answers team questions using SOPs and company documentation from Google Drive
+A multi-tenant SaaS platform for AI-powered knowledge management that:
+- Deploys intelligent Slack bots for team Q&A
 - Uses RAG (Retrieval Augmented Generation) for accurate, contextual responses
-- Self-learns and updates automatically when documents change
-- Scrapes the company website weekly for up-to-date information
-- Provides a UI dashboard for monitoring and configuration
+- Syncs documents automatically from Google Drive
+- Scrapes company websites for up-to-date information
+- Provides a comprehensive admin dashboard for configuration
+- Supports multiple workspaces with isolated data (multi-tenancy)
+- Integrates Stripe billing with tiered subscriptions
 
 ## Tech Stack
 | Component | Technology |
 |-----------|------------|
-| AI/LLM | Google Gemini API |
-| Vector Database | Supabase (pgvector) |
+| AI/LLM | Google Gemini API (embeddings + generation) |
+| Database | PostgreSQL + pgvector (Supabase) |
+| Auth | Supabase Auth + JWT + RLS |
 | Document Source | Google Drive API |
-| Chat Interface | Slack Bolt SDK |
-| Backend | Node.js/TypeScript (Express) |
+| Chat Interface | Slack Bolt SDK (Socket Mode) |
+| Backend | Node.js/TypeScript + Express |
 | Dashboard | Next.js 15 / React 19 |
 | Web Scraping | Puppeteer / Cheerio |
+| Billing | Stripe Subscriptions |
 | Package Manager | pnpm (monorepo) |
 | Testing | Vitest |
+| Deployment | Docker + Traefik |
 
 ## Architecture
 - **Monorepo** using pnpm workspaces
 - `apps/api` - Backend Express API server (port 3000)
 - `apps/dashboard` - Next.js admin dashboard (port 3001)
-- `packages/shared` - Shared types and constants
-- `supabase/migrations` - Database migrations
+- `packages/shared` - Shared types and constants (@teambrain/shared)
+- `supabase/migrations` - 15 database migrations
+- `docs/` - Documentation (API, Database, Admin, Dashboard)
 
 ## Key Features
+- Multi-tenant workspaces with RLS isolation
 - Natural language question detection (no @mentions required)
 - Threaded conversations in Slack
-- Hybrid search (vector + BM25 keyword)
+- Hybrid search (vector + BM25) with RRF fusion
 - Google Drive document sync with polling
+- Website scraping with configurable limits
 - User feedback and self-learning system
-- Admin dashboard for configuration
+- Admin dashboard for full configuration
+- Platform admin panel for SaaS management
+- Stripe billing with Starter/Pro/Business tiers
+
+## Package Names
+- `teambrain-ai` (root)
+- `@teambrain/api` (backend)
+- `@teambrain/dashboard` (frontend)
+- `@teambrain/shared` (shared types)
 
 ## Implementation Status
-Based on git commits:
-- Phase 1: Foundation setup complete ✓
-- Phase 2-5: Complete bot implementation ✓
-- Phase 7: Next.js admin dashboard added ✓
+All major phases complete:
+- Phase 0: Setup Wizard ✓
+- Phase SaaS: Multi-tenant transformation ✓
+- Phase Landing: Marketing page ✓
+- Phase 1-6: Core features ✓
+- Phase Admin: Platform admin panel ✓

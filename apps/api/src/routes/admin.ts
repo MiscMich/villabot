@@ -16,7 +16,7 @@ import type {
   AdminWorkspaceFilters,
   PaginatedResponse,
   AdminAuditLogEntry,
-} from '@villa-paraiso/shared';
+} from '@teambrain/shared';
 
 const router = Router();
 

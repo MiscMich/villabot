@@ -1,40 +1,59 @@
-# Villa Paraiso Slack AI Assistant
+# TeamBrain AI
 
-An intelligent Slack bot for Villa Paraiso Vacation Rentals that answers team questions using company SOPs, documentation, and website content.
+Multi-tenant SaaS platform for deploying AI-powered Slack bots with RAG (Retrieval Augmented Generation). Each workspace can configure their own knowledge base from Google Drive documents and website content.
 
 ## Features
 
-- **RAG-Powered Responses**: Uses Retrieval Augmented Generation to provide accurate, contextual answers
-- **Google Drive Integration**: Automatically syncs SOPs and documentation (DOCX, PDF, Google Docs, Sheets)
-- **Self-Learning**: Learns from user corrections and feedback
-- **Auto-Updates**: Polls Google Drive for changes and updates knowledge base automatically
-- **Website Scraping**: Weekly extraction of company website content
-- **Admin Dashboard**: Monitor bot performance, manage knowledge base, and configure settings
+- **Multi-Tenant Architecture**: Isolated workspaces with separate knowledge bases
+- **RAG-Powered Responses**: Hybrid search (vector + BM25) for accurate answers
+- **Google Drive Integration**: OAuth-based sync with automatic document chunking
+- **Website Scraping**: Configurable crawling per workspace
+- **Self-Learning**: User corrections stored as learned facts
+- **Admin Dashboard**: Full platform management with usage analytics
+- **Stripe Billing**: Tiered subscriptions (Starter, Pro, Business)
+- **Self-Hosted Supabase**: Complete data sovereignty option
 
 ## Tech Stack
 
-| Component | Technology |
-|-----------|------------|
-| AI/LLM | Google Gemini API |
-| Vector Database | Supabase (pgvector) |
-| Document Source | Google Drive API |
-| Chat Interface | Slack Bolt SDK |
-| Backend | Node.js/TypeScript |
-| Dashboard | Next.js / React |
-| Web Scraping | Puppeteer / Cheerio |
+| Layer | Technology |
+|-------|------------|
+| **Backend** | Node.js/TypeScript + Express |
+| **Dashboard** | Next.js 15 + React 19 |
+| **AI** | Google Gemini (embeddings + generation) |
+| **Database** | PostgreSQL + pgvector (Supabase) |
+| **Auth** | Supabase Auth + RLS policies |
+| **Integration** | Slack Bolt SDK, Google Drive API |
+| **Billing** | Stripe Subscriptions |
+| **Deployment** | Docker + Traefik + Self-hosted Supabase |
 
 ## Project Structure
 
 ```
-villa-paraiso-bot/
+teambrain-ai/
 ├── apps/
-│   ├── api/           # Backend API server
-│   └── dashboard/     # Admin dashboard (Next.js)
+│   ├── api/                    # Backend API + Slack bot manager
+│   │   ├── src/
+│   │   │   ├── middleware/     # Auth, workspace, rate limiting
+│   │   │   ├── routes/         # REST API endpoints
+│   │   │   └── services/       # Business logic
+│   │   └── Dockerfile
+│   └── dashboard/              # Next.js admin UI
+│       ├── src/app/
+│       │   ├── admin/          # Platform admin panel
+│       │   ├── auth/           # Authentication pages
+│       │   ├── billing/        # Subscription management
+│       │   ├── bots/           # Bot management
+│       │   ├── setup/          # 8-step onboarding wizard
+│       │   └── team/           # Team management
+│       └── Dockerfile
 ├── packages/
-│   └── shared/        # Shared types and constants
+│   └── shared/                 # Shared types and constants
 ├── supabase/
-│   └── migrations/    # Database migrations
-└── PLAN.md            # Full implementation plan
+│   └── migrations/             # 15 database migrations
+├── scripts/                    # Deployment scripts
+├── traefik/                    # Reverse proxy config
+├── docker-compose.yml          # Main services
+└── docker-compose.supabase.yml # Self-hosted Supabase
 ```
 
 ## Quick Start
@@ -43,70 +62,122 @@ villa-paraiso-bot/
 
 - Node.js 20+
 - pnpm 8+
-- Supabase account
-- Google Cloud project with Drive API enabled
-- Slack workspace with admin access
+- Docker & Docker Compose (for deployment)
+- Supabase account (cloud or self-hosted)
+- Google Cloud project (Drive API + OAuth)
 - Gemini API key
+- Slack App (for each workspace)
 
-### Installation
+### Local Development
 
-1. **Clone and install dependencies:**
-   ```bash
-   pnpm install
-   ```
+```bash
+# Clone repository
+git clone https://github.com/MiscMich/teambrain-ai.git
+cd teambrain-ai
 
-2. **Set up environment variables:**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your credentials
-   ```
+# Install dependencies
+pnpm install
 
-3. **Run database migrations:**
-   - Go to your Supabase project dashboard
-   - Navigate to SQL Editor
-   - Run the contents of `supabase/migrations/001_initial_schema.sql`
+# Configure environment
+cp .env.example apps/api/.env
+cp .env.example apps/dashboard/.env.local
+# Edit both files with your credentials
 
-4. **Start the development server:**
-   ```bash
-   pnpm dev
-   ```
+# Run database migrations in Supabase SQL Editor
+# (see supabase/migrations/ - run in order)
 
-5. **Verify it's working:**
-   ```bash
-   curl http://localhost:3000/health
-   ```
+# Start development servers
+pnpm dev              # API on port 3000
+pnpm dev:dashboard    # Dashboard on port 3001
+```
+
+### Docker Deployment
+
+See [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) for full production deployment with:
+- Self-hosted Supabase
+- Traefik reverse proxy with SSL
+- Backup scripts
+- Health monitoring
 
 ## Documentation
 
-See [PLAN.md](./PLAN.md) for the complete implementation plan including:
-- System architecture
-- Database schema
-- RAG pipeline details
-- Implementation phases
-- API configurations
+| Document | Description |
+|----------|-------------|
+| [SETUP.md](./SETUP.md) | Step-by-step setup guide |
+| [docs/API.md](./docs/API.md) | API endpoint reference |
+| [docs/DATABASE.md](./docs/DATABASE.md) | Database schema reference |
+| [docs/ADMIN.md](./docs/ADMIN.md) | Platform admin guide |
+| [docs/DASHBOARD.md](./docs/DASHBOARD.md) | User dashboard guide |
 
-## Development
+## Development Commands
 
 ```bash
-# Start API server in development mode
-pnpm dev
-
-# Start dashboard in development mode
-pnpm dev:dashboard
-
-# Run type checking
-pnpm typecheck
-
-# Run linting
-pnpm lint
-
-# Run tests
-pnpm test
-
-# Build all packages
-pnpm build
+pnpm dev              # Start API server (port 3000)
+pnpm dev:dashboard    # Start dashboard (port 3001)
+pnpm typecheck        # TypeScript type checking
+pnpm lint             # ESLint
+pnpm test             # Run tests (Vitest)
+pnpm build            # Build all packages
 ```
+
+## Architecture
+
+```
+                    ┌─────────────────────────────────────────┐
+                    │              Traefik                     │
+                    │         (SSL + Routing)                  │
+                    └─────────────┬───────────────────────────┘
+                                  │
+        ┌─────────────────────────┼─────────────────────────┐
+        │                         │                         │
+        ▼                         ▼                         ▼
+┌───────────────┐       ┌─────────────────┐       ┌─────────────────┐
+│  Dashboard    │       │    API Server   │       │   Supabase      │
+│   (Next.js)   │◄─────►│   (Express)     │◄─────►│  (PostgreSQL)   │
+│   Port 3001   │       │   Port 3000     │       │   Port 8000     │
+└───────────────┘       └────────┬────────┘       └─────────────────┘
+                                 │
+        ┌────────────────────────┼────────────────────────┐
+        │                        │                        │
+        ▼                        ▼                        ▼
+┌───────────────┐       ┌─────────────────┐       ┌───────────────┐
+│  Slack API    │       │  Google Gemini  │       │ Google Drive  │
+│  (Bot Events) │       │  (AI + Embed)   │       │   (Docs)      │
+└───────────────┘       └─────────────────┘       └───────────────┘
+```
+
+## Subscription Tiers
+
+| Feature | Starter | Pro | Business |
+|---------|---------|-----|----------|
+| Queries/month | 500 | 2,000 | 10,000 |
+| Documents | 100 | 500 | Unlimited |
+| Bots | 1 | 3 | 10 |
+| Team members | 3 | 10 | Unlimited |
+| Support | Community | Email | Priority |
+
+## Environment Variables
+
+See [.env.example](./.env.example) for all required configuration:
+
+**Required:**
+- `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` - Database
+- `GEMINI_API_KEY` - AI embeddings and generation
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` - OAuth for Drive
+
+**Per-Workspace (stored in database):**
+- Slack tokens (Bot Token, App Token)
+- Google Drive folder IDs
+- Website URLs for scraping
+
+## Security
+
+- Row Level Security (RLS) on all tables
+- Workspace isolation for multi-tenancy
+- JWT-based authentication
+- API rate limiting (tier-based)
+- No credentials in git (use `.env` files)
 
 ## License
 
-Proprietary - Villa Paraiso Vacation Rentals
+Proprietary - All rights reserved

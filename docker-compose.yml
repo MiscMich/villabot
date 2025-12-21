@@ -1,40 +1,72 @@
-# Villa Paraiso Bot - Docker Compose Configuration
-# Development and Production deployment
-
-version: '3.8'
+# TeamBrain AI - Docker Compose Configuration
+# Production deployment with Traefik reverse proxy
 
 services:
-  # API Service (Backend + Slack Bot)
+  # Traefik Reverse Proxy
+  traefik:
+    image: traefik:v3.0
+    container_name: teambrain-traefik
+    restart: unless-stopped
+    command:
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+      - letsencrypt:/letsencrypt
+    networks:
+      - teambrain-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.${DOMAIN}`)"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.dashboard.middlewares=auth"
+      - "traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_AUTH}"
+
+  # API Service (Backend + Slack Bot Manager)
   api:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    container_name: villabot-api
+    container_name: teambrain-api
     restart: unless-stopped
-    ports:
-      - "${API_PORT:-3000}:3000"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=3000
       - LOG_LEVEL=${LOG_LEVEL:-info}
+      # URLs
+      - API_URL=https://api.${DOMAIN}
+      - APP_URL=https://${DOMAIN}
       # Supabase
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-      # Google
+      # Google OAuth
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
-      - GOOGLE_DRIVE_FOLDER_ID=${GOOGLE_DRIVE_FOLDER_ID}
+      - GOOGLE_REDIRECT_URI=https://api.${DOMAIN}/api/google-drive/callback
       # Gemini AI
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      # Slack
-      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
-      - SLACK_SIGNING_SECRET=${SLACK_SIGNING_SECRET}
-      - SLACK_APP_TOKEN=${SLACK_APP_TOKEN}
-      # Optional
-      - COMPANY_WEBSITE_URL=${COMPANY_WEBSITE_URL:-}
-      - DRIVE_POLL_INTERVAL_MS=${DRIVE_POLL_INTERVAL_MS:-300000}
+      # Stripe Billing
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - STRIPE_STARTER_PRICE_ID=${STRIPE_STARTER_PRICE_ID}
+      - STRIPE_PRO_PRICE_ID=${STRIPE_PRO_PRICE_ID}
+      - STRIPE_BUSINESS_PRICE_ID=${STRIPE_BUSINESS_PRICE_ID}
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
       interval: 30s
@@ -42,7 +74,13 @@ services:
       retries: 3
       start_period: 40s
     networks:
-      - villabot-network
+      - teambrain-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=Host(`api.${DOMAIN}`)"
+      - "traefik.http.routers.api.entrypoints=websecure"
+      - "traefik.http.routers.api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.api.loadbalancer.server.port=3000"
 
   # Dashboard Service (Next.js Admin UI)
   dashboard:
@@ -50,15 +88,16 @@ services:
       context: .
       dockerfile: apps/dashboard/Dockerfile
       args:
-        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://api:3000}
-    container_name: villabot-dashboard
+        - NEXT_PUBLIC_API_URL=https://api.${DOMAIN}
+        - NEXT_PUBLIC_SUPABASE_URL=${SUPABASE_URL}
+        - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+        - NEXT_PUBLIC_APP_NAME=TeamBrain AI
+        - NEXT_PUBLIC_APP_URL=https://${DOMAIN}
+    container_name: teambrain-dashboard
     restart: unless-stopped
-    ports:
-      - "${DASHBOARD_PORT:-3001}:3001"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=3001
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://api:3000}
     depends_on:
       api:
         condition: service_healthy
@@ -69,8 +108,17 @@ services:
       retries: 3
       start_period: 40s
     networks:
-      - villabot-network
+      - teambrain-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.services.dashboard.loadbalancer.server.port=3001"
 
 networks:
-  villabot-network:
+  teambrain-network:
     driver: bridge
+
+volumes:
+  letsencrypt:

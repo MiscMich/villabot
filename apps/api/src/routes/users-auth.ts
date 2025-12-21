@@ -7,7 +7,7 @@ import { Router } from 'express';
 import { supabase } from '../services/supabase/client.js';
 import { logger } from '../utils/logger.js';
 import { authenticate } from '../middleware/auth.js';
-import { TIER_CONFIGS } from '@villa-paraiso/shared';
+import { TIER_CONFIGS } from '@teambrain/shared';
 import type {
   SignUpRequest,
   SignUpResponse,
@@ -18,7 +18,7 @@ import type {
   UpdatePasswordRequest,
   UpdateProfileRequest,
   WorkspaceWithRole,
-} from '@villa-paraiso/shared';
+} from '@teambrain/shared';
 
 export const usersAuthRouter = Router();
 

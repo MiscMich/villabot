@@ -1,4 +1,4 @@
-# Villa Paraiso Bot API - Dockerfile
+# TeamBrain AI API - Dockerfile
 # Multi-stage build for production
 
 # Stage 1: Dependencies
@@ -28,7 +28,7 @@ COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_module
 COPY . .
 
 # Build the API
-RUN pnpm --filter @villa-paraiso/api build
+RUN pnpm --filter @teambrain/api build
 
 # Stage 3: Runner
 FROM node:20-alpine AS runner
@@ -40,15 +40,15 @@ ENV PORT=3000
 
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 villabot
+RUN adduser --system --uid 1001 teambrain
 
 # Copy built application
-COPY --from=builder --chown=villabot:nodejs /app/apps/api/dist ./dist
-COPY --from=builder --chown=villabot:nodejs /app/apps/api/package.json ./
-COPY --from=builder --chown=villabot:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=villabot:nodejs /app/packages/shared/dist ./packages/shared/dist
+COPY --from=builder --chown=teambrain:nodejs /app/apps/api/dist ./dist
+COPY --from=builder --chown=teambrain:nodejs /app/apps/api/package.json ./
+COPY --from=builder --chown=teambrain:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=teambrain:nodejs /app/packages/shared/dist ./packages/shared/dist
 
-USER villabot
+USER teambrain
 
 EXPOSE 3000
 

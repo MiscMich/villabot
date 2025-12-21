@@ -22,7 +22,7 @@ import {
   Settings,
   X,
 } from 'lucide-react';
-import type { WorkspaceMemberRole } from '@villa-paraiso/shared';
+import type { WorkspaceMemberRole } from '@teambrain/shared';
 
 const roleLabels: Record<WorkspaceMemberRole, string> = {
   owner: 'Owner',

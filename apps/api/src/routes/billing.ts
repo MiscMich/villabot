@@ -19,8 +19,8 @@ import {
   listInvoices,
   listPaymentMethods,
 } from '../services/billing/stripe.js';
-import { TIER_CONFIGS } from '@villa-paraiso/shared';
-import type { SubscriptionTier } from '@villa-paraiso/shared';
+import { TIER_CONFIGS } from '@teambrain/shared';
+import type { SubscriptionTier } from '@teambrain/shared';
 import type Stripe from 'stripe';
 
 const router = Router();

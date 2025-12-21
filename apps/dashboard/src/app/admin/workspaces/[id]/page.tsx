@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
-import { useState } from 'react';
+import { useState, use } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -35,8 +35,9 @@ import { Label } from '@/components/ui/label';
 export default function AdminWorkspaceDetailsPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const { id } = use(params);
   const queryClient = useQueryClient();
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -48,8 +49,8 @@ export default function AdminWorkspaceDetailsPage({
   });
 
   const { data, isLoading } = useQuery({
-    queryKey: ['admin-workspace-details', params.id],
-    queryFn: () => api.getAdminWorkspaceDetails(params.id),
+    queryKey: ['admin-workspace-details', id],
+    queryFn: () => api.getAdminWorkspaceDetails(id),
   });
 
   const updateMutation = useMutation({
@@ -59,9 +60,9 @@ export default function AdminWorkspaceDetailsPage({
       status?: string;
       isInternal?: boolean;
       internalNotes?: string;
-    }) => api.updateAdminWorkspace(params.id, updates),
+    }) => api.updateAdminWorkspace(id, updates),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-workspace-details', params.id] });
+      queryClient.invalidateQueries({ queryKey: ['admin-workspace-details', id] });
       setShowEditModal(false);
     },
   });

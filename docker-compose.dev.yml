@@ -1,0 +1,78 @@
+# TeamBrain AI - Docker Compose Configuration (Development)
+# Local development without Traefik/SSL
+
+services:
+  # API Service (Backend + Slack Bot Manager)
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: teambrain-api-dev
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+      # URLs
+      - API_URL=http://localhost:3000
+      - APP_URL=http://localhost:3001
+      # Supabase
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      # Google OAuth
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REDIRECT_URI=http://localhost:3000/api/google-drive/callback
+      # Gemini AI
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      # Stripe Billing
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - STRIPE_STARTER_PRICE_ID=${STRIPE_STARTER_PRICE_ID}
+      - STRIPE_PRO_PRICE_ID=${STRIPE_PRO_PRICE_ID}
+      - STRIPE_BUSINESS_PRICE_ID=${STRIPE_BUSINESS_PRICE_ID}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - teambrain-dev-network
+
+  # Dashboard Service (Next.js Admin UI)
+  dashboard:
+    build:
+      context: .
+      dockerfile: apps/dashboard/Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=http://localhost:3000
+        - NEXT_PUBLIC_SUPABASE_URL=${SUPABASE_URL}
+        - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+        - NEXT_PUBLIC_APP_NAME=TeamBrain AI
+        - NEXT_PUBLIC_APP_URL=http://localhost:3001
+    container_name: teambrain-dashboard-dev
+    restart: unless-stopped
+    ports:
+      - "${DASHBOARD_PORT:-3001}:3001"
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - teambrain-dev-network
+
+networks:
+  teambrain-dev-network:
+    driver: bridge

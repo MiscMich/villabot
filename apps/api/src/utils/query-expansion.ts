@@ -43,9 +43,8 @@ const SYNONYM_MAP: Record<string, string[]> = {
   'weekly': ['every week', 'routine'],
   'schedule': ['calendar', 'timing', 'plan'],
 
-  // Villa Paraiso specific
+  // General accommodation terms
   'villa': ['property', 'house', 'rental', 'accommodation'],
-  'paraiso': ['villa paraiso', 'vpvr'],
 };
 
 // Phrase expansions for common queries

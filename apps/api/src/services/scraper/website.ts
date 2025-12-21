@@ -85,7 +85,7 @@ export async function scrapeWebsite(options: ScrapeOptions): Promise<{
     });
 
     const page = await browser.newPage();
-    await page.setUserAgent('VillaParaisoBot/1.0 (Knowledge Base Crawler)');
+    await page.setUserAgent('TeamBrainBot/1.0 (Knowledge Base Crawler)');
 
     // Fetch and parse robots.txt if enabled
     if (respectRobotsTxt) {
@@ -221,7 +221,7 @@ async function fetchRobotsTxt(baseUrl: string): Promise<string[]> {
 
       if (trimmed.startsWith('user-agent:')) {
         const agent = trimmed.substring('user-agent:'.length).trim();
-        relevantSection = agent === '*' || agent.includes('villaparaiso');
+        relevantSection = agent === '*' || agent.includes('teambrain');
       } else if (relevantSection && trimmed.startsWith('disallow:')) {
         const path = line.trim().substring('disallow:'.length).trim();
         if (path) {

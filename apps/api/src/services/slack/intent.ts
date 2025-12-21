@@ -6,7 +6,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { env } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
-import { QUESTION_HEURISTICS } from '@villa-paraiso/shared';
+import { QUESTION_HEURISTICS } from '@teambrain/shared';
 
 // Initialize Gemini for classification
 const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
@@ -35,9 +35,9 @@ const QUESTION_KEYWORDS = new Set([
 
 // Keywords related to company operations (boost these)
 const DOMAIN_KEYWORDS = new Set([
-  'villa', 'paraiso', 'guest', 'booking', 'reservation', 'check-in', 'checkout',
-  'cleaning', 'maintenance', 'amenities', 'pool', 'wifi', 'key', 'lockbox',
   'policy', 'procedure', 'sop', 'process', 'how to', 'what is the',
+  'document', 'documentation', 'guide', 'manual', 'instructions',
+  'protocol', 'guidelines', 'workflow', 'steps', 'help',
 ]);
 
 // Phrases that indicate feedback
@@ -180,12 +180,12 @@ function matchKeywords(message: string): IntentResult {
  */
 async function classifyWithAI(message: string): Promise<IntentResult> {
   try {
-    const prompt = `Classify the following message from a workplace Slack channel for a vacation rental company (Villa Paraiso).
+    const prompt = `Classify the following message from a workplace Slack channel.
 
 Message: "${message}"
 
 Is this:
-1. A QUESTION about company procedures, policies, or operations that a knowledge bot should answer
+1. A QUESTION about company procedures, policies, documentation, or operations that a knowledge bot should answer
 2. A GREETING or casual chat
 3. Regular CONVERSATION between team members (not directed at a bot)
 

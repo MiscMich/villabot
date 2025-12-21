@@ -1,8 +1,8 @@
 {
-  "name": "villa-paraiso-bot",
-  "version": "0.1.0",
+  "name": "teambrain-ai",
+  "version": "1.0.0",
   "private": true,
-  "description": "Slack AI Assistant for Villa Paraiso Vacation Rentals",
+  "description": "Multi-tenant SaaS platform for AI-powered Slack bots with RAG",
   "scripts": {
     "dev": "pnpm --filter api dev",
     "dev:dashboard": "pnpm --filter dashboard dev",
@@ -18,9 +18,11 @@
     "rag",
     "ai",
     "supabase",
-    "gemini"
+    "gemini",
+    "saas",
+    "multi-tenant"
   ],
-  "author": "Villa Paraiso",
+  "author": "TeamBrain AI",
   "license": "UNLICENSED",
   "engines": {
     "node": ">=20.0.0",

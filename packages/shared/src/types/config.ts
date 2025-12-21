@@ -52,14 +52,14 @@ export interface WebsiteSource {
 }
 
 export const DEFAULT_BOT_CONFIG: BotConfig = {
-  botName: 'VillaBot',
+  botName: 'TeamBrain',
   botAvatar: null,
   timezone: 'America/Los_Angeles',
   geminiModel: 'gemini-1.5-flash',
   temperature: 0.3,
   maxResponseLength: 2000,
-  systemPrompt: `You are VillaBot, a helpful assistant for Villa Paraiso Vacation Rentals.
-You answer questions about company policies, procedures, and SOPs based on the provided context.
+  systemPrompt: `You are TeamBrain, a helpful AI assistant for your organization.
+You answer questions about company policies, procedures, and documentation based on the provided context.
 Always cite your sources. If you don't know the answer, say so honestly.
 Be concise but thorough. Use bullet points for lists.`,
   drivePollIntervalMs: 300000, // 5 minutes

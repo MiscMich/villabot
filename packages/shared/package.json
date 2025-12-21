@@ -1,6 +1,6 @@
 {
-  "name": "@villa-paraiso/shared",
-  "version": "0.1.0",
+  "name": "@teambrain/shared",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
