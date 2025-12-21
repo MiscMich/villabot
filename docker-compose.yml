@@ -74,6 +74,8 @@ services:
       # Optional
       - COMPANY_WEBSITE_URL=${COMPANY_WEBSITE_URL:-}
       - GOOGLE_DRIVE_FOLDER_ID=${GOOGLE_DRIVE_FOLDER_ID:-}
+    ports:
+      - "3000:3000"
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
       interval: 30s
@@ -103,6 +105,8 @@ services:
         - NEXT_PUBLIC_APP_URL=https://${DOMAIN}
     container_name: teambrain-dashboard
     restart: unless-stopped
+    ports:
+      - "3001:3001"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=3001
