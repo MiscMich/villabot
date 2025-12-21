@@ -37,7 +37,9 @@ services:
     networks:
       - coolify
     labels:
+      - "traefik.enable=true"
       - "traefik.docker.network=coolify"
+      - "traefik.http.services.dashboard.loadbalancer.server.port=3000"
 
 networks:
   coolify:
