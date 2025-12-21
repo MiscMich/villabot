@@ -22,6 +22,9 @@ services:
         - NEXT_PUBLIC_APP_URL=https://cluebase.ai
     expose:
       - "3001"
+    labels:
+      # Explicit Traefik service port configuration
+      - "traefik.http.services.dashboard-m8s04gk4w0osko0sgw48cw4s.loadbalancer.server.port=3001"
     environment:
       - NODE_ENV=production
       - PORT=3001
