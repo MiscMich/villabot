@@ -11,7 +11,7 @@ version: '3.8'
 services:
   dashboard:
     build:
-      context: ../..
+      context: .
       dockerfile: apps/dashboard/Dockerfile
       args:
         # These are baked into the build at compile time
@@ -25,8 +25,8 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3001
-      # Internal API URL for server-side calls (middleware)
-      - API_URL=http://api:3000
+      # API URL for server-side calls (using external URL since containers are on separate networks)
+      - API_URL=${API_URL:-https://api.cluebase.ai}
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001"]
       interval: 30s

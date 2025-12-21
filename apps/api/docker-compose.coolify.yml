@@ -9,7 +9,7 @@ version: '3.8'
 services:
   api:
     build:
-      context: ../..
+      context: .
       dockerfile: apps/api/Dockerfile
     expose:
       - "3000"
@@ -45,7 +45,7 @@ services:
   # Background worker (optional - can run in same container or separate)
   worker:
     build:
-      context: ../..
+      context: .
       dockerfile: apps/api/Dockerfile
     command: ["dumb-init", "node", "dist/worker.js"]
     environment:
