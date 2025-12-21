@@ -43,12 +43,6 @@ services:
     restart: unless-stopped
     networks:
       - coolify
-    labels:
-      # Traefik routing configuration
-      - "traefik.enable=true"
-      - "traefik.docker.network=coolify"
-      # Explicit service port - critical for routing
-      - "traefik.http.services.api.loadbalancer.server.port=3000"
 
   # Background worker (optional - can run in same container or separate)
   worker:
