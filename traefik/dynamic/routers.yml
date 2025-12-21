@@ -82,7 +82,3 @@ http:
       loadBalancer:
         servers:
           - url: "http://kong:8000"
-        healthCheck:
-          path: /
-          interval: 30s
-          timeout: 10s
