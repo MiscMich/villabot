@@ -1,0 +1,59 @@
+# Cluebase AI - Local Docker Test Environment
+# Usage: docker compose -f docker-compose.local.yml up --build
+#
+# This allows testing the production Docker builds locally before deploying
+
+version: '3.8'
+
+services:
+  # Dashboard (Next.js)
+  dashboard:
+    build:
+      context: .
+      dockerfile: apps/dashboard/Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=http://localhost:3000
+        - NEXT_PUBLIC_SUPABASE_URL=${SUPABASE_URL:-https://supabase.cluebase.ai}
+        - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-test-key}
+        - NEXT_PUBLIC_APP_NAME=Cluebase AI
+        - NEXT_PUBLIC_APP_URL=http://localhost:3001
+    ports:
+      - "3001:3000"  # Map container's 3000 to host's 3001
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - API_URL=http://api:3000
+    depends_on:
+      - api
+    networks:
+      - cluebase-local
+
+  # API (Express)
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - LOG_LEVEL=debug
+      - SUPABASE_URL=${SUPABASE_URL:-https://supabase.cluebase.ai}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-test-key}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-test-key}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-test-key}
+      - API_URL=http://localhost:3000
+      - APP_URL=http://localhost:3001
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - cluebase-local
+
+networks:
+  cluebase-local:
+    driver: bridge
