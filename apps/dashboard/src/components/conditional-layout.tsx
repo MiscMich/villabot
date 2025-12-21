@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { Sidebar } from '@/components/sidebar';
+import { Sidebar, MobileSidebarProvider, MobileMenuButton } from '@/components/sidebar';
 import { SetupGuard } from '@/components/setup-guard';
 
 interface ConditionalLayoutProps {
@@ -41,20 +41,23 @@ export function ConditionalLayout({ children }: ConditionalLayoutProps) {
   // Protected routes: wrap with setup guard and dashboard layout
   return (
     <SetupGuard>
-      <div className="flex h-screen bg-background">
-        <Sidebar />
-        <main className="flex-1 overflow-y-auto">
-          <div className="relative min-h-full">
-            {/* Subtle background pattern */}
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-amber-100/20 via-background to-background dark:from-amber-900/10 pointer-events-none" />
+      <MobileSidebarProvider>
+        <div className="flex h-screen bg-background">
+          <MobileMenuButton />
+          <Sidebar />
+          <main className="flex-1 overflow-y-auto md:ml-0">
+            <div className="relative min-h-full">
+              {/* Subtle background pattern */}
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-amber-100/20 via-background to-background dark:from-amber-900/10 pointer-events-none" />
 
-            {/* Content */}
-            <div className="relative px-8 py-8 max-w-7xl mx-auto">
-              {children}
+              {/* Content */}
+              <div className="relative px-4 py-16 md:px-8 md:py-8 max-w-7xl mx-auto">
+                {children}
+              </div>
             </div>
-          </div>
-        </main>
-      </div>
+          </main>
+        </div>
+      </MobileSidebarProvider>
     </SetupGuard>
   );
 }

@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import { useToast } from '@/components/ui/use-toast';
 import {
   RefreshCw,
   FileText,
@@ -23,6 +24,7 @@ import {
 
 export default function DocumentsPage() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [syncing, setSyncing] = useState(false);
   const [scraping, setScraping] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -47,14 +49,22 @@ export default function DocumentsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents'] });
       queryClient.invalidateQueries({ queryKey: ['syncStatus'] });
+      toast({ title: 'Sync Complete', description: 'Documents synced from Google Drive' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Sync Failed', description: error.message, variant: 'destructive' });
     },
   });
 
   const toggleMutation = useMutation({
     mutationFn: ({ id, active }: { id: string; active: boolean }) =>
       api.toggleDocument(id, active),
-    onSuccess: () => {
+    onSuccess: (_, { active }) => {
       queryClient.invalidateQueries({ queryKey: ['documents'] });
+      toast({ title: active ? 'Document Enabled' : 'Document Disabled', description: 'Document status updated' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Update Failed', description: error.message, variant: 'destructive' });
     },
   });
 
@@ -62,6 +72,10 @@ export default function DocumentsPage() {
     mutationFn: api.deleteDocument,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents'] });
+      toast({ title: 'Document Deleted', description: 'Document removed from knowledge base' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Delete Failed', description: error.message, variant: 'destructive' });
     },
   });
 
@@ -70,6 +84,10 @@ export default function DocumentsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents'] });
       queryClient.invalidateQueries({ queryKey: ['scrapeStatus'] });
+      toast({ title: 'Scrape Complete', description: 'Website pages indexed successfully' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Scrape Failed', description: error.message, variant: 'destructive' });
     },
   });
 

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/components/ui/use-toast';
 import {
   Users,
   UserPlus,
@@ -69,6 +70,7 @@ interface TeamInvite {
 export default function TeamPage() {
   const { workspace, canManageTeam, isOwner } = useWorkspace();
   const { user } = useAuth();
+  const { toast } = useToast();
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [invites, setInvites] = useState<TeamInvite[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -124,10 +126,12 @@ export default function TeamPage() {
       setInviteRole('member');
       setShowInviteForm(false);
       setSuccess(`Invitation sent to ${inviteEmail}`);
+      toast({ title: 'Invitation Sent', description: `Invite sent to ${inviteEmail}` });
       setTimeout(() => setSuccess(null), 5000);
     } catch (err) {
       console.error('Failed to invite:', err);
       setError('Failed to send invitation. Please try again.');
+      toast({ title: 'Invite Failed', description: 'Failed to send invitation', variant: 'destructive' });
     } finally {
       setIsInviting(false);
     }
@@ -139,10 +143,12 @@ export default function TeamPage() {
       await api.revokeInvite(inviteId);
       setInvites(invites.filter((i) => i.id !== inviteId));
       setSuccess('Invitation revoked');
+      toast({ title: 'Invite Revoked', description: 'Invitation has been cancelled' });
       setTimeout(() => setSuccess(null), 5000);
     } catch (err) {
       console.error('Failed to revoke invite:', err);
       setError('Failed to revoke invitation');
+      toast({ title: 'Revoke Failed', description: 'Failed to cancel invitation', variant: 'destructive' });
     } finally {
       setRevokingInvite(null);
     }
@@ -155,10 +161,12 @@ export default function TeamPage() {
         members.map((m) => (m.id === memberId ? { ...m, role: newRole } : m))
       );
       setSuccess('Role updated successfully');
+      toast({ title: 'Role Updated', description: `Member role changed to ${roleLabels[newRole]}` });
       setTimeout(() => setSuccess(null), 5000);
     } catch (err) {
       console.error('Failed to update role:', err);
       setError('Failed to update role');
+      toast({ title: 'Update Failed', description: 'Failed to update member role', variant: 'destructive' });
     }
   };
 
@@ -168,10 +176,12 @@ export default function TeamPage() {
       await api.removeMember(memberId);
       setMembers(members.filter((m) => m.id !== memberId));
       setSuccess('Member removed from workspace');
+      toast({ title: 'Member Removed', description: 'Team member has been removed' });
       setTimeout(() => setSuccess(null), 5000);
     } catch (err) {
       console.error('Failed to remove member:', err);
       setError('Failed to remove member');
+      toast({ title: 'Remove Failed', description: 'Failed to remove team member', variant: 'destructive' });
     } finally {
       setRemovingMember(null);
     }

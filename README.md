@@ -1,4 +1,4 @@
-# TeamBrain AI
+# Cluebase AI
 
 Multi-tenant SaaS platform for deploying AI-powered Slack bots with RAG (Retrieval Augmented Generation). Each workspace can configure their own knowledge base from Google Drive documents and website content.
 
@@ -11,7 +11,7 @@ Multi-tenant SaaS platform for deploying AI-powered Slack bots with RAG (Retriev
 - **Self-Learning**: User corrections stored as learned facts
 - **Admin Dashboard**: Full platform management with usage analytics
 - **Stripe Billing**: Tiered subscriptions (Starter, Pro, Business)
-- **Self-Hosted Supabase**: Complete data sovereignty option
+- **Coolify Deployment**: One-click Supabase and Git-based deployments
 
 ## Tech Stack
 
@@ -24,19 +24,20 @@ Multi-tenant SaaS platform for deploying AI-powered Slack bots with RAG (Retriev
 | **Auth** | Supabase Auth + RLS policies |
 | **Integration** | Slack Bolt SDK, Google Drive API |
 | **Billing** | Stripe Subscriptions |
-| **Deployment** | Docker + Traefik + Self-hosted Supabase |
+| **Deployment** | Coolify + Docker + Supabase |
 
 ## Project Structure
 
 ```
-teambrain-ai/
+cluebase-ai/
 ├── apps/
 │   ├── api/                    # Backend API + Slack bot manager
 │   │   ├── src/
 │   │   │   ├── middleware/     # Auth, workspace, rate limiting
 │   │   │   ├── routes/         # REST API endpoints
 │   │   │   └── services/       # Business logic
-│   │   └── Dockerfile
+│   │   ├── Dockerfile
+│   │   └── docker-compose.coolify.yml
 │   └── dashboard/              # Next.js admin UI
 │       ├── src/app/
 │       │   ├── admin/          # Platform admin panel
@@ -45,15 +46,14 @@ teambrain-ai/
 │       │   ├── bots/           # Bot management
 │       │   ├── setup/          # 8-step onboarding wizard
 │       │   └── team/           # Team management
-│       └── Dockerfile
+│       ├── Dockerfile
+│       └── docker-compose.coolify.yml
 ├── packages/
 │   └── shared/                 # Shared types and constants
 ├── supabase/
-│   └── migrations/             # 15 database migrations
-├── scripts/                    # Deployment scripts
-├── traefik/                    # Reverse proxy config
-├── docker-compose.yml          # Main services
-└── docker-compose.supabase.yml # Self-hosted Supabase
+│   └── migrations/             # Database migrations
+└── docs/
+    └── COOLIFY_DEPLOYMENT.md   # Deployment guide
 ```
 
 ## Quick Start
@@ -63,7 +63,7 @@ teambrain-ai/
 - Node.js 20+
 - pnpm 8+
 - Docker & Docker Compose (for deployment)
-- Supabase account (cloud or self-hosted)
+- Supabase account (cloud or self-hosted via Coolify)
 - Google Cloud project (Drive API + OAuth)
 - Gemini API key
 - Slack App (for each workspace)
@@ -91,12 +91,12 @@ pnpm dev              # API on port 3000
 pnpm dev:dashboard    # Dashboard on port 3001
 ```
 
-### Docker Deployment
+### Production Deployment
 
-See [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) for full production deployment with:
-- Self-hosted Supabase
-- Traefik reverse proxy with SSL
-- Backup scripts
+See [docs/COOLIFY_DEPLOYMENT.md](./docs/COOLIFY_DEPLOYMENT.md) for full production deployment with:
+- One-click Supabase via Coolify template
+- Automatic SSL/TLS management
+- Git-based auto-deployments
 - Health monitoring
 
 ## Documentation
@@ -104,6 +104,7 @@ See [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) for full production deployment wi
 | Document | Description |
 |----------|-------------|
 | [SETUP.md](./SETUP.md) | Step-by-step setup guide |
+| [docs/COOLIFY_DEPLOYMENT.md](./docs/COOLIFY_DEPLOYMENT.md) | Coolify deployment guide |
 | [docs/API.md](./docs/API.md) | API endpoint reference |
 | [docs/DATABASE.md](./docs/DATABASE.md) | Database schema reference |
 | [docs/ADMIN.md](./docs/ADMIN.md) | Platform admin guide |
@@ -124,8 +125,8 @@ pnpm build            # Build all packages
 
 ```
                     ┌─────────────────────────────────────────┐
-                    │              Traefik                     │
-                    │         (SSL + Routing)                  │
+                    │              Coolify/Traefik            │
+                    │         (SSL + Routing)                 │
                     └─────────────┬───────────────────────────┘
                                   │
         ┌─────────────────────────┼─────────────────────────┐
@@ -177,6 +178,14 @@ See [.env.example](./.env.example) for all required configuration:
 - JWT-based authentication
 - API rate limiting (tier-based)
 - No credentials in git (use `.env` files)
+
+## Live URLs
+
+| Service | URL |
+|---------|-----|
+| Dashboard | https://cluebase.ai |
+| API | https://api.cluebase.ai |
+| Supabase | https://supabase.cluebase.ai |
 
 ## License
 

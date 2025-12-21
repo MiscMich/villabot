@@ -1,0 +1,36 @@
+# Cluebase AI Dashboard - Coolify Deployment
+# This file is used by Coolify for Git-based deployments
+#
+# IMPORTANT:
+# - Coolify manages ports via Traefik - use 'expose' not 'ports'
+# - NEXT_PUBLIC_* vars must be in build args (baked at build time)
+# - Environment variables are set in Coolify UI
+
+version: '3.8'
+
+services:
+  dashboard:
+    build:
+      context: ../..
+      dockerfile: apps/dashboard/Dockerfile
+      args:
+        # These are baked into the build at compile time
+        - NEXT_PUBLIC_API_URL=https://api.cluebase.ai
+        - NEXT_PUBLIC_SUPABASE_URL=https://supabase.cluebase.ai
+        - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+        - NEXT_PUBLIC_APP_NAME=Cluebase AI
+        - NEXT_PUBLIC_APP_URL=https://cluebase.ai
+    expose:
+      - "3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      # Internal API URL for server-side calls (middleware)
+      - API_URL=http://api:3000
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped

@@ -1,7 +1,12 @@
-# TeamBrain AI - Project Instructions
+# Cluebase AI - Project Instructions
 
 ## Project Overview
 Multi-tenant SaaS platform for AI-powered knowledge management. Features RAG-powered Slack bots that answer team questions using SOPs, documentation from Google Drive, and website content. Supports multiple workspaces with isolated data, Stripe billing integration, and a full dashboard for configuration.
+
+**Live URLs**:
+- Dashboard: https://cluebase.ai
+- API: https://api.cluebase.ai
+- Supabase: https://supabase.cluebase.ai
 
 ## Tech Stack
 - **Backend**: Node.js/TypeScript + Express (port 3000)
@@ -10,7 +15,7 @@ Multi-tenant SaaS platform for AI-powered knowledge management. Features RAG-pow
 - **Database**: Supabase + pgvector
 - **Integration**: Slack Bolt SDK, Google Drive API
 - **Package Manager**: pnpm (monorepo)
-- **Deployment**: Docker + Docker Compose
+- **Deployment**: Coolify + Docker + Supabase
 
 ## Development Commands
 ```bash
@@ -22,18 +27,22 @@ pnpm test             # Run tests (Vitest)
 pnpm build            # Build all packages
 ```
 
-## Docker Deployment
-```bash
-docker compose up -d --build   # Build and start all services
-docker compose logs -f         # View logs
-docker compose down            # Stop all services
-```
+## Coolify Deployment
+Production deployment is managed via Coolify on Hetzner VPS.
+
+- **Coolify Dashboard**: http://178.156.192.101:8000
+- **Deployment Guide**: See `docs/COOLIFY_DEPLOYMENT.md`
+
+Key compose files for Coolify:
+- `apps/api/docker-compose.coolify.yml` - API service
+- `apps/dashboard/docker-compose.coolify.yml` - Dashboard service
 
 ## Project Structure
 ```
 apps/
 ├── api/                       # Backend API + Slack bot
 │   ├── Dockerfile            # Production Docker build
+│   ├── docker-compose.coolify.yml  # Coolify deployment
 │   └── src/
 │       ├── services/slack/   # Slack bot handlers
 │       ├── services/rag/     # RAG pipeline (hybrid search)
@@ -46,6 +55,7 @@ apps/
 │           └── config.ts     # Bot configuration
 └── dashboard/                 # Next.js admin UI
     ├── Dockerfile            # Production Docker build
+    ├── docker-compose.coolify.yml  # Coolify deployment
     └── src/app/
         ├── dashboard/        # Overview dashboard
         ├── documents/        # Document management
@@ -67,9 +77,8 @@ packages/
 supabase/
 └── migrations/                # Database schema
 
-docker-compose.yml             # Container orchestration
-DEPLOYMENT.md                  # Production deployment guide
-PLAN.md                        # Feature roadmap and architecture
+docs/
+└── COOLIFY_DEPLOYMENT.md     # Production deployment guide
 ```
 
 ## Database Schema (Key Tables)

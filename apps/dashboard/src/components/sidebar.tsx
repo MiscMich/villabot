@@ -18,9 +18,43 @@ import {
   ThumbsUp,
   Wand2,
   AlertCircle,
+  Menu,
+  X,
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, createContext, useContext } from 'react';
 import { useSetupStatus, getSetupProgress } from '@/hooks/useSetupStatus';
+
+// Mobile sidebar context
+const MobileSidebarContext = createContext<{
+  isOpen: boolean;
+  setIsOpen: (open: boolean) => void;
+}>({ isOpen: false, setIsOpen: () => {} });
+
+export function useMobileSidebar() {
+  return useContext(MobileSidebarContext);
+}
+
+export function MobileSidebarProvider({ children }: { children: React.ReactNode }) {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <MobileSidebarContext.Provider value={{ isOpen, setIsOpen }}>
+      {children}
+    </MobileSidebarContext.Provider>
+  );
+}
+
+export function MobileMenuButton() {
+  const { isOpen, setIsOpen } = useMobileSidebar();
+  return (
+    <button
+      onClick={() => setIsOpen(!isOpen)}
+      className="md:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-card border border-border/50 shadow-lg"
+      aria-label="Toggle menu"
+    >
+      {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+    </button>
+  );
+}
 
 const navigation = [
   {
@@ -79,12 +113,18 @@ export function Sidebar() {
   const { data: setupStatus } = useSetupStatus();
   const setupProgress = getSetupProgress(setupStatus);
   const isSetupComplete = setupStatus?.completed ?? true; // Default to true to avoid flash
+  const { isOpen, setIsOpen } = useMobileSidebar();
 
   useEffect(() => {
     // Check for dark mode preference
     const isDarkMode = document.documentElement.classList.contains('dark');
     setIsDark(isDarkMode);
   }, []);
+
+  // Close sidebar on navigation
+  useEffect(() => {
+    setIsOpen(false);
+  }, [pathname, setIsOpen]);
 
   const toggleTheme = () => {
     const newIsDark = !isDark;
@@ -94,7 +134,22 @@ export function Sidebar() {
   };
 
   return (
-    <div className="flex h-full w-72 flex-col bg-card border-r border-border/50 relative overflow-hidden">
+    <>
+      {/* Mobile backdrop */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 md:hidden"
+          onClick={() => setIsOpen(false)}
+        />
+      )}
+      <div
+        className={cn(
+          'flex h-full w-72 flex-col bg-card border-r border-border/50 relative overflow-hidden',
+          // Mobile: fixed overlay that slides in
+          'fixed md:relative z-50 transition-transform duration-300 ease-in-out',
+          isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        )}
+      >
       {/* Background gradient decoration */}
       <div className="absolute top-0 left-0 right-0 h-64 bg-gradient-to-b from-amber-500/5 to-transparent pointer-events-none" />
       <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-amber-500/3 to-transparent pointer-events-none" />
@@ -247,6 +302,7 @@ export function Sidebar() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

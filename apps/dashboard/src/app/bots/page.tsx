@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { BotFormModal } from '@/components/bot-form-modal';
+import { useToast } from '@/components/ui/use-toast';
 import {
   Bot,
   Plus,
@@ -34,6 +35,7 @@ interface BotData {
 
 export default function BotsPage() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [showFormModal, setShowFormModal] = useState(false);
   const [editingBot, setEditingBot] = useState<BotData | null>(null);
@@ -47,6 +49,10 @@ export default function BotsPage() {
     mutationFn: api.activateBot,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bots'] });
+      toast({ title: 'Bot Activated', description: 'Bot is now running and ready' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Activation Failed', description: error.message, variant: 'destructive' });
     },
   });
 
@@ -54,6 +60,10 @@ export default function BotsPage() {
     mutationFn: api.deactivateBot,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bots'] });
+      toast({ title: 'Bot Deactivated', description: 'Bot has been stopped' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Deactivation Failed', description: error.message, variant: 'destructive' });
     },
   });
 
@@ -61,6 +71,10 @@ export default function BotsPage() {
     mutationFn: api.deleteBot,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bots'] });
+      toast({ title: 'Bot Deleted', description: 'Bot has been removed' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Delete Failed', description: error.message, variant: 'destructive' });
     },
   });
 

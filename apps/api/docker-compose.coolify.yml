@@ -1,0 +1,62 @@
+# Cluebase AI API - Coolify Deployment
+# This file is used by Coolify for Git-based deployments
+#
+# IMPORTANT: Coolify manages ports via Traefik - use 'expose' not 'ports'
+# Environment variables are set in Coolify UI, not in this file
+
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    expose:
+      - "3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      # Supabase (set in Coolify secrets)
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      # Redis (Coolify internal)
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      # AI
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      # URLs
+      - API_URL=${API_URL:-https://api.cluebase.ai}
+      - APP_URL=${APP_URL:-https://cluebase.ai}
+      # Optional: Google Drive
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      # Optional: Stripe
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  # Background worker (optional - can run in same container or separate)
+  worker:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    command: ["dumb-init", "node", "dist/worker.js"]
+    environment:
+      - NODE_ENV=production
+      - WORKER_MODE=true
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+    restart: unless-stopped
