@@ -178,7 +178,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return { error: null };
   }, []);
 
-  // Sign up with email/password
+  // Sign up with email/password - calls API to create user, profile, and workspace
   const signUp = useCallback(async (
     email: string,
     password: string,
@@ -187,24 +187,58 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const supabase = getSupabase();
     setState(prev => ({ ...prev, isLoading: true, error: null }));
 
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
+    try {
+      const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+      const response = await fetch(`${API_BASE}/api/auth/signup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          password,
           full_name: options?.full_name,
           workspace_name: options?.workspace_name,
           invite_token: options?.invite_token,
-        },
-      },
-    });
+        }),
+      });
 
-    if (error) {
+      const data = await response.json();
+
+      if (!response.ok) {
+        const error = new Error(data.error || 'Signup failed') as Error & { code?: string };
+        error.code = data.code;
+        setState(prev => ({ ...prev, isLoading: false, error }));
+        return { error: error as unknown as AuthError };
+      }
+
+      // If API returned a session, set it in Supabase client
+      if (data.session?.access_token && data.session?.refresh_token) {
+        await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
+      }
+
+      // Update state with user data
+      if (data.user) {
+        setState(prev => ({
+          ...prev,
+          isLoading: false,
+          profile: data.profile || null,
+          workspaces: data.workspace ? [{ ...data.workspace, role: 'owner' }] : [],
+        }));
+      } else {
+        // Email confirmation required - user needs to verify email
+        setState(prev => ({ ...prev, isLoading: false }));
+      }
+
+      return { error: null };
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error('Signup failed');
       setState(prev => ({ ...prev, isLoading: false, error }));
-      return { error };
+      return { error: error as unknown as AuthError };
     }
-
-    return { error: null };
   }, []);
 
   // Sign out

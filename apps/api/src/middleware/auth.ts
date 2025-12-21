@@ -7,6 +7,7 @@ import { Request, Response, NextFunction } from 'express';
 import { supabase } from '../services/supabase/client.js';
 import { logger } from '../utils/logger.js';
 import type { AuthUser, UserProfile, AuthSession } from '@teambrain/shared';
+import { TIER_CONFIGS } from '@teambrain/shared';
 
 // Extend Express Request to include auth context
 declare global {
@@ -100,6 +101,76 @@ export async function authenticate(
         return;
       }
       userProfile = newProfile;
+
+      // Also check if user needs a default workspace (new signup via client-side)
+      const { data: existingMemberships } = await supabase
+        .from('workspace_members')
+        .select('id')
+        .eq('user_id', user.id)
+        .limit(1);
+
+      if (!existingMemberships?.length) {
+        // User has no workspace - create a default one
+        const workspaceName = user.user_metadata?.workspace_name || 'My Workspace';
+        const slug = workspaceName
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '');
+
+        const tierConfig = TIER_CONFIGS.pro; // New workspaces start on Pro trial
+
+        const { data: newWorkspace, error: wsError } = await supabase
+          .from('workspaces')
+          .insert({
+            name: workspaceName,
+            slug: `${slug}-${Date.now()}`,
+            tier: 'pro',
+            status: 'trialing',
+            trial_started_at: new Date().toISOString(),
+            trial_ends_at: new Date(Date.now() + tierConfig.trialDays * 24 * 60 * 60 * 1000).toISOString(),
+            max_documents: tierConfig.limits.documents,
+            max_queries_per_month: tierConfig.limits.queriesPerMonth,
+            max_file_upload_mb: tierConfig.limits.fileUploadMb,
+            max_team_members: tierConfig.limits.teamMembers,
+            max_website_pages: tierConfig.limits.websitePages,
+            max_bots: tierConfig.limits.bots,
+            settings: { brandColor: '#f59e0b', timezone: 'UTC', weeklyDigest: false },
+          })
+          .select()
+          .single();
+
+        if (wsError) {
+          logger.error('Failed to create default workspace', { error: wsError, userId: user.id });
+        } else if (newWorkspace) {
+          // Create owner membership
+          await supabase
+            .from('workspace_members')
+            .insert({
+              workspace_id: newWorkspace.id,
+              user_id: user.id,
+              role: 'owner',
+              is_active: true,
+            });
+
+          // Update profile with default workspace
+          const { data: updatedProfile } = await supabase
+            .from('user_profiles')
+            .update({ default_workspace_id: newWorkspace.id })
+            .eq('id', user.id)
+            .select()
+            .single();
+
+          if (updatedProfile) {
+            userProfile = updatedProfile;
+          }
+
+          logger.info('Created default workspace for new user', {
+            userId: user.id,
+            workspaceId: newWorkspace.id,
+            workspaceName,
+          });
+        }
+      }
     }
 
     // Attach user context to request
