@@ -34,3 +34,9 @@ services:
       retries: 3
       start_period: 40s
     restart: unless-stopped
+    networks:
+      - coolify
+
+networks:
+  coolify:
+    external: true
