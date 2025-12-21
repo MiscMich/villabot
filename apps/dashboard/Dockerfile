@@ -60,9 +60,9 @@ RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
 # Copy Next.js standalone build
-# The standalone output preserves the WORKDIR path structure, so we need to copy from /app/
-# inside standalone to get the correct apps/dashboard/server.js structure
-COPY --from=builder --chown=nextjs:nodejs /app/apps/dashboard/.next/standalone/app/ ./
+# Standalone preserves monorepo structure: apps/dashboard/server.js
+# Use trailing slash to copy CONTENTS, not the folder itself
+COPY --from=builder --chown=nextjs:nodejs /app/apps/dashboard/.next/standalone/ ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/dashboard/.next/static ./apps/dashboard/.next/static
 COPY --from=builder /app/apps/dashboard/public ./apps/dashboard/public
 
