@@ -1,6 +1,6 @@
-# TeamBrain AI - Production Deployment Guide
+# Cluebase AI - Production Deployment Guide
 
-Complete guide for deploying TeamBrain AI as a self-hosted SaaS platform.
+Complete guide for deploying Cluebase AI as a self-hosted SaaS platform.
 
 ## Architecture Overview
 
@@ -13,10 +13,10 @@ Complete guide for deploying TeamBrain AI as a self-hosted SaaS platform.
 ┌─────────────────────────────────────────────────────────────────┐
 │                     Traefik (Reverse Proxy + SSL)                │
 │                                                                  │
-│  api.teambrain.app ─────────────────────────► API Container     │
-│  teambrain.app ─────────────────────────────► Dashboard          │
-│  supabase.teambrain.app ────────────────────► Kong (Supabase)    │
-│  traefik.teambrain.app ─────────────────────► Traefik Dashboard  │
+│  api.cluebase.ai ───────────────────────────► API Container     │
+│  cluebase.ai ───────────────────────────────► Dashboard          │
+│  supabase.cluebase.ai ──────────────────────► Kong (Supabase)    │
+│  traefik.cluebase.ai ───────────────────────► Traefik Dashboard  │
 └─────────────────────────────────────────────────────────────────┘
                                 │
         ┌───────────────────────┼───────────────────────┐
@@ -44,7 +44,7 @@ Complete guide for deploying TeamBrain AI as a self-hosted SaaS platform.
 
 ## Multi-Tenant Credential Model
 
-TeamBrain AI separates platform and workspace credentials:
+Cluebase AI separates platform and workspace credentials:
 
 ### Platform Credentials (Shared by all tenants)
 | Credential | Purpose | Where |
@@ -141,7 +141,7 @@ nano .env
 - `SECRET_KEY_BASE` - From generated secrets
 - `SUPABASE_ANON_KEY` - From generated secrets
 - `SUPABASE_SERVICE_ROLE_KEY` - From generated secrets
-- `DOMAIN` - Your domain (e.g., teambrain.app)
+- `DOMAIN` - Your domain (e.g., cluebase.ai)
 - `ACME_EMAIL` - For SSL certificates
 - `STRIPE_*` - From Stripe dashboard (optional for testing)
 - `SMTP_*` - From email provider (optional for testing)
@@ -192,8 +192,8 @@ http:
           - Content-Type
           - Authorization
         accessControlAllowOriginList:
-          - https://teambrain.app
-          - https://www.teambrain.app
+          - https://cluebase.ai
+          - https://www.cluebase.ai
         accessControlMaxAge: 86400
         addVaryHeader: true
 
