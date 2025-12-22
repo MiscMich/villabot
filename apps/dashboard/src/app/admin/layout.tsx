@@ -10,7 +10,6 @@ import {
   LayoutDashboard,
   Building2,
   Users,
-  Settings,
   ChevronRight,
   Shield,
   Loader2,
@@ -34,12 +33,6 @@ const adminNavigation = [
     href: '/admin/users',
     icon: Users,
     description: 'Platform users',
-  },
-  {
-    name: 'Settings',
-    href: '/admin/settings',
-    icon: Settings,
-    description: 'Admin settings',
   },
 ];
 

@@ -487,6 +487,7 @@ router.patch(
 /**
  * List users with filters
  * GET /api/admin/users
+ * Note: We need to join user_profiles with auth.users to get email and last_sign_in_at
  */
 router.get(
   '/users',
@@ -498,46 +499,140 @@ router.get(
       const isAdmin = req.query.isAdmin === 'true' ? true : req.query.isAdmin === 'false' ? false : undefined;
       const page = parseInt(req.query.page as string) || 1;
       const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+      const offset = (page - 1) * limit;
 
-      let query = supabase.from('user_profiles').select('*', { count: 'exact' });
+      // Use raw SQL to join user_profiles with auth.users for email
+      let sqlQuery = `
+        SELECT
+          up.id,
+          au.email,
+          up.full_name,
+          up.avatar_url,
+          up.is_platform_admin,
+          up.created_at,
+          au.last_sign_in_at
+        FROM user_profiles up
+        JOIN auth.users au ON up.id = au.id
+        WHERE 1=1
+      `;
+
+      let countQuery = `
+        SELECT COUNT(*) as total
+        FROM user_profiles up
+        JOIN auth.users au ON up.id = au.id
+        WHERE 1=1
+      `;
+
+      const params: unknown[] = [];
+      let paramIndex = 1;
 
       if (search) {
-        query = query.or(`email.ilike.%${search}%,full_name.ilike.%${search}%`);
+        const searchCondition = ` AND (au.email ILIKE $${paramIndex} OR up.full_name ILIKE $${paramIndex})`;
+        sqlQuery += searchCondition;
+        countQuery += searchCondition;
+        params.push(`%${search}%`);
+        paramIndex++;
       }
+
       if (isAdmin !== undefined) {
-        query = query.eq('is_platform_admin', isAdmin);
+        const adminCondition = ` AND up.is_platform_admin = $${paramIndex}`;
+        sqlQuery += adminCondition;
+        countQuery += adminCondition;
+        params.push(isAdmin);
+        paramIndex++;
       }
 
-      const offset = (page - 1) * limit;
-      query = query.order('created_at', { ascending: false }).range(offset, offset + limit - 1);
+      sqlQuery += ` ORDER BY up.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+      params.push(limit, offset);
 
-      const { data, error, count } = await query;
+      // Execute queries
+      const { data, error } = await supabase.rpc('exec_sql', {
+        query: sqlQuery,
+        params: params,
+      }).single();
+
+      // Fallback: if RPC doesn't exist, use direct query approach
+      let users: AdminUser[] = [];
+      let total = 0;
 
       if (error) {
-        logger.error('Failed to fetch users', { error });
-        res.status(500).json({
-          error: 'Failed to fetch users',
-          code: 'FETCH_ERROR',
-        });
-        return;
-      }
+        // Fallback: Query user_profiles and auth.users separately
+        let profileQuery = supabase.from('user_profiles').select('*', { count: 'exact' });
 
-      const users: AdminUser[] = (data ?? []).map((u) => ({
-        id: u.id,
-        email: u.email,
-        fullName: u.full_name,
-        avatarUrl: u.avatar_url,
-        isPlatformAdmin: u.is_platform_admin,
-        createdAt: u.created_at,
-        lastSignInAt: u.last_sign_in_at,
-      }));
+        if (search) {
+          profileQuery = profileQuery.ilike('full_name', `%${search}%`);
+        }
+        if (isAdmin !== undefined) {
+          profileQuery = profileQuery.eq('is_platform_admin', isAdmin);
+        }
+
+        profileQuery = profileQuery.order('created_at', { ascending: false }).range(offset, offset + limit - 1);
+
+        const { data: profiles, error: profileError, count } = await profileQuery;
+
+        if (profileError) {
+          logger.error('Failed to fetch users', { error: profileError });
+          res.status(500).json({
+            error: 'Failed to fetch users',
+            code: 'FETCH_ERROR',
+          });
+          return;
+        }
+
+        // Get auth.users data for emails
+        const { data: authUsers } = await supabase.auth.admin.listUsers();
+        const authUserMap = new Map(
+          (authUsers?.users ?? []).map(u => [u.id, { email: u.email, lastSignInAt: u.last_sign_in_at }])
+        );
+
+        // Filter by email search if needed
+        let filteredProfiles = profiles ?? [];
+        if (search) {
+          filteredProfiles = filteredProfiles.filter(p => {
+            const authUser = authUserMap.get(p.id);
+            return authUser?.email?.toLowerCase().includes(search.toLowerCase()) ||
+                   p.full_name?.toLowerCase().includes(search.toLowerCase());
+          });
+        }
+
+        users = filteredProfiles.map((u) => {
+          const authUser = authUserMap.get(u.id);
+          return {
+            id: u.id,
+            email: authUser?.email ?? 'unknown',
+            fullName: u.full_name,
+            avatarUrl: u.avatar_url,
+            isPlatformAdmin: u.is_platform_admin ?? false,
+            createdAt: u.created_at,
+            lastSignInAt: authUser?.lastSignInAt ?? null,
+          };
+        });
+        total = count ?? 0;
+      } else {
+        users = (data as unknown[]).map((u: Record<string, unknown>) => ({
+          id: u.id as string,
+          email: u.email as string,
+          fullName: u.full_name as string | null,
+          avatarUrl: u.avatar_url as string | null,
+          isPlatformAdmin: u.is_platform_admin as boolean,
+          createdAt: u.created_at as string,
+          lastSignInAt: u.last_sign_in_at as string | null,
+        }));
+
+        // Get count
+        const { data: countData } = await supabase.rpc('exec_sql', {
+          query: countQuery,
+          params: params.slice(0, -2), // Remove limit and offset
+        }).single();
+        total = (countData as { total: number })?.total ?? 0;
+      }
 
       const response: PaginatedResponse<AdminUser> = {
         data: users,
-        total: count ?? 0,
+        total,
         page,
         limit,
-        totalPages: Math.ceil((count ?? 0) / limit),
+        totalPages: Math.ceil(total / limit),
       };
 
       res.json(response);

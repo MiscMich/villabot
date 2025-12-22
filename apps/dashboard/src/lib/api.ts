@@ -751,4 +751,39 @@ export const api = {
       totalWorkspaces: number;
     }>;
   }>(`/api/admin/growth?days=${days}`),
+
+  // Admin User Management
+  getAdminUsers: (filters?: {
+    search?: string;
+    isAdmin?: boolean;
+    page?: number;
+    limit?: number;
+  }) => {
+    const params = new URLSearchParams();
+    if (filters?.search) params.append('search', filters.search);
+    if (filters?.isAdmin !== undefined) params.append('isAdmin', String(filters.isAdmin));
+    if (filters?.page) params.append('page', String(filters.page));
+    if (filters?.limit) params.append('limit', String(filters.limit));
+    return fetchApi<{
+      data: Array<{
+        id: string;
+        email: string;
+        fullName: string | null;
+        avatarUrl: string | null;
+        isPlatformAdmin: boolean;
+        createdAt: string;
+        lastSignInAt: string | null;
+      }>;
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+    }>(`/api/admin/users?${params.toString()}`);
+  },
+
+  toggleAdminStatus: (userId: string, isAdmin: boolean) =>
+    fetchApi<{ message: string }>(`/api/admin/users/${userId}/admin`, {
+      method: 'POST',
+      body: JSON.stringify({ isAdmin }),
+    }),
 };
