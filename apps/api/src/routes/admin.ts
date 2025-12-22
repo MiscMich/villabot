@@ -600,11 +600,11 @@ router.get(
           return {
             id: u.id,
             email: authUser?.email ?? 'unknown',
-            fullName: u.full_name,
-            avatarUrl: u.avatar_url,
+            fullName: u.full_name ?? undefined,
+            avatarUrl: u.avatar_url ?? undefined,
             isPlatformAdmin: u.is_platform_admin ?? false,
             createdAt: u.created_at,
-            lastSignInAt: authUser?.lastSignInAt ?? null,
+            lastSignInAt: authUser?.lastSignInAt ?? undefined,
           };
         });
         total = count ?? 0;
@@ -612,11 +612,11 @@ router.get(
         users = (data as unknown[]).map((u: Record<string, unknown>) => ({
           id: u.id as string,
           email: u.email as string,
-          fullName: u.full_name as string | null,
-          avatarUrl: u.avatar_url as string | null,
+          fullName: (u.full_name as string | null) ?? undefined,
+          avatarUrl: (u.avatar_url as string | null) ?? undefined,
           isPlatformAdmin: u.is_platform_admin as boolean,
           createdAt: u.created_at as string,
-          lastSignInAt: u.last_sign_in_at as string | null,
+          lastSignInAt: (u.last_sign_in_at as string | null) ?? undefined,
         }));
 
         // Get count
