@@ -15,23 +15,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className="dark" suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{
             __html: `
-              try {
-                if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                  document.documentElement.classList.add('dark')
-                } else {
-                  document.documentElement.classList.remove('dark')
-                }
-              } catch (_) {}
+              // Force dark mode for 2025 redesign
+              document.documentElement.classList.add('dark')
             `,
           }}
         />
       </head>
-      <body className="font-sans antialiased">
+      <body className="font-sans antialiased bg-void min-h-screen">
         <Providers>
           <ConditionalLayout>{children}</ConditionalLayout>
           <Toaster />

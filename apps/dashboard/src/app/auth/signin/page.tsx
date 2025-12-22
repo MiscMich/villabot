@@ -19,7 +19,7 @@ function SignInForm() {
   const { signIn } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const returnTo = searchParams.get('returnTo') || '/';
+  const returnTo = searchParams.get('returnTo') || '/dashboard';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

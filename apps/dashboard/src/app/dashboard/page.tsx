@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
+import { motion, useInView } from 'framer-motion';
 import { api } from '@/lib/api';
 import {
   FileText,
@@ -17,58 +18,79 @@ import {
   TrendingUp,
   Activity,
   Loader2,
+  ArrowUpRight,
 } from 'lucide-react';
+import { fadeInUp, staggerContainer } from '@/lib/motion';
+import { GlassCard, GradientText } from '@/components/design-system';
 
-// Stat Card Component
+// Stat Card Component with Glassmorphism
 function StatCard({
   title,
   value,
   subtitle,
   icon: Icon,
   trend,
-  delay = 0,
+  index = 0,
+  gradient = 'purple',
 }: {
   title: string;
   value: string | number;
   subtitle: string;
   icon: React.ElementType;
   trend?: { value: number; positive: boolean };
-  delay?: number;
+  index?: number;
+  gradient?: 'purple' | 'blue' | 'pink' | 'cyan';
 }) {
+  const gradientColors = {
+    purple: 'from-violet-600 to-pink-600',
+    blue: 'from-blue-600 to-cyan-600',
+    pink: 'from-pink-600 to-rose-600',
+    cyan: 'from-cyan-600 to-teal-600',
+  };
+
+  const glowColors = {
+    purple: 'shadow-glow-purple',
+    blue: 'shadow-glow-blue',
+    pink: 'shadow-glow-pink',
+    cyan: 'shadow-glow-cyan',
+  };
+
   return (
-    <div
-      className="premium-card group opacity-0 animate-fade-in-up"
-      style={{ animationDelay: `${delay}ms` }}
+    <motion.div
+      variants={fadeInUp}
+      custom={index}
+      whileHover={{ y: -4, transition: { duration: 0.2 } }}
     >
-      <div className="p-6">
-        <div className="flex items-start justify-between">
-          <div className="icon-container group-hover:scale-110 transition-transform duration-300">
-            <Icon className="w-6 h-6" />
-          </div>
-          {trend && (
-            <div
-              className={`flex items-center gap-1 text-sm font-medium ${
-                trend.positive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-              }`}
-            >
-              <TrendingUp
-                className={`w-4 h-4 ${!trend.positive && 'rotate-180'}`}
-              />
-              {trend.value}%
+      <GlassCard hover glow={gradient} padding="none" className="h-full">
+        <div className="p-6">
+          <div className="flex items-start justify-between">
+            <div className={`p-3 rounded-xl bg-gradient-to-br ${gradientColors[gradient]} ${glowColors[gradient]}`}>
+              <Icon className="w-5 h-5 text-white" />
             </div>
-          )}
-        </div>
+            {trend && (
+              <div
+                className={`flex items-center gap-1 text-sm font-medium px-2.5 py-1 rounded-full ${
+                  trend.positive
+                    ? 'bg-emerald-500/10 text-emerald-400'
+                    : 'bg-red-500/10 text-red-400'
+                }`}
+              >
+                <TrendingUp
+                  className={`w-3.5 h-3.5 ${!trend.positive && 'rotate-180'}`}
+                />
+                {trend.value}%
+              </div>
+            )}
+          </div>
 
-        <div className="mt-4 space-y-1">
-          <p className="text-sm font-medium text-muted-foreground">{title}</p>
-          <p className="stat-value">{value}</p>
-          <p className="text-sm text-muted-foreground">{subtitle}</p>
+          <div className="mt-5 space-y-1">
+            <p className="text-sm font-medium text-white/60">{title}</p>
+            <p className="text-3xl font-bold text-white">{value}</p>
+            <p className="text-sm text-white/40">{subtitle}</p>
+          </div>
         </div>
-      </div>
-
-      {/* Decorative gradient line at bottom */}
-      <div className="h-1 w-full bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-    </div>
+      </GlassCard>
+    </motion.div>
   );
 }
 
@@ -76,31 +98,41 @@ function StatCard({
 function ServiceStatus({
   name,
   online,
-  delay = 0,
+  index = 0,
 }: {
   name: string;
   online: boolean;
-  delay?: number;
+  index?: number;
 }) {
   return (
-    <div
-      className="flex items-center gap-3 p-4 rounded-xl bg-secondary/50 hover:bg-secondary transition-colors opacity-0 animate-fade-in"
-      style={{ animationDelay: `${delay}ms` }}
+    <motion.div
+      variants={fadeInUp}
+      custom={index}
+      className="flex items-center gap-3 p-4 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 hover:bg-white/10 transition-colors"
     >
-      <div className={`status-pulse ${online ? 'online' : 'offline'}`}>
-        <span />
+      <div className="relative flex items-center justify-center">
+        <span
+          className={`w-2.5 h-2.5 rounded-full ${
+            online ? 'bg-emerald-500' : 'bg-red-500'
+          }`}
+        />
+        {online && (
+          <span className="absolute w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+        )}
       </div>
-      <span className="font-medium capitalize">{name.replace(/([A-Z])/g, ' $1').trim()}</span>
+      <span className="font-medium text-white capitalize">
+        {name.replace(/([A-Z])/g, ' $1').trim()}
+      </span>
       <span
         className={`ml-auto text-xs font-semibold px-2.5 py-1 rounded-full ${
           online
-            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-            : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+            : 'bg-red-500/10 text-red-400 border border-red-500/20'
         }`}
       >
         {online ? 'Connected' : 'Offline'}
       </span>
-    </div>
+    </motion.div>
   );
 }
 
@@ -115,49 +147,53 @@ function SyncStatusCard({
   documentCount: number;
 }) {
   return (
-    <div className="premium-card p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '400ms' }}>
-      <div className="flex items-center gap-3 mb-6">
-        <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600">
-          <Cloud className="w-6 h-6 text-white" />
-        </div>
-        <div>
-          <h3 className="font-display text-lg font-semibold">Google Drive Sync</h3>
-          <p className="text-sm text-muted-foreground">Document synchronization</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-4">
-        <div className="text-center p-4 rounded-xl bg-secondary/50">
-          <div className="flex justify-center mb-2">
-            {connected ? (
-              <CheckCircle className="w-6 h-6 text-green-500" />
-            ) : (
-              <XCircle className="w-6 h-6 text-red-500" />
-            )}
+    <motion.div variants={fadeInUp}>
+      <GlassCard hover glow="blue" padding="lg">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-3 rounded-xl bg-gradient-to-br from-blue-600 to-cyan-600 shadow-glow-blue">
+            <Cloud className="w-6 h-6 text-white" />
           </div>
-          <p className="text-xs text-muted-foreground">Status</p>
-          <p className="font-semibold">{connected ? 'Connected' : 'Offline'}</p>
+          <div>
+            <h3 className="text-lg font-semibold text-white">Google Drive Sync</h3>
+            <p className="text-sm text-white/50">Document synchronization</p>
+          </div>
         </div>
 
-        <div className="text-center p-4 rounded-xl bg-secondary/50">
-          <div className="flex justify-center mb-2">
-            <Activity className="w-6 h-6 text-amber-500" />
+        <div className="grid grid-cols-3 gap-4">
+          <div className="text-center p-4 rounded-xl bg-white/5 border border-white/10">
+            <div className="flex justify-center mb-2">
+              {connected ? (
+                <CheckCircle className="w-6 h-6 text-emerald-400" />
+              ) : (
+                <XCircle className="w-6 h-6 text-red-400" />
+              )}
+            </div>
+            <p className="text-xs text-white/40 mb-1">Status</p>
+            <p className="font-semibold text-white">
+              {connected ? 'Connected' : 'Offline'}
+            </p>
           </div>
-          <p className="text-xs text-muted-foreground">Last Sync</p>
-          <p className="font-semibold text-sm">
-            {lastSync ? new Date(lastSync).toLocaleTimeString() : 'Never'}
-          </p>
-        </div>
 
-        <div className="text-center p-4 rounded-xl bg-secondary/50">
-          <div className="flex justify-center mb-2">
-            <FileText className="w-6 h-6 text-indigo-500" />
+          <div className="text-center p-4 rounded-xl bg-white/5 border border-white/10">
+            <div className="flex justify-center mb-2">
+              <Activity className="w-6 h-6 text-violet-400" />
+            </div>
+            <p className="text-xs text-white/40 mb-1">Last Sync</p>
+            <p className="font-semibold text-white text-sm">
+              {lastSync ? new Date(lastSync).toLocaleTimeString() : 'Never'}
+            </p>
           </div>
-          <p className="text-xs text-muted-foreground">Documents</p>
-          <p className="font-semibold">{documentCount}</p>
+
+          <div className="text-center p-4 rounded-xl bg-white/5 border border-white/10">
+            <div className="flex justify-center mb-2">
+              <FileText className="w-6 h-6 text-pink-400" />
+            </div>
+            <p className="text-xs text-white/40 mb-1">Documents</p>
+            <p className="font-semibold text-white">{documentCount}</p>
+          </div>
         </div>
-      </div>
-    </div>
+      </GlassCard>
+    </motion.div>
   );
 }
 
@@ -166,24 +202,77 @@ function LoadingSkeleton() {
   return (
     <div className="space-y-8">
       <div className="space-y-2">
-        <div className="h-10 w-48 bg-muted rounded-lg shimmer" />
-        <div className="h-5 w-64 bg-muted rounded-lg shimmer" />
+        <div className="h-10 w-48 bg-white/5 rounded-lg animate-pulse" />
+        <div className="h-5 w-64 bg-white/5 rounded-lg animate-pulse" />
       </div>
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         {[...Array(4)].map((_, i) => (
-          <div key={i} className="h-44 bg-muted rounded-xl shimmer" />
+          <div
+            key={i}
+            className="h-44 bg-white/5 rounded-xl animate-pulse"
+            style={{ animationDelay: `${i * 100}ms` }}
+          />
         ))}
       </div>
-      <div className="h-32 bg-muted rounded-xl shimmer" />
-      <div className="h-48 bg-muted rounded-xl shimmer" />
+      <div className="h-32 bg-white/5 rounded-xl animate-pulse" />
+      <div className="h-48 bg-white/5 rounded-xl animate-pulse" />
     </div>
+  );
+}
+
+// Quick Action Button
+function QuickActionButton({
+  onClick,
+  disabled,
+  loading,
+  icon: Icon,
+  title,
+  description,
+  index = 0,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  loading?: boolean;
+  icon: React.ElementType;
+  title: string;
+  description: string;
+  index?: number;
+}) {
+  return (
+    <motion.button
+      variants={fadeInUp}
+      custom={index}
+      whileHover={{ y: -4, transition: { duration: 0.2 } }}
+      whileTap={{ scale: 0.98 }}
+      onClick={onClick}
+      disabled={disabled}
+      className="group p-6 text-left rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 hover:bg-white/10 hover:border-violet-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      <div className="flex items-start justify-between mb-3">
+        <div className="p-3 rounded-xl bg-gradient-to-br from-violet-600 to-pink-600 shadow-glow-purple group-hover:shadow-glow-purple transition-shadow">
+          {loading ? (
+            <Loader2 className="w-6 h-6 text-white animate-spin" />
+          ) : (
+            <Icon className="w-6 h-6 text-white group-hover:scale-110 transition-transform" />
+          )}
+        </div>
+        <ArrowUpRight className="w-5 h-5 text-white/40 group-hover:text-violet-400 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all" />
+      </div>
+      <h3 className="font-semibold text-white mb-1">{title}</h3>
+      <p className="text-sm text-white/50">{description}</p>
+    </motion.button>
   );
 }
 
 export default function OverviewPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once: true });
+  const [syncMessage, setSyncMessage] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
 
   const { data: overview, isLoading: overviewLoading } = useQuery({
     queryKey: ['overview'],
@@ -240,29 +329,40 @@ export default function OverviewPage() {
   }
 
   return (
-    <div className="space-y-8">
-      {/* Decorative noise overlay */}
-      <div className="noise-overlay" />
-
+    <motion.div
+      ref={ref}
+      variants={staggerContainer}
+      initial="initial"
+      animate={isInView ? 'animate' : 'initial'}
+      className="space-y-8"
+    >
       {/* Header */}
-      <div className="opacity-0 animate-fade-in">
+      <motion.div variants={fadeInUp}>
         <div className="flex items-center gap-3 mb-2">
-          <Sparkles className="w-8 h-8 text-amber-500" />
-          <h1 className="text-4xl font-display font-bold">Dashboard</h1>
+          <div className="p-2.5 rounded-xl bg-gradient-to-br from-violet-600 to-pink-600 shadow-glow-purple">
+            <Sparkles className="w-6 h-6 text-white" />
+          </div>
+          <h1 className="text-4xl font-bold text-white">
+            Dash<GradientText as="span" className="text-4xl font-bold">board</GradientText>
+          </h1>
         </div>
-        <p className="text-lg text-muted-foreground">
+        <p className="text-lg text-white/60">
           Monitor your AI knowledge assistant performance and activity
         </p>
-      </div>
+      </motion.div>
 
       {/* Stats Grid */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+      <motion.div
+        variants={staggerContainer}
+        className="grid gap-6 md:grid-cols-2 lg:grid-cols-4"
+      >
         <StatCard
           title="Total Documents"
           value={overview?.documents.total ?? 0}
           subtitle={`${overview?.documents.chunks ?? 0} chunks indexed`}
           icon={FileText}
-          delay={100}
+          index={0}
+          gradient="purple"
         />
         <StatCard
           title="Messages This Week"
@@ -270,7 +370,8 @@ export default function OverviewPage() {
           subtitle={`${overview?.activity.responsesThisWeek ?? 0} responses sent`}
           icon={MessageSquare}
           trend={{ value: 12, positive: true }}
-          delay={200}
+          index={1}
+          gradient="blue"
         />
         <StatCard
           title="Satisfaction Rate"
@@ -281,35 +382,40 @@ export default function OverviewPage() {
           }
           subtitle={`${overview?.feedback.positive ?? 0} positive, ${overview?.feedback.negative ?? 0} negative`}
           icon={ThumbsUp}
-          delay={300}
+          index={2}
+          gradient="pink"
         />
         <StatCard
           title="Learned Facts"
           value={overview?.knowledge.learnedFacts ?? 0}
           subtitle="From user corrections"
           icon={Brain}
-          delay={400}
+          index={3}
+          gradient="cyan"
         />
-      </div>
+      </motion.div>
 
       {/* Service Status */}
-      <div className="opacity-0 animate-fade-in-up" style={{ animationDelay: '300ms' }}>
-        <div className="section-header">
-          <h2 className="font-display">Service Status</h2>
-          <div className="divider" />
+      <motion.div variants={fadeInUp}>
+        <div className="flex items-center gap-4 mb-4">
+          <h2 className="text-xl font-semibold text-white">Service Status</h2>
+          <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent" />
         </div>
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+        <motion.div
+          variants={staggerContainer}
+          className="grid gap-3 md:grid-cols-2 lg:grid-cols-4"
+        >
           {health?.services &&
             Object.entries(health.services).map(([service, status], index) => (
               <ServiceStatus
                 key={service}
                 name={service}
                 online={status as boolean}
-                delay={350 + index * 50}
+                index={index}
               />
             ))}
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
 
       {/* Google Drive Sync */}
       <SyncStatusCard
@@ -320,11 +426,14 @@ export default function OverviewPage() {
 
       {/* Sync Status Message */}
       {syncMessage && (
-        <div
-          className={`fixed top-4 right-4 z-50 p-4 rounded-xl shadow-lg animate-fade-in ${
+        <motion.div
+          initial={{ opacity: 0, y: -20, x: 20 }}
+          animate={{ opacity: 1, y: 0, x: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          className={`fixed top-4 right-4 z-50 p-4 rounded-xl shadow-lg backdrop-blur-xl border ${
             syncMessage.type === 'success'
-              ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-200 border border-green-200 dark:border-green-800'
-              : 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-200 border border-red-200 dark:border-red-800'
+              ? 'bg-emerald-500/10 text-emerald-200 border-emerald-500/20'
+              : 'bg-red-500/10 text-red-200 border-red-500/20'
           }`}
         >
           <div className="flex items-center gap-2">
@@ -335,55 +444,44 @@ export default function OverviewPage() {
             )}
             <span className="font-medium">{syncMessage.text}</span>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* Quick Actions */}
-      <div className="opacity-0 animate-fade-in-up" style={{ animationDelay: '500ms' }}>
-        <div className="section-header">
-          <h2 className="font-display">Quick Actions</h2>
-          <div className="divider" />
+      <motion.div variants={fadeInUp}>
+        <div className="flex items-center gap-4 mb-4">
+          <h2 className="text-xl font-semibold text-white">Quick Actions</h2>
+          <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent" />
         </div>
-        <div className="grid gap-4 md:grid-cols-3">
-          <button
+        <motion.div
+          variants={staggerContainer}
+          className="grid gap-4 md:grid-cols-3"
+        >
+          <QuickActionButton
             onClick={handleSyncDocuments}
             disabled={syncMutation.isPending}
-            className="premium-card p-6 text-left group hover:border-amber-500/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {syncMutation.isPending ? (
-              <Loader2 className="w-8 h-8 text-amber-500 mb-3 animate-spin" />
-            ) : (
-              <RefreshCw className="w-8 h-8 text-amber-500 mb-3 group-hover:rotate-180 transition-transform duration-500" />
-            )}
-            <h3 className="font-display font-semibold mb-1">
-              {syncMutation.isPending ? 'Syncing...' : 'Sync Documents'}
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              Manually trigger a Google Drive sync
-            </p>
-          </button>
-          <button
+            loading={syncMutation.isPending}
+            icon={RefreshCw}
+            title={syncMutation.isPending ? 'Syncing...' : 'Sync Documents'}
+            description="Manually trigger a Google Drive sync"
+            index={0}
+          />
+          <QuickActionButton
             onClick={handleTrainBot}
-            className="premium-card p-6 text-left group hover:border-amber-500/50 transition-colors"
-          >
-            <Brain className="w-8 h-8 text-amber-500 mb-3 group-hover:scale-110 transition-transform" />
-            <h3 className="font-display font-semibold mb-1">Train Bot</h3>
-            <p className="text-sm text-muted-foreground">
-              Add new knowledge to the assistant
-            </p>
-          </button>
-          <button
+            icon={Brain}
+            title="Train Bot"
+            description="Add new knowledge to the assistant"
+            index={1}
+          />
+          <QuickActionButton
             onClick={handleViewConversations}
-            className="premium-card p-6 text-left group hover:border-amber-500/50 transition-colors"
-          >
-            <MessageSquare className="w-8 h-8 text-amber-500 mb-3 group-hover:scale-110 transition-transform" />
-            <h3 className="font-display font-semibold mb-1">View Conversations</h3>
-            <p className="text-sm text-muted-foreground">
-              Browse recent bot interactions
-            </p>
-          </button>
-        </div>
-      </div>
-    </div>
+            icon={MessageSquare}
+            title="View Conversations"
+            description="Browse recent bot interactions"
+            index={2}
+          />
+        </motion.div>
+      </motion.div>
+    </motion.div>
   );
 }

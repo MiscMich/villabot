@@ -79,7 +79,8 @@ app.use('/api/errors', generalApiRateLimiter, errorsRouter);
 app.use('/api/conversations', generalApiRateLimiter, conversationsRouter);
 app.use('/api/bots', generalApiRateLimiter, botsRouter);
 app.use('/api/feedback', generalApiRateLimiter, feedbackRouter);
-app.use('/api/setup', generalApiRateLimiter, setupRouter);
+// Setup router doesn't use resolveWorkspace (used during initial setup before workspace exists)
+app.use('/api/setup', setupRouter);
 app.use('/api/billing', generalApiRateLimiter, billingRouter);
 
 // Platform admin routes - NO rate limiting (platform admins bypass limits)

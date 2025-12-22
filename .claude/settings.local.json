@@ -11,7 +11,10 @@
       "mcp__tavily__tavily-search",
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(cat:*)",
-      "Bash(xargs:*)"
+      "Bash(xargs:*)",
+      "mcp__supabase__get_project_url",
+      "mcp__supabase__list_tables",
+      "mcp__supabase__get_database_stats"
     ],
     "deny": [],
     "ask": []
