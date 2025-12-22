@@ -71,7 +71,7 @@ export default function AdminDashboardPage() {
 
       {/* Stats Grid */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="bg-slate-800/50 border-slate-700 opacity-0 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
+        <Card className="glass-card opacity-0 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-300">Total Workspaces</CardTitle>
             <Building2 className="h-4 w-4 text-purple-400" />
@@ -84,7 +84,7 @@ export default function AdminDashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-slate-800/50 border-slate-700 opacity-0 animate-fade-in-up" style={{ animationDelay: '150ms' }}>
+        <Card className="glass-card opacity-0 animate-fade-in-up" style={{ animationDelay: '150ms' }}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-300">Total Users</CardTitle>
             <Users className="h-4 w-4 text-blue-400" />
@@ -97,7 +97,7 @@ export default function AdminDashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-slate-800/50 border-slate-700 opacity-0 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
+        <Card className="glass-card opacity-0 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-300">Estimated MRR</CardTitle>
             <DollarSign className="h-4 w-4 text-green-400" />
@@ -112,10 +112,10 @@ export default function AdminDashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-slate-800/50 border-slate-700 opacity-0 animate-fade-in-up" style={{ animationDelay: '250ms' }}>
+        <Card className="glass-card opacity-0 animate-fade-in-up" style={{ animationDelay: '250ms' }}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-300">Total Bots</CardTitle>
-            <Bot className="h-4 w-4 text-amber-400" />
+            <Bot className="h-4 w-4 text-violet-400" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-slate-100">{stats?.totalBots ?? 0}</div>
@@ -128,7 +128,7 @@ export default function AdminDashboardPage() {
 
       {/* Tier Breakdown */}
       <div className="grid gap-6 md:grid-cols-3">
-        <Card className="bg-slate-800/50 border-slate-700">
+        <Card className="glass-card">
           <CardHeader>
             <CardTitle className="text-slate-100">Starter</CardTitle>
             <CardDescription className="text-slate-400">Free tier workspaces</CardDescription>
@@ -138,7 +138,7 @@ export default function AdminDashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-slate-800/50 border-slate-700">
+        <Card className="glass-card">
           <CardHeader>
             <CardTitle className="text-slate-100">Pro</CardTitle>
             <CardDescription className="text-slate-400">Pro tier workspaces</CardDescription>
@@ -148,7 +148,7 @@ export default function AdminDashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-slate-800/50 border-slate-700">
+        <Card className="glass-card">
           <CardHeader>
             <CardTitle className="text-slate-100">Business</CardTitle>
             <CardDescription className="text-slate-400">Business tier workspaces</CardDescription>
@@ -160,7 +160,7 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* Growth Chart */}
-      <Card className="bg-slate-800/50 border-slate-700">
+      <Card className="glass-card">
         <CardHeader>
           <CardTitle className="text-slate-100 flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-green-400" />
@@ -203,7 +203,7 @@ export default function AdminDashboardPage() {
       </Card>
 
       {/* Recent Workspaces */}
-      <Card className="bg-slate-800/50 border-slate-700">
+      <Card className="glass-card">
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle className="text-slate-100">Recent Workspaces</CardTitle>
@@ -231,7 +231,7 @@ export default function AdminDashboardPage() {
                       'w-10 h-10 rounded-lg flex items-center justify-center',
                       workspace.isInternal
                         ? 'bg-purple-500/20 text-purple-400'
-                        : 'bg-amber-500/20 text-amber-400'
+                        : 'bg-amber-500/20 text-violet-400'
                     )}
                   >
                     <Building2 className="h-5 w-5" />

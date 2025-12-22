@@ -19,8 +19,22 @@ import {
   FileText,
   MessageSquare,
   Key,
+  FolderOpen,
+  Check,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+type DocumentCategory = 'shared' | 'operations' | 'marketing' | 'sales' | 'hr' | 'technical' | 'custom';
+
+const CATEGORY_OPTIONS: { value: DocumentCategory; label: string; description: string }[] = [
+  { value: 'shared', label: 'Shared', description: 'Company-wide knowledge available to all' },
+  { value: 'operations', label: 'Operations', description: 'SOPs and operational procedures' },
+  { value: 'marketing', label: 'Marketing', description: 'Marketing materials and campaigns' },
+  { value: 'sales', label: 'Sales', description: 'Sales collateral and playbooks' },
+  { value: 'hr', label: 'HR', description: 'Human resources policies and docs' },
+  { value: 'technical', label: 'Technical', description: 'Technical documentation and guides' },
+  { value: 'custom', label: 'Custom', description: 'Uncategorized documents' },
+];
 
 interface BotFormModalProps {
   isOpen: boolean;
@@ -31,6 +45,7 @@ interface BotFormModalProps {
     slug: string;
     description: string | null;
     system_prompt: string | null;
+    categories?: DocumentCategory[];
   } | null;
 }
 
@@ -43,6 +58,7 @@ export function BotFormModal({ isOpen, onClose, editBot }: BotFormModalProps) {
   const [slug, setSlug] = useState('');
   const [description, setDescription] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
+  const [categories, setCategories] = useState<DocumentCategory[]>(['shared']);
   const [slackBotToken, setSlackBotToken] = useState('');
   const [slackAppToken, setSlackAppToken] = useState('');
   const [slackSigningSecret, setSlackSigningSecret] = useState('');
@@ -61,6 +77,7 @@ export function BotFormModal({ isOpen, onClose, editBot }: BotFormModalProps) {
         setSlug(editBot.slug);
         setDescription(editBot.description ?? '');
         setSystemPrompt(editBot.system_prompt ?? '');
+        setCategories(editBot.categories ?? ['shared']);
         setSlugManuallyEdited(true);
         // Don't populate tokens for security - they're stored encrypted
         setSlackBotToken('');
@@ -71,6 +88,7 @@ export function BotFormModal({ isOpen, onClose, editBot }: BotFormModalProps) {
         setSlug('');
         setDescription('');
         setSystemPrompt('');
+        setCategories(['shared']);
         setSlackBotToken('');
         setSlackAppToken('');
         setSlackSigningSecret('');
@@ -117,6 +135,7 @@ export function BotFormModal({ isOpen, onClose, editBot }: BotFormModalProps) {
           name,
           description: description || undefined,
           system_prompt: systemPrompt || undefined,
+          categories: categories.length > 0 ? categories : undefined,
         },
       });
     } else {
@@ -125,11 +144,20 @@ export function BotFormModal({ isOpen, onClose, editBot }: BotFormModalProps) {
         slug,
         description: description || undefined,
         system_prompt: systemPrompt || undefined,
+        categories: categories.length > 0 ? categories : undefined,
         slack_bot_token: slackBotToken || undefined,
         slack_app_token: slackAppToken || undefined,
         slack_signing_secret: slackSigningSecret || undefined,
       });
     }
+  };
+
+  const toggleCategory = (category: DocumentCategory) => {
+    setCategories(prev =>
+      prev.includes(category)
+        ? prev.filter(c => c !== category)
+        : [...prev, category]
+    );
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
@@ -148,9 +176,9 @@ export function BotFormModal({ isOpen, onClose, editBot }: BotFormModalProps) {
       {/* Modal */}
       <div className="relative w-full max-w-2xl bg-card border border-border rounded-2xl shadow-2xl overflow-hidden animate-scale-in">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-border/50 bg-gradient-to-r from-amber-500/5 to-transparent">
+        <div className="flex items-center justify-between p-6 border-b border-border/50 bg-gradient-to-r from-violet-500/5 to-transparent">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-lg">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-400 to-purple-600 flex items-center justify-center shadow-lg">
               <Bot className="w-6 h-6 text-white" />
             </div>
             <div>
@@ -228,7 +256,7 @@ export function BotFormModal({ isOpen, onClose, editBot }: BotFormModalProps) {
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="A helpful bot for marketing team questions..."
-                    className="w-full min-h-[80px] pl-10 pr-4 py-2 rounded-lg border border-border/50 bg-secondary/50 focus:bg-background focus:border-amber-500/50 focus:outline-none focus:ring-2 focus:ring-amber-500/20 transition-all resize-none"
+                    className="w-full min-h-[80px] pl-10 pr-4 py-2 rounded-lg border border-border/50 bg-secondary/50 focus:bg-background focus:border-violet-500/50 focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all resize-none"
                   />
                 </div>
               </div>
@@ -242,7 +270,7 @@ export function BotFormModal({ isOpen, onClose, editBot }: BotFormModalProps) {
                     value={systemPrompt}
                     onChange={(e) => setSystemPrompt(e.target.value)}
                     placeholder="You are a helpful marketing assistant. Focus on..."
-                    className="w-full min-h-[120px] pl-10 pr-4 py-2 rounded-lg border border-border/50 bg-secondary/50 focus:bg-background focus:border-amber-500/50 focus:outline-none focus:ring-2 focus:ring-amber-500/20 transition-all resize-none font-mono text-sm"
+                    className="w-full min-h-[120px] pl-10 pr-4 py-2 rounded-lg border border-border/50 bg-secondary/50 focus:bg-background focus:border-violet-500/50 focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all resize-none font-mono text-sm"
                   />
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -251,13 +279,70 @@ export function BotFormModal({ isOpen, onClose, editBot }: BotFormModalProps) {
               </div>
             </div>
 
+            {/* Document Categories Section */}
+            <div className="space-y-4 pt-4 border-t border-border/50">
+              <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                <FolderOpen className="w-4 h-4" />
+                <span>Document Access</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Select which document categories this bot can search. At least one category is recommended.
+              </p>
+
+              <div className="grid gap-2 md:grid-cols-2">
+                {CATEGORY_OPTIONS.map((option) => {
+                  const isSelected = categories.includes(option.value);
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => toggleCategory(option.value)}
+                      className={cn(
+                        'flex items-start gap-3 p-3 rounded-lg border text-left transition-all',
+                        isSelected
+                          ? 'border-violet-500/50 bg-violet-500/10 ring-1 ring-violet-500/30'
+                          : 'border-border/50 bg-secondary/30 hover:bg-secondary/50 hover:border-border'
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          'w-5 h-5 rounded flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors',
+                          isSelected
+                            ? 'bg-violet-500 text-white'
+                            : 'bg-secondary border border-border'
+                        )}
+                      >
+                        {isSelected && <Check className="w-3 h-3" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={cn(
+                          'text-sm font-medium',
+                          isSelected ? 'text-violet-700 dark:text-violet-300' : ''
+                        )}>
+                          {option.label}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {option.description}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              {categories.length === 0 && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  No categories selected. Bot will have limited document access.
+                </p>
+              )}
+            </div>
+
             {/* Slack Credentials Section - Only for new bots */}
             {!isEditing && (
               <div className="space-y-4 pt-4 border-t border-border/50">
                 <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                   <Key className="w-4 h-4" />
                   <span>Slack Credentials</span>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400">
                     Optional
                   </span>
                 </div>
@@ -354,7 +439,7 @@ export function BotFormModal({ isOpen, onClose, editBot }: BotFormModalProps) {
             <Button
               type="submit"
               disabled={isPending || !name || !slug}
-              className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white"
+              className="bg-gradient-to-r from-violet-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white"
             >
               {isPending ? (
                 <>

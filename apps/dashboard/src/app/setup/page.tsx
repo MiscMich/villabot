@@ -187,7 +187,7 @@ function PasswordInput({
         className={cn(
           'w-full px-4 py-3 pr-20 rounded-xl border border-border/50 bg-secondary/50',
           'font-mono text-sm placeholder:text-muted-foreground/60',
-          'focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50',
+          'focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50',
           'transition-all duration-200',
           className
         )}
@@ -224,7 +224,7 @@ function TestConnectionButton({
         'flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm',
         'transition-all duration-200',
         status === 'idle' && 'bg-secondary hover:bg-secondary/80 text-foreground',
-        status === 'testing' && 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+        status === 'testing' && 'bg-violet-500/10 text-purple-600 dark:text-violet-400',
         status === 'success' && 'bg-success/10 text-success',
         status === 'error' && 'bg-destructive/10 text-destructive'
       )}
@@ -291,10 +291,10 @@ function FeatureCard({
   description: string;
 }) {
   return (
-    <div className="group p-6 rounded-2xl bg-secondary/30 border border-border/50 hover:border-amber-500/30 hover:bg-secondary/50 transition-all duration-300">
+    <div className="group p-6 rounded-2xl bg-secondary/30 border border-border/50 hover:border-violet-500/30 hover:bg-secondary/50 transition-all duration-300">
       <div className="flex items-start gap-4">
-        <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400/20 to-amber-600/20 flex items-center justify-center group-hover:from-amber-400/30 group-hover:to-amber-600/30 transition-colors">
-          <Icon className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+        <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-violet-400/20 to-purple-600/20 flex items-center justify-center group-hover:from-violet-400/30 group-hover:to-purple-600/30 transition-colors">
+          <Icon className="w-6 h-6 text-purple-600 dark:text-violet-400" />
         </div>
         <div>
           <h3 className="font-semibold text-foreground mb-1">{title}</h3>
@@ -318,7 +318,7 @@ function WelcomeStep({ onNext }: { onNext: () => void }) {
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
           transition={{ type: 'spring', stiffness: 200, damping: 15 }}
-          className="inline-flex items-center justify-center w-24 h-24 rounded-3xl bg-gradient-to-br from-amber-400 to-amber-600 shadow-glow mx-auto"
+          className="inline-flex items-center justify-center w-24 h-24 rounded-3xl bg-gradient-to-br from-violet-400 to-purple-600 shadow-glow mx-auto"
         >
           <Sparkles className="w-12 h-12 text-white" />
         </motion.div>
@@ -376,7 +376,7 @@ function WelcomeStep({ onNext }: { onNext: () => void }) {
         transition={{ delay: 0.5 }}
         className="flex items-center justify-center gap-2 text-sm text-muted-foreground"
       >
-        <Zap className="w-4 h-4 text-amber-500" />
+        <Zap className="w-4 h-4 text-violet-500" />
         <span>Setup takes about 5-10 minutes</span>
       </motion.div>
 
@@ -389,7 +389,7 @@ function WelcomeStep({ onNext }: { onNext: () => void }) {
       >
         <button
           onClick={onNext}
-          className="group flex items-center gap-3 px-8 py-4 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 text-white font-semibold text-lg shadow-glow hover:shadow-glow-lg transition-all duration-300 hover:scale-[1.02]"
+          className="group flex items-center gap-3 px-8 py-4 rounded-2xl bg-gradient-to-r from-violet-500 to-purple-600 text-white font-semibold text-lg shadow-glow hover:shadow-glow-lg transition-all duration-300 hover:scale-[1.02]"
         >
           Get Started
           <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -412,12 +412,12 @@ function WorkspaceStep({
 
   return (
     <div className="space-y-6">
-      <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+      <div className="p-4 bg-violet-500/10 border border-violet-500/20 rounded-xl">
         <div className="flex items-start gap-3">
-          <Info className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+          <Info className="w-5 h-5 text-purple-600 dark:text-violet-400 flex-shrink-0 mt-0.5" />
           <div className="space-y-1 text-sm">
-            <p className="font-medium text-amber-700 dark:text-amber-300">SaaS Platform</p>
-            <p className="text-amber-600/80 dark:text-amber-400/80">
+            <p className="font-medium text-purple-700 dark:text-purple-300">SaaS Platform</p>
+            <p className="text-purple-600/80 dark:text-violet-400/80">
               Cluebase AI is a fully managed platform. Infrastructure, AI, and database are provided and managed for you.
             </p>
           </div>
@@ -436,7 +436,7 @@ function WorkspaceStep({
               onUpdate({ name: e.target.value, slug: generateSlug(e.target.value) });
             }}
             placeholder="Acme Inc"
-            className="w-full px-4 py-3 rounded-xl border border-border/50 bg-secondary/50 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all"
+            className="w-full px-4 py-3 rounded-xl border border-border/50 bg-secondary/50 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 transition-all"
           />
           <p className="text-xs text-muted-foreground">
             The name of your organization or team
@@ -452,7 +452,7 @@ function WorkspaceStep({
             value={config.slug}
             onChange={(e) => onUpdate({ slug: e.target.value })}
             placeholder="acme-inc"
-            className="w-full px-4 py-3 rounded-xl border border-border/50 bg-secondary/50 font-mono text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all"
+            className="w-full px-4 py-3 rounded-xl border border-border/50 bg-secondary/50 font-mono text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 transition-all"
           />
           <p className="text-xs text-muted-foreground">
             URL-friendly identifier (auto-generated from name)
@@ -497,6 +497,19 @@ function SlackStep({
 
   return (
     <div className="space-y-6">
+      {/* Workspace-specific messaging */}
+      <div className="p-4 bg-violet-500/10 border border-violet-500/20 rounded-xl">
+        <div className="flex items-start gap-3">
+          <Shield className="w-5 h-5 text-purple-600 dark:text-violet-400 flex-shrink-0 mt-0.5" />
+          <div className="space-y-1 text-sm">
+            <p className="font-medium text-purple-700 dark:text-purple-300">Your Own Slack App</p>
+            <p className="text-purple-600/80 dark:text-violet-400/80">
+              Each workspace creates their own Slack app. Your bot credentials are private to your workspace and give you full control over your Slack integration.
+            </p>
+          </div>
+        </div>
+      </div>
+
       <button
         onClick={() => setShowHelp(true)}
         className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -563,7 +576,7 @@ function SlackStep({
             <h4 className="font-semibold text-foreground">1. Create a New App</h4>
             <p className="text-muted-foreground">
               Go to{' '}
-              <a href="https://api.slack.com/apps" target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:underline inline-flex items-center gap-1">
+              <a href="https://api.slack.com/apps" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline inline-flex items-center gap-1">
                 api.slack.com/apps <ExternalLink className="w-3 h-3" />
               </a>{' '}
               and click &quot;Create New App&quot; → &quot;From scratch&quot;.
@@ -680,16 +693,21 @@ function GoogleDriveStep({
         <div className="space-y-4">
           <div className="flex items-center gap-3 p-4 bg-success/10 border border-success/20 rounded-xl">
             <CheckCircle2 className="w-5 h-5 text-success" />
-            <span className="text-success font-medium">Google Drive connected!</span>
+            <div>
+              <p className="text-success font-medium">Google Drive connected!</p>
+              <p className="text-sm text-muted-foreground">
+                Your Google Drive is now linked to this workspace.
+              </p>
+            </div>
           </div>
 
-          <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+          <div className="p-4 bg-violet-500/10 border border-violet-500/20 rounded-xl">
             <div className="flex items-start gap-3">
-              <Info className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+              <Shield className="w-5 h-5 text-purple-600 dark:text-violet-400 flex-shrink-0 mt-0.5" />
               <div className="space-y-1 text-sm">
-                <p className="font-medium text-amber-700 dark:text-amber-300">Folder Selection</p>
-                <p className="text-amber-600/80 dark:text-amber-400/80">
-                  You&apos;ll select specific folders in the next step.
+                <p className="font-medium text-purple-700 dark:text-purple-300">Private to Your Workspace</p>
+                <p className="text-purple-600/80 dark:text-violet-400/80">
+                  Your Google Drive connection and documents are completely private. Other Cluebase customers cannot access your files.
                 </p>
               </div>
             </div>
@@ -698,7 +716,7 @@ function GoogleDriveStep({
       )}
 
       <p className="text-xs text-muted-foreground text-center">
-        You can add more folders and configure sync settings later from the dashboard.
+        Documents synced from Google Drive will be organized by category and accessible to your bots.
       </p>
     </div>
   );
@@ -715,20 +733,29 @@ function KnowledgeSourcesStep({
 }) {
   return (
     <div className="space-y-6">
-      {/* Google Drive Folders */}
+      {/* Google Drive Status */}
       {driveConfig.authenticated && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-foreground">Google Drive Folders</h3>
-            <button className="text-sm text-amber-600 dark:text-amber-400 hover:underline">
-              Select Folders
-            </button>
+          <div className="flex items-center gap-3 p-4 bg-success/10 border border-success/20 rounded-xl">
+            <CheckCircle2 className="w-5 h-5 text-success" />
+            <div>
+              <p className="text-success font-medium">Google Drive Connected</p>
+              <p className="text-sm text-muted-foreground">
+                Your workspace can now sync documents from Google Drive.
+              </p>
+            </div>
           </div>
 
-          <div className="p-4 bg-secondary/30 border border-border/50 rounded-xl">
-            <p className="text-sm text-muted-foreground">
-              No folders selected yet. Click &quot;Select Folders&quot; to choose which Drive folders to sync.
-            </p>
+          <div className="p-4 bg-violet-500/10 border border-violet-500/20 rounded-xl">
+            <div className="flex items-start gap-3">
+              <Info className="w-5 h-5 text-purple-600 dark:text-violet-400 flex-shrink-0 mt-0.5" />
+              <div className="space-y-1 text-sm">
+                <p className="font-medium text-purple-700 dark:text-purple-300">Per-Bot Document Access</p>
+                <p className="text-purple-600/80 dark:text-violet-400/80">
+                  Each bot can be configured to access specific document categories. You&apos;ll set this up when creating bots in the Bots dashboard.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -741,7 +768,7 @@ function KnowledgeSourcesStep({
             id="websiteEnabled"
             checked={config.websiteEnabled}
             onChange={(e) => onUpdate({ websiteEnabled: e.target.checked })}
-            className="w-4 h-4 rounded border-border text-amber-500 focus:ring-amber-500 focus:ring-offset-0"
+            className="w-4 h-4 rounded border-border text-violet-500 focus:ring-violet-500 focus:ring-offset-0"
           />
           <label htmlFor="websiteEnabled" className="text-sm font-medium text-foreground cursor-pointer">
             Add Website Content
@@ -759,7 +786,7 @@ function KnowledgeSourcesStep({
                 value={config.websiteUrl}
                 onChange={(e) => onUpdate({ websiteUrl: e.target.value })}
                 placeholder="https://yourcompany.com"
-                className="w-full px-4 py-3 rounded-xl border border-border/50 bg-secondary/50 font-mono text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all"
+                className="w-full px-4 py-3 rounded-xl border border-border/50 bg-secondary/50 font-mono text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 transition-all"
               />
               <p className="text-xs text-muted-foreground">
                 Cluebase AI will crawl and index your website content
@@ -778,7 +805,7 @@ function KnowledgeSourcesStep({
                   step={50}
                   value={config.maxPages}
                   onChange={(e) => onUpdate({ maxPages: parseInt(e.target.value) })}
-                  className="flex-1 accent-amber-500"
+                  className="flex-1 accent-violet-500"
                 />
                 <span className="w-16 text-right font-mono text-sm">{config.maxPages}</span>
               </div>
@@ -790,12 +817,12 @@ function KnowledgeSourcesStep({
         )}
       </div>
 
-      <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+      <div className="p-4 bg-violet-500/10 border border-violet-500/20 rounded-xl">
         <div className="flex items-start gap-3">
-          <Info className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+          <Info className="w-5 h-5 text-purple-600 dark:text-violet-400 flex-shrink-0 mt-0.5" />
           <div className="space-y-1 text-sm">
-            <p className="font-medium text-amber-700 dark:text-amber-300">Optional Step</p>
-            <p className="text-amber-600/80 dark:text-amber-400/80">
+            <p className="font-medium text-purple-700 dark:text-purple-300">Optional Step</p>
+            <p className="text-purple-600/80 dark:text-violet-400/80">
               You can skip knowledge source selection and add them later from the dashboard.
             </p>
           </div>
@@ -830,7 +857,7 @@ function FirstBotStep({
               onUpdate({ name: e.target.value, slug: generateSlug(e.target.value) });
             }}
             placeholder="Cluebase"
-            className="w-full px-4 py-3 rounded-xl border border-border/50 bg-secondary/50 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all"
+            className="w-full px-4 py-3 rounded-xl border border-border/50 bg-secondary/50 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 transition-all"
           />
         </div>
 
@@ -843,7 +870,7 @@ function FirstBotStep({
             value={config.slug}
             onChange={(e) => onUpdate({ slug: e.target.value })}
             placeholder="cluebase"
-            className="w-full px-4 py-3 rounded-xl border border-border/50 bg-secondary/50 font-mono text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all"
+            className="w-full px-4 py-3 rounded-xl border border-border/50 bg-secondary/50 font-mono text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 transition-all"
           />
         </div>
       </div>
@@ -857,7 +884,7 @@ function FirstBotStep({
           value={config.personality}
           onChange={(e) => onUpdate({ personality: e.target.value })}
           placeholder="Friendly and professional"
-          className="w-full px-4 py-3 rounded-xl border border-border/50 bg-secondary/50 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all"
+          className="w-full px-4 py-3 rounded-xl border border-border/50 bg-secondary/50 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 transition-all"
         />
         <p className="text-xs text-muted-foreground">
           How should the bot communicate? e.g., &quot;Casual and helpful&quot;, &quot;Formal and precise&quot;
@@ -873,7 +900,7 @@ function FirstBotStep({
           onChange={(e) => onUpdate({ instructions: e.target.value })}
           placeholder="You are a helpful AI assistant for this organization. Help team members find information about company procedures, policies, and operations. Always be friendly and cite your sources."
           rows={5}
-          className="w-full px-4 py-3 rounded-xl border border-border/50 bg-secondary/50 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all resize-none"
+          className="w-full px-4 py-3 rounded-xl border border-border/50 bg-secondary/50 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 transition-all resize-none"
         />
         <p className="text-xs text-muted-foreground">
           Custom instructions that define how the bot should behave and respond
@@ -949,7 +976,7 @@ function CompleteStep({
       <div className="p-6 rounded-2xl bg-secondary/30 border border-border/50">
         <h3 className="font-semibold mb-4">Your Bot</h3>
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-glow">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-400 to-purple-600 flex items-center justify-center shadow-glow">
             <Bot className="w-7 h-7 text-white" />
           </div>
           <div>
@@ -976,7 +1003,7 @@ function CompleteStep({
       {/* Launch Button */}
       <div className="text-center space-y-4">
         {!allPassed && (
-          <p className="text-sm text-amber-600 dark:text-amber-400">
+          <p className="text-sm text-purple-600 dark:text-violet-400">
             Complete all required configurations before launching.
           </p>
         )}
@@ -992,7 +1019,7 @@ function CompleteStep({
           className={cn(
             'inline-flex items-center gap-3 px-10 py-4 rounded-2xl font-semibold text-lg transition-all duration-300',
             allPassed
-              ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-glow hover:shadow-glow-lg hover:scale-[1.02]'
+              ? 'bg-gradient-to-r from-violet-500 to-purple-600 text-white shadow-glow hover:shadow-glow-lg hover:scale-[1.02]'
               : 'bg-secondary text-muted-foreground cursor-not-allowed'
           )}
         >
@@ -1191,7 +1218,7 @@ export default function SetupWizard() {
                     disabled={index > currentStep}
                     className={cn(
                       'flex items-center gap-2 px-3 py-2 rounded-xl transition-all duration-200',
-                      isActive && 'bg-amber-500/10',
+                      isActive && 'bg-violet-500/10',
                       index > currentStep && 'opacity-40 cursor-not-allowed',
                       index < currentStep && 'cursor-pointer hover:bg-secondary'
                     )}
@@ -1199,7 +1226,7 @@ export default function SetupWizard() {
                     <div
                       className={cn(
                         'w-8 h-8 rounded-lg flex items-center justify-center transition-all',
-                        isActive && 'bg-gradient-to-br from-amber-400 to-amber-600 text-white shadow-glow',
+                        isActive && 'bg-gradient-to-br from-violet-400 to-purple-600 text-white shadow-glow',
                         isCompleted && 'bg-success text-white',
                         !isActive && !isCompleted && 'bg-secondary text-muted-foreground'
                       )}

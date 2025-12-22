@@ -66,6 +66,51 @@ A multi-tenant SaaS platform for AI-powered knowledge management that:
 
 ---
 
+## Multi-Tenant Architecture
+
+Cluebase AI is a multi-tenant SaaS platform where each **workspace** is completely isolated:
+
+### Workspace Isolation Model
+
+| Resource | Isolation Level | Description |
+|----------|-----------------|-------------|
+| **Documents** | Per-workspace | Each workspace has its own knowledge base |
+| **Slack Bots** | Per-workspace | Each workspace creates their own Slack app and provides credentials |
+| **Google Drive** | Per-workspace | Each workspace authenticates their own Google Drive via OAuth |
+| **Team Members** | Per-workspace | Users are invited to specific workspaces with roles |
+| **Usage Limits** | Per-workspace | Subscription tier determines document limits, queries/month |
+
+### Integration Authentication
+
+**Slack Bot Setup (Per-Workspace):**
+- Each workspace creates their own Slack app in the Slack API console
+- Users provide: Bot Token (xoxb-), App-Level Token (xapp-), Signing Secret
+- Each bot connects to one Slack workspace only
+- Multiple bots per workspace supported for different teams/use cases
+
+**Google Drive Connection (Platform-Managed OAuth):**
+- Platform owns the Google OAuth app (GOOGLE_CLIENT_ID/SECRET)
+- Users click "Connect Google Drive" → OAuth popup → authorize
+- No API credentials needed from users - fully managed
+- Tokens stored per-workspace for isolation
+
+### Data Security
+
+- **Row Level Security (RLS)**: All database tables enforce workspace isolation
+- **API Authentication**: JWT tokens include workspace context
+- **Cross-Workspace Access**: Impossible - RLS policies prevent data leakage
+
+### User Roles
+
+| Role | Scope | Capabilities |
+|------|-------|--------------|
+| **Platform Admin** | Entire platform | Manage all workspaces, view stats, create internal workspaces |
+| **Workspace Owner** | Single workspace | Full control of workspace settings, billing, team |
+| **Workspace Admin** | Single workspace | Manage bots, documents, team members |
+| **Workspace Member** | Single workspace | Use bots, view documents |
+
+---
+
 ## Core Components
 
 ### 1. Document Ingestion System

@@ -1,12 +1,24 @@
 # Cluebase AI
 
-Multi-tenant SaaS platform for deploying AI-powered Slack bots with RAG (Retrieval Augmented Generation). Each workspace can configure their own knowledge base from Google Drive documents and website content.
+Multi-tenant SaaS platform for deploying AI-powered Slack bots with RAG (Retrieval Augmented Generation). Each workspace is completely isolated with their own Slack bot, Google Drive connection, and knowledge base.
+
+## How It Works
+
+**For each workspace:**
+1. **Create a Slack App**: Users create their own Slack app in the Slack developer console and provide Bot Token + App Token
+2. **Connect Google Drive**: One-click OAuth authentication (platform-managed, no API credentials needed from users)
+3. **Build Knowledge Base**: Sync documents from Google Drive, scrape website content, or upload files
+4. **Deploy AI Bot**: The Slack bot answers team questions using RAG-powered search across the workspace's knowledge base
+
+> **Data Isolation**: Each workspace's data (documents, conversations, learned facts) is completely isolated using Row Level Security (RLS). Workspaces cannot access each other's data.
 
 ## Features
 
-- **Multi-Tenant Architecture**: Isolated workspaces with separate knowledge bases
+- **Multi-Tenant Architecture**: Complete workspace isolation with RLS-protected data
 - **RAG-Powered Responses**: Hybrid search (vector + BM25) for accurate answers
-- **Google Drive Integration**: OAuth-based sync with automatic document chunking
+- **Google Drive Integration**: Platform-managed OAuth (users just click "Connect Google Drive")
+- **Per-Workspace Slack Bots**: Each workspace creates their own Slack app with unique credentials
+- **Multi-Bot Support**: Create multiple bots per workspace, each with access to specific document categories
 - **Website Scraping**: Configurable crawling per workspace
 - **Self-Learning**: User corrections stored as learned facts
 - **Admin Dashboard**: Full platform management with usage analytics
@@ -60,13 +72,18 @@ cluebase-ai/
 
 ### Prerequisites
 
+**Platform Infrastructure (one-time setup by platform operator):**
 - Node.js 20+
 - pnpm 8+
 - Docker & Docker Compose (for deployment)
 - Supabase account (cloud or self-hosted via Coolify)
-- Google Cloud project (Drive API + OAuth)
+- Google Cloud project with OAuth configured (Drive API enabled)
 - Gemini API key
-- Slack App (for each workspace)
+- Stripe account for billing
+
+**Per-Workspace (each customer provides):**
+- Slack App created in Slack developer console (Bot Token + App Token)
+- Google account to connect via OAuth (no API credentials needed)
 
 ### Local Development
 
@@ -104,7 +121,9 @@ See [docs/COOLIFY_DEPLOYMENT.md](./docs/COOLIFY_DEPLOYMENT.md) for full producti
 | Document | Description |
 |----------|-------------|
 | [SETUP.md](./SETUP.md) | Step-by-step setup guide |
-| [docs/COOLIFY_DEPLOYMENT.md](./docs/COOLIFY_DEPLOYMENT.md) | Coolify deployment guide |
+| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Multi-tenant architecture and workspace isolation |
+| [docs/COOLIFY_DEPLOYMENT.md](./docs/COOLIFY_DEPLOYMENT.md) | Coolify deployment guide (recommended) |
+| [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) | Manual deployment guide (alternative) |
 | [docs/API.md](./docs/API.md) | API endpoint reference |
 | [docs/DATABASE.md](./docs/DATABASE.md) | Database schema reference |
 | [docs/ADMIN.md](./docs/ADMIN.md) | Platform admin guide |
@@ -161,23 +180,27 @@ pnpm build            # Build all packages
 
 See [.env.example](./.env.example) for all required configuration:
 
-**Required:**
-- `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` - Database
+**Platform-Level (set by platform operator in `.env`):**
+- `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` - Database connection
 - `GEMINI_API_KEY` - AI embeddings and generation
-- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` - OAuth for Drive
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` - Platform's OAuth app for Drive
+- `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` - Billing integration
 
-**Per-Workspace (stored in database):**
-- Slack tokens (Bot Token, App Token)
-- Google Drive folder IDs
+**Per-Workspace (stored in database, provided by customers):**
+- Slack Bot Token (`xoxb-...`) - From customer's Slack app
+- Slack App Token (`xapp-...`) - From customer's Slack app
+- Google Drive OAuth tokens - Stored after customer clicks "Connect Google Drive"
 - Website URLs for scraping
+- Document category preferences per bot
 
 ## Security
 
-- Row Level Security (RLS) on all tables
-- Workspace isolation for multi-tenancy
-- JWT-based authentication
-- API rate limiting (tier-based)
-- No credentials in git (use `.env` files)
+- **Complete Workspace Isolation**: Row Level Security (RLS) on all database tables
+- **Data Separation**: Each workspace's documents, conversations, and learned facts are isolated
+- **Per-Workspace Credentials**: Slack tokens and Google Drive tokens stored per-workspace
+- **JWT Authentication**: Secure token-based authentication via Supabase Auth
+- **API Rate Limiting**: Tier-based limits to prevent abuse
+- **No Credentials in Git**: All secrets via environment variables
 
 ## Live URLs
 

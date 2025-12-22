@@ -54,7 +54,7 @@ export default function AdminWorkspacesPage() {
       case 'business':
         return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400';
       case 'pro':
-        return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
+        return 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400';
       default:
         return 'bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-400';
     }
@@ -143,7 +143,7 @@ export default function AdminWorkspacesPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-slate-800/50 border border-slate-700 rounded-lg opacity-0 animate-fade-in-up" style={{ animationDelay: '150ms' }}>
+      <div className="glass-card rounded-lg opacity-0 animate-fade-in-up" style={{ animationDelay: '150ms' }}>
         {isLoading ? (
           <div className="flex items-center justify-center p-12">
             <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
@@ -187,7 +187,7 @@ export default function AdminWorkspacesPage() {
                             'w-10 h-10 rounded-lg flex items-center justify-center',
                             workspace.isInternal
                               ? 'bg-purple-500/20 text-purple-400'
-                              : 'bg-amber-500/20 text-amber-400'
+                              : 'bg-violet-500/20 text-violet-400'
                           )}
                         >
                           {workspace.isInternal ? (

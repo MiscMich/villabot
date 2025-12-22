@@ -2,11 +2,72 @@
 
 Guide for platform administrators managing the Cluebase AI SaaS platform.
 
+## Admin vs Regular User Login
+
+Cluebase uses a **single login system** for both regular users and platform administrators.
+
+### How It Works
+
+| Aspect | Regular User | Platform Admin |
+|--------|--------------|----------------|
+| **Login URL** | `/auth/login` | `/auth/login` (same) |
+| **Authentication** | Email + Password (Supabase Auth) | Same |
+| **After Login** | Redirected to workspace dashboard | Redirected to workspace dashboard |
+| **Admin Access** | No `/admin` menu | Shows `/admin` in navigation |
+
+**The difference is a database flag**, not separate credentials:
+
+```sql
+-- Check if a user is a platform admin
+SELECT is_platform_admin FROM user_profiles WHERE email = 'user@example.com';
+```
+
+### Setting Up the First Platform Admin
+
+Since admin status is flag-based, the first admin must be set manually:
+
+**Option 1: SQL (recommended for first admin)**
+```sql
+UPDATE user_profiles
+SET is_platform_admin = true
+WHERE email = 'admin@yourcompany.com';
+```
+
+**Option 2: Via an existing admin**
+Once one admin exists, they can promote others through the Admin Panel:
+1. Go to `/admin/users`
+2. Find the user
+3. Click "Make Admin"
+
+### Why Same Login?
+
+- **Security**: No separate admin login page to discover/attack
+- **Simplicity**: One account per person, not multiple credentials
+- **Audit Trail**: All actions tied to one user identity
+- **Role Separation**: Workspace admin ≠ Platform admin (different permissions)
+
+### Platform Admin vs Workspace Admin
+
+These are **two separate role systems** that can overlap:
+
+| Role | Scope | Source | Permissions |
+|------|-------|--------|-------------|
+| **Platform Admin** | Entire platform | `user_profiles.is_platform_admin` | View all workspaces, create internal workspaces, manage users |
+| **Workspace Owner** | Single workspace | `workspace_members.role = 'owner'` | Full control of their workspace, billing, delete workspace |
+| **Workspace Admin** | Single workspace | `workspace_members.role = 'admin'` | Manage team, bots, documents within workspace |
+| **Workspace Member** | Single workspace | `workspace_members.role = 'member'` | View dashboard, use bot |
+
+A user can be:
+- **Platform Admin + Workspace Owner**: Admin of platform AND owns a workspace
+- **Platform Admin only**: Manages platform but doesn't own any workspace
+- **Workspace Owner only**: Regular user who owns their workspace
+
 ## Accessing Admin Panel
 
 1. Navigate to `/admin` in the dashboard
 2. You must have `is_platform_admin = true` on your user profile
 3. Admin routes are protected by role-based access control
+4. The admin navigation only appears for platform admins
 
 ## Admin Dashboard Overview
 

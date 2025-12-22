@@ -2,6 +2,21 @@
 
 Complete guide for using the Cluebase AI dashboard.
 
+## Understanding Workspaces
+
+Cluebase AI is a multi-tenant platform. Each **workspace** is completely isolated:
+
+| Your Workspace Has | Isolation Level |
+|-------------------|-----------------|
+| Documents & Knowledge Base | Only your team can access |
+| Slack Bot(s) | Your own Slack app credentials |
+| Google Drive Connection | Your own OAuth authentication |
+| Team Members | Only people you invite |
+| Conversations & Analytics | Private to your workspace |
+| Billing & Subscription | Separate per workspace |
+
+> **Key Point**: Other Cluebase customers cannot see or access anything in your workspace. Data isolation is enforced at the database level using Row Level Security (RLS).
+
 ## Getting Started
 
 ### Creating an Account
@@ -33,31 +48,68 @@ Already completed if you created a workspace.
 
 ### Step 3: Connect Slack
 
+Each workspace creates and manages their own Slack app. This gives you full control over the bot's permissions and appearance in your Slack workspace.
+
+**Create your Slack app:**
 1. Go to [api.slack.com/apps](https://api.slack.com/apps)
-2. Create a new app for your workspace
-3. Enable Socket Mode
-4. Copy the Bot Token (`xoxb-...`)
-5. Copy the App Token (`xapp-...`)
-6. Paste into the wizard
+2. Click "Create New App" → "From scratch"
+3. Name your app (e.g., "Cluebase AI")
+4. Select YOUR Slack workspace (this app only works for your workspace)
+
+**Configure the app:**
+5. Enable **Socket Mode** (Settings → Socket Mode → Enable)
+6. Generate an App Token with `connections:write` scope
+7. Add **Bot Token Scopes** (OAuth & Permissions):
+   - `app_mentions:read` - Respond to @mentions
+   - `chat:write` - Send messages
+   - `im:history` - Read DM history
+   - `im:read` - Read DM channel info
+   - `im:write` - Start DM conversations
+8. Install the app to your workspace
+
+**Copy credentials to Cluebase:**
+9. Copy the **Bot Token** (`xoxb-...`) from OAuth & Permissions
+10. Copy the **App Token** (`xapp-...`) from Basic Information → App-Level Tokens
+11. Paste both into the setup wizard
+
+> **Note**: Your Slack app and credentials are private to your workspace. Other Cluebase customers cannot see or access your bot.
 
 ### Step 4: Connect Google Drive
 
+Google Drive integration uses secure OAuth authentication. Unlike Slack, you don't need to create any apps or configure API credentials—Cluebase handles everything.
+
+**Connect your Google Drive:**
 1. Click "Connect Google Drive"
-2. Sign in with your Google account
-3. Grant access to Google Drive
-4. OAuth tokens are saved automatically
+2. A Google sign-in popup appears
+3. Sign in with your Google account (or choose an existing account)
+4. Review the permissions request (read-only access to files)
+5. Click "Allow" to grant access
+6. You'll be redirected back to the setup wizard
+
+**What happens behind the scenes:**
+- Your OAuth tokens are stored securely in your workspace
+- Tokens are automatically refreshed when needed
+- Other workspaces cannot access your Google Drive
+- You can disconnect at any time from Settings
+
+> **Privacy**: Cluebase only has read access to your Drive files. We cannot modify, delete, or share your files. Only files in folders you explicitly select will be indexed.
 
 ### Step 5: Knowledge Sources
 
-**Google Drive Folders:**
-- Click "Add Folder"
-- Paste the folder ID from the Drive URL
-- Assign a category (SOPs, Marketing, etc.)
+Configure where your knowledge base content comes from.
+
+**Google Drive:**
+- Your connected Google Drive is ready to sync
+- Document categories (SOPs, Marketing, etc.) can be assigned during sync
+- Individual bots can be configured to access specific categories
 
 **Website Scraping:**
 - Enter your company website URL
-- Set page limit (50-500)
-- Configure scraping schedule
+- Set page limit (50-500 pages)
+- Content is categorized automatically
+- Scraping runs on the schedule you configure
+
+> **Per-Bot Access**: Each bot you create can be assigned access to specific document categories. For example, your "Sales Bot" might only access Sales and Marketing documents, while your "Internal Bot" accesses everything.
 
 ### Step 6: Create First Bot
 

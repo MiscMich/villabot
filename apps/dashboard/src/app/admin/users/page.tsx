@@ -125,7 +125,7 @@ export default function AdminUsersPage() {
 
       {/* Stats Summary */}
       <div className="grid gap-4 md:grid-cols-3 opacity-0 animate-fade-in-up" style={{ animationDelay: '150ms' }}>
-        <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4">
+        <div className="glass-card rounded-lg p-4">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-purple-500/20">
               <Users className="h-5 w-5 text-purple-400" />
@@ -136,10 +136,10 @@ export default function AdminUsersPage() {
             </div>
           </div>
         </div>
-        <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4">
+        <div className="glass-card rounded-lg p-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-amber-500/20">
-              <Crown className="h-5 w-5 text-amber-400" />
+            <div className="p-2 rounded-lg bg-violet-500/20">
+              <Crown className="h-5 w-5 text-violet-400" />
             </div>
             <div>
               <p className="text-sm text-slate-400">Platform Admins</p>
@@ -149,7 +149,7 @@ export default function AdminUsersPage() {
             </div>
           </div>
         </div>
-        <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4">
+        <div className="glass-card rounded-lg p-4">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-blue-500/20">
               <User className="h-5 w-5 text-blue-400" />
@@ -165,7 +165,7 @@ export default function AdminUsersPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-slate-800/50 border border-slate-700 rounded-lg opacity-0 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
+      <div className="glass-card rounded-lg opacity-0 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
         {isLoading ? (
           <div className="flex items-center justify-center p-12">
             <Loader2 className="h-8 w-8 animate-spin text-purple-500" />

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { BotFormModal } from '@/components/bot-form-modal';
 import { useToast } from '@/components/ui/use-toast';
+import { GlassCardStatic } from '@/components/design-system/glass-card';
 import {
   Bot,
   Plus,
@@ -131,7 +132,7 @@ export default function BotsPage() {
       <div className="flex items-start justify-between opacity-0 animate-fade-in">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <Bot className="w-8 h-8 text-amber-500" />
+            <Bot className="w-8 h-8 text-violet-500" />
             <h1 className="text-4xl font-display font-bold">Bots</h1>
           </div>
           <p className="text-lg text-muted-foreground">
@@ -143,7 +144,7 @@ export default function BotsPage() {
             setEditingBot(null);
             setShowFormModal(true);
           }}
-          className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white shadow-lg"
+          className="bg-gradient-to-r from-violet-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white shadow-lg"
         >
           <Plus className="h-4 w-4 mr-2" />
           New Bot
@@ -152,19 +153,19 @@ export default function BotsPage() {
 
       {/* Stats Overview */}
       <div className="grid gap-6 md:grid-cols-3">
-        <div className="premium-card p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
+        <div className="glass-card p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-muted-foreground">Total Bots</p>
               <p className="text-3xl font-display font-bold">{botsData?.total ?? 0}</p>
             </div>
-            <div className="p-3 rounded-xl bg-gradient-to-br from-amber-400/20 to-amber-600/20">
-              <Bot className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+            <div className="p-3 rounded-xl bg-gradient-to-br from-violet-400/20 to-purple-600/20">
+              <Bot className="h-6 w-6 text-purple-600 dark:text-violet-400" />
             </div>
           </div>
         </div>
 
-        <div className="premium-card p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '150ms' }}>
+        <div className="glass-card p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '150ms' }}>
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-muted-foreground">Active</p>
@@ -178,7 +179,7 @@ export default function BotsPage() {
           </div>
         </div>
 
-        <div className="premium-card p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
+        <div className="glass-card p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-muted-foreground">Inactive</p>
@@ -202,7 +203,7 @@ export default function BotsPage() {
             placeholder="Search bots..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 rounded-lg border border-border/50 bg-secondary/50 focus:bg-background focus:border-amber-500/50 focus:outline-none focus:ring-2 focus:ring-amber-500/20 transition-all"
+            className="w-full pl-10 pr-4 py-2 rounded-lg border border-border/50 bg-secondary/50 focus:bg-background focus:border-violet-500/50 focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all"
           />
         </div>
       </div>
@@ -210,7 +211,7 @@ export default function BotsPage() {
       {/* Bots Grid */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {filteredBots?.length === 0 ? (
-          <div className="col-span-full flex flex-col items-center justify-center py-16 premium-card">
+          <div className="col-span-full flex flex-col items-center justify-center py-16 glass-card">
             <div className="p-4 rounded-full bg-muted mb-4">
               <Bot className="h-8 w-8 text-muted-foreground" />
             </div>
@@ -223,7 +224,7 @@ export default function BotsPage() {
           filteredBots?.map((bot, index) => (
             <div
               key={bot.id}
-              className="premium-card p-6 group opacity-0 animate-fade-in-up hover:border-amber-500/30 transition-all"
+              className="glass-card p-6 group opacity-0 animate-fade-in-up hover:border-violet-500/30 transition-all"
               style={{ animationDelay: `${300 + index * 50}ms` }}
             >
               <div className="flex items-start justify-between mb-4">
@@ -231,7 +232,7 @@ export default function BotsPage() {
                   <div className={cn(
                     'w-12 h-12 rounded-xl flex items-center justify-center',
                     bot.status === 'active'
-                      ? 'bg-gradient-to-br from-amber-400 to-amber-600 shadow-glow'
+                      ? 'bg-gradient-to-br from-violet-400 to-purple-600 shadow-glow'
                       : 'bg-secondary'
                   )}>
                     <Bot className={cn(
@@ -243,7 +244,7 @@ export default function BotsPage() {
                     <div className="flex items-center gap-2">
                       <h3 className="font-display font-semibold">{bot.name}</h3>
                       {bot.is_default && (
-                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-violet-100 text-purple-700 dark:bg-violet-900/30 dark:text-violet-400">
                           Default
                         </span>
                       )}
@@ -255,7 +256,7 @@ export default function BotsPage() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 hover:text-amber-600"
+                    className="h-8 w-8 hover:text-purple-600"
                     onClick={() => {
                       setEditingBot(bot);
                       setShowFormModal(true);

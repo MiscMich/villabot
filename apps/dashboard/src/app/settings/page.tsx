@@ -169,7 +169,7 @@ export default function SettingsPage() {
       {/* Header */}
       <div className="opacity-0 animate-fade-in">
         <div className="flex items-center gap-3 mb-2">
-          <Settings className="w-8 h-8 text-amber-500" />
+          <Settings className="w-8 h-8 text-violet-500" />
           <h1 className="text-4xl font-display font-bold">Settings</h1>
         </div>
         <p className="text-lg text-muted-foreground">
@@ -199,11 +199,11 @@ export default function SettingsPage() {
 
         {/* General Settings */}
         <TabsContent value="general" className="mt-6">
-          <div className="premium-card">
+          <div className="glass-card">
             <div className="p-6 border-b border-border/50">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-gradient-subtle">
-                  <Sparkles className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                  <Sparkles className="h-5 w-5 text-violet-600 dark:text-violet-400" />
                 </div>
                 <div>
                   <h2 className="font-display text-xl font-semibold">General Settings</h2>
@@ -218,7 +218,7 @@ export default function SettingsPage() {
                   id="botName"
                   value={generalSettings.botName}
                   onChange={(e) => setGeneralSettings({ ...generalSettings, botName: e.target.value })}
-                  className="border-border/50 focus:border-amber-500/50 focus:ring-amber-500/20"
+                  className="border-border/50 focus:border-violet-500/50 focus:ring-violet-500/20"
                 />
                 <p className="text-sm text-muted-foreground">
                   The name your bot will use when responding
@@ -230,7 +230,7 @@ export default function SettingsPage() {
                   id="timezone"
                   value={generalSettings.timezone}
                   onChange={(e) => setGeneralSettings({ ...generalSettings, timezone: e.target.value })}
-                  className="border-border/50 focus:border-amber-500/50 focus:ring-amber-500/20"
+                  className="border-border/50 focus:border-violet-500/50 focus:ring-violet-500/20"
                 />
                 <p className="text-sm text-muted-foreground">
                   Used for scheduling and timestamps
@@ -239,7 +239,7 @@ export default function SettingsPage() {
               <Button
                 onClick={handleSaveGeneral}
                 disabled={saving}
-                className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white"
+                className="bg-gradient-to-r from-violet-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white"
               >
                 <Save className="h-4 w-4 mr-2" />
                 {saving ? 'Saving...' : 'Save Changes'}
@@ -250,7 +250,7 @@ export default function SettingsPage() {
 
         {/* AI Settings */}
         <TabsContent value="ai" className="mt-6">
-          <div className="premium-card">
+          <div className="glass-card">
             <div className="p-6 border-b border-border/50">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500/20 to-indigo-500/20">
@@ -269,7 +269,7 @@ export default function SettingsPage() {
                   id="model"
                   value={aiSettings.model}
                   onChange={(e) => setAiSettings({ ...aiSettings, model: e.target.value })}
-                  className="border-border/50 focus:border-amber-500/50 focus:ring-amber-500/20"
+                  className="border-border/50 focus:border-violet-500/50 focus:ring-violet-500/20"
                 />
                 <p className="text-sm text-muted-foreground">
                   Gemini model to use for responses
@@ -288,7 +288,7 @@ export default function SettingsPage() {
                   step="0.1"
                   value={aiSettings.temperature}
                   onChange={(e) => setAiSettings({ ...aiSettings, temperature: parseFloat(e.target.value) })}
-                  className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer accent-amber-500"
+                  className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer accent-violet-500"
                 />
                 <div className="flex justify-between text-xs text-muted-foreground">
                   <span>More focused</span>
@@ -302,7 +302,7 @@ export default function SettingsPage() {
                   type="number"
                   value={aiSettings.maxResponseLength}
                   onChange={(e) => setAiSettings({ ...aiSettings, maxResponseLength: parseInt(e.target.value) })}
-                  className="border-border/50 focus:border-amber-500/50 focus:ring-amber-500/20"
+                  className="border-border/50 focus:border-violet-500/50 focus:ring-violet-500/20"
                 />
                 <p className="text-sm text-muted-foreground">
                   Maximum characters in bot responses
@@ -311,7 +311,7 @@ export default function SettingsPage() {
               <Button
                 onClick={handleSaveAI}
                 disabled={saving}
-                className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white"
+                className="bg-gradient-to-r from-violet-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white"
               >
                 <Save className="h-4 w-4 mr-2" />
                 {saving ? 'Saving...' : 'Save Changes'}
@@ -323,7 +323,7 @@ export default function SettingsPage() {
         {/* Integrations */}
         <TabsContent value="integrations" className="mt-6 space-y-6">
           {/* Google Drive */}
-          <div className="premium-card">
+          <div className="glass-card">
             <div className="p-6 border-b border-border/50">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -387,7 +387,7 @@ export default function SettingsPage() {
           </div>
 
           {/* Slack Status */}
-          <div className="premium-card">
+          <div className="glass-card">
             <div className="p-6 border-b border-border/50">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-500/20">
@@ -412,7 +412,7 @@ export default function SettingsPage() {
 
         {/* Sync Settings */}
         <TabsContent value="sync" className="mt-6">
-          <div className="premium-card">
+          <div className="glass-card">
             <div className="p-6 border-b border-border/50">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-gradient-to-br from-emerald-500/20 to-teal-500/20">
@@ -432,7 +432,7 @@ export default function SettingsPage() {
                   type="number"
                   value={syncSettings.drivePollIntervalMs / 60000}
                   onChange={(e) => setSyncSettings({ ...syncSettings, drivePollIntervalMs: parseInt(e.target.value) * 60000 })}
-                  className="border-border/50 focus:border-amber-500/50 focus:ring-amber-500/20"
+                  className="border-border/50 focus:border-violet-500/50 focus:ring-violet-500/20"
                 />
                 <p className="text-sm text-muted-foreground">
                   How often to check Google Drive for changes
@@ -444,7 +444,7 @@ export default function SettingsPage() {
                   id="scrapeSchedule"
                   value={syncSettings.websiteScrapeSchedule}
                   onChange={(e) => setSyncSettings({ ...syncSettings, websiteScrapeSchedule: e.target.value })}
-                  className="border-border/50 focus:border-amber-500/50 focus:ring-amber-500/20 font-mono"
+                  className="border-border/50 focus:border-violet-500/50 focus:ring-violet-500/20 font-mono"
                 />
                 <p className="text-sm text-muted-foreground">
                   Cron expression for website scraping (default: weekly on Sunday at midnight)
@@ -453,7 +453,7 @@ export default function SettingsPage() {
               <Button
                 onClick={handleSaveSync}
                 disabled={saving}
-                className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white"
+                className="bg-gradient-to-r from-violet-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white"
               >
                 <Save className="h-4 w-4 mr-2" />
                 {saving ? 'Saving...' : 'Save Changes'}

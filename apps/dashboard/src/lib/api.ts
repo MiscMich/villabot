@@ -385,6 +385,7 @@ export const api = {
     slug: string;
     description?: string;
     system_prompt?: string;
+    categories?: string[];
     slack_bot_token?: string;
     slack_app_token?: string;
     slack_signing_secret?: string;
@@ -397,6 +398,7 @@ export const api = {
     name?: string;
     description?: string;
     system_prompt?: string;
+    categories?: string[];
     status?: 'active' | 'inactive';
   }) => fetchApi(`/api/bots/${id}`, {
     method: 'PATCH',
