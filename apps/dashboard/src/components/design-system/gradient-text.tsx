@@ -22,11 +22,12 @@ const gradientClasses = {
 
 export const GradientText = forwardRef<HTMLElement, GradientTextProps>(
   ({ children, className, variant = 'cosmic', animate = true, as = 'span', ...props }, ref) => {
-    const Component = motion[as];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Component = motion[as] as any;
 
     return (
       <Component
-        ref={ref as React.Ref<HTMLElement>}
+        ref={ref}
         variants={animate ? fadeInUp : undefined}
         initial={animate ? 'initial' : undefined}
         animate={animate ? 'animate' : undefined}
