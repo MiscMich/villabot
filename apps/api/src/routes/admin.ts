@@ -609,7 +609,7 @@ router.get(
         });
         total = count ?? 0;
       } else {
-        users = (data as unknown[]).map((u: Record<string, unknown>) => ({
+        users = (data as Record<string, unknown>[]).map((u) => ({
           id: u.id as string,
           email: u.email as string,
           fullName: (u.full_name as string | null) ?? undefined,
