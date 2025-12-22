@@ -20,13 +20,13 @@ const gradientClasses = {
   cyan: 'bg-gradient-to-r from-cyan-400 via-blue-400 to-violet-400',
 };
 
-export const GradientText = forwardRef<HTMLSpanElement, GradientTextProps>(
+export const GradientText = forwardRef<HTMLElement, GradientTextProps>(
   ({ children, className, variant = 'cosmic', animate = true, as = 'span', ...props }, ref) => {
     const Component = motion[as];
 
     return (
       <Component
-        ref={ref}
+        ref={ref as React.Ref<HTMLElement>}
         variants={animate ? fadeInUp : undefined}
         initial={animate ? 'initial' : undefined}
         animate={animate ? 'animate' : undefined}
