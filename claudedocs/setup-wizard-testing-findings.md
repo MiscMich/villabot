@@ -122,10 +122,23 @@ After deployment, verify:
 
 **All 7 wizard steps tested successfully on production (cluebase.ai).**
 
-The critical fix (Google Drive skip) is verified working:
+### UI Fixes Verified (2025-12-23)
+
+**Bug 1 (Google Drive Not Skippable)**: ✅ FIXED
 - Continue button is enabled without Google authentication
 - Wizard correctly shows Google Drive as "Not configured" on review screen
-- Full wizard flow completes without requiring any optional integrations
+
+**Bug 2 (Launch Bot Grayed Out Without Google Drive)**: ✅ FIXED
+- Launch Bot button is now ENABLED when website URL is configured
+- No longer requires Google Drive authentication
+- Website URL serves as valid knowledge source alternative
+
+### Remaining Backend Issue
+
+The `POST /api/setup/complete` endpoint returns 500 error when attempting to launch the bot. This is a **separate backend issue** unrelated to the UI fixes:
+- Possible causes: database schema, `createBot()` function, workspace creation
+- UI fixes are complete and working correctly
+- Backend investigation needed separately
 
 ## Testing Credentials Used
 

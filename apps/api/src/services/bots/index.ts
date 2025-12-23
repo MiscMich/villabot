@@ -161,6 +161,7 @@ export async function createBot(input: BotCreateInput): Promise<Bot> {
   const { data, error } = await supabase
     .from('bots')
     .insert({
+      workspace_id: input.workspaceId,
       name: input.name,
       slug: input.slug,
       description: input.description ?? null,
