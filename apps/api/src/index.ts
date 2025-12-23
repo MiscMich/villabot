@@ -92,7 +92,7 @@ app.use('/api/webhooks', webhooksRouter);
 // Root endpoint
 app.get('/', (_req, res) => {
   res.json({
-    name: 'TeamBrain AI API',
+    name: 'Cluebase AI API',
     version: '0.3.0',
     endpoints: {
       health: '/health',
@@ -127,7 +127,7 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 
 // Start server
 async function start(): Promise<void> {
-  logger.info('Starting TeamBrain AI API...');
+  logger.info('Starting Cluebase AI API...');
 
   // Test database connection
   const dbOk = await testSupabaseConnection();

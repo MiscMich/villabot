@@ -117,17 +117,22 @@ export const api = {
   }>('/health'),
 
   // Setup (public - for initial setup wizard)
-  getSetupStatus: () => fetchPublic<{
-    completed: boolean;
-    completedAt: string | null;
-    steps: {
-      database: boolean;
-      ai: boolean;
-      slack: boolean;
-      googleDrive: boolean;
-      bot: boolean;
-    };
-  }>('/api/setup/status'),
+  // Supports optional workspaceId for checking setup status of specific workspace
+  getSetupStatus: (workspaceId?: string) => {
+    const url = workspaceId
+      ? `/api/setup/status?workspaceId=${encodeURIComponent(workspaceId)}`
+      : '/api/setup/status';
+    return fetchPublic<{
+      completed: boolean;
+      completedAt: string | null;
+      steps: {
+        workspace: boolean;
+        slack: boolean;
+        googleDrive: boolean;
+        bot: boolean;
+      };
+    }>(url);
+  },
 
   testDatabase: (url: string, serviceKey: string) =>
     fetchPublic<{ success: boolean; message?: string; error?: string }>('/api/setup/test-database', {

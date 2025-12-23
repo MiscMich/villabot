@@ -1,5 +1,5 @@
 /**
- * Shared constants for TeamBrain AI
+ * Shared constants for Cluebase AI
  */
 
 import type { SubscriptionTier } from './types/workspaces.js';

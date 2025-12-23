@@ -61,21 +61,37 @@ setupRouter.get('/status', async (req, res) => {
       });
     }
 
-    const { data } = await supabase
-      .from('bot_config')
-      .select('value')
-      .eq('key', SETUP_STATUS_KEY)
+    // Check if workspace has any bots configured (indicates setup is complete)
+    const { data: bots, error: botsError } = await supabase
+      .from('bots')
+      .select('id, slack_bot_token')
       .eq('workspace_id', workspaceId)
-      .single();
+      .limit(1);
 
-    const status: SetupStatus = data?.value ?? {
-      completed: false,
-      completedAt: null,
+    if (botsError) {
+      logger.error('Error checking bots for setup status', { workspaceId, error: botsError });
+    }
+
+    // Check if Google Drive folders are configured for any bot in this workspace
+    const { data: driveFolders } = await supabase
+      .from('bot_drive_folders')
+      .select('id, bots!inner(workspace_id)')
+      .eq('bots.workspace_id', workspaceId)
+      .limit(1);
+
+    const hasBot = Boolean(bots && bots.length > 0);
+    const hasSlack = Boolean(hasBot && bots?.[0]?.slack_bot_token);
+    const hasGoogleDrive = Boolean(driveFolders && driveFolders.length > 0);
+
+    // Setup is complete if there's at least one bot configured
+    const status: SetupStatus = {
+      completed: hasBot,
+      completedAt: hasBot ? new Date().toISOString() : null,
       steps: {
-        workspace: false,
-        slack: false,
-        googleDrive: false,
-        bot: false,
+        workspace: true, // Workspace exists if we got here
+        slack: hasSlack,
+        googleDrive: hasGoogleDrive,
+        bot: hasBot,
       },
     };
 

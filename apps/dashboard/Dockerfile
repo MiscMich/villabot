@@ -52,7 +52,7 @@ RUN apk add --no-cache dumb-init
 WORKDIR /app
 
 ENV NODE_ENV=production
-ENV PORT=3000
+ENV PORT=3001
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Create non-root user

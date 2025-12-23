@@ -3,12 +3,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 
+// Workspace storage key (synced with WorkspaceContext and api.ts)
+const WORKSPACE_STORAGE_KEY = 'cluebase_current_workspace';
+
 export interface SetupStatus {
   completed: boolean;
   completedAt: string | null;
   steps: {
-    database: boolean;
-    ai: boolean;
+    workspace: boolean;
     slack: boolean;
     googleDrive: boolean;
     bot: boolean;
@@ -16,13 +18,24 @@ export interface SetupStatus {
 }
 
 /**
+ * Get current workspace ID from localStorage
+ */
+function getCurrentWorkspaceId(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(WORKSPACE_STORAGE_KEY);
+}
+
+/**
  * Hook to check if initial setup is complete
- * Used for client-side setup status checking
+ * Uses current workspace context to check setup status
  */
 export function useSetupStatus() {
   return useQuery<SetupStatus>({
     queryKey: ['setup-status'],
-    queryFn: api.getSetupStatus,
+    queryFn: () => {
+      const workspaceId = getCurrentWorkspaceId();
+      return api.getSetupStatus(workspaceId ?? undefined);
+    },
     staleTime: 60 * 1000, // 1 minute
     retry: 1,
     refetchOnWindowFocus: false,

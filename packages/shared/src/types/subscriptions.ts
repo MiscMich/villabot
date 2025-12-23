@@ -1,4 +1,4 @@
-// Subscription and billing types for TeamBrain AI
+// Subscription and billing types for Cluebase AI
 
 import type { SubscriptionTier, SubscriptionStatus } from './workspaces.js';
 

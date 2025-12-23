@@ -1,4 +1,4 @@
--- Villa Paraiso Bot - Multi-Bot Platform Schema
+-- Cluebase AI - Multi-Bot Platform Schema
 -- Enables multiple specialized bots with shared and bot-specific knowledge
 
 -- ============================================

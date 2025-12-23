@@ -1,4 +1,4 @@
-// Authentication types for TeamBrain AI
+// Authentication types for Cluebase AI
 
 import type { UserProfile, Workspace, WorkspaceMember } from './workspaces.js';
 

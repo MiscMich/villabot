@@ -1,4 +1,4 @@
-// Workspace and multi-tenancy types for TeamBrain AI
+// Workspace and multi-tenancy types for Cluebase AI
 
 export type SubscriptionTier = 'starter' | 'pro' | 'business';
 

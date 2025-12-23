@@ -52,13 +52,13 @@ export interface WebsiteSource {
 }
 
 export const DEFAULT_BOT_CONFIG: BotConfig = {
-  botName: 'TeamBrain',
+  botName: 'Cluebase',
   botAvatar: null,
   timezone: 'America/Los_Angeles',
   geminiModel: 'gemini-1.5-flash',
   temperature: 0.3,
   maxResponseLength: 2000,
-  systemPrompt: `You are TeamBrain, a helpful AI assistant for your organization.
+  systemPrompt: `You are Cluebase, a helpful AI assistant for your organization.
 You answer questions about company policies, procedures, and documentation based on the provided context.
 Always cite your sources. If you don't know the answer, say so honestly.
 Be concise but thorough. Use bullet points for lists.`,

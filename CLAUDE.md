@@ -25,6 +25,13 @@ pnpm typecheck        # Type checking
 pnpm lint             # Linting
 pnpm test             # Run tests (Vitest)
 pnpm build            # Build all packages
+
+# E2E Testing (Dashboard)
+cd apps/dashboard
+pnpm test:e2e         # Run E2E tests headless
+pnpm test:e2e:ui      # Run with Playwright UI
+pnpm test:e2e:headed  # Run in headed browser
+pnpm test:e2e:debug   # Debug mode
 ```
 
 ## Coolify Deployment
@@ -157,6 +164,40 @@ See `.env.example` for required configuration:
 - Feedback review dashboard (complete)
 - Team invites with email notifications (complete)
 - Platform admin panel (complete)
+
+## Testing
+
+### E2E Tests (Playwright)
+Located in `apps/dashboard/e2e/`:
+- `auth.spec.ts` - Authentication flows (login, signup, OAuth)
+- `billing.spec.ts` - Stripe checkout and subscription management
+- `bots.spec.ts` - Bot creation, configuration, deletion
+- `dashboard.spec.ts` - Dashboard overview and metrics
+- `documents.spec.ts` - Document upload, search, sync
+- `settings.spec.ts` - Workspace configuration
+
+**68 tests** covering all major user flows.
+
+### Health Check Endpoints
+- `GET /health` - Service status (supabase, slack, gemini, googleDrive)
+- Returns: `{ status: 'healthy' | 'degraded', services: {...}, uptime: number }`
+
+## Background Services
+
+### Worker Process
+The API includes a background worker for scheduled tasks:
+- `apps/api/src/worker.ts` - Background job processor
+- Google Drive polling (configurable interval)
+- Website scraping (weekly cron schedule)
+- Bot health monitoring
+
+### Scheduler
+5 scheduled jobs initialized on startup:
+- Drive sync polling
+- Website scrape scheduling
+- Bot health checks
+- Error log cleanup
+- Analytics aggregation
 
 ## Available Plugins
 Use `/commit` for git commits, `/code-review` for PR reviews, `/feature-dev` for feature development workflow.
