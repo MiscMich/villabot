@@ -72,8 +72,21 @@ async function fetchApi<T>(
     // Handle specific error codes
     if (res.status === 401) {
       // Unauthorized - session may have expired
-      if (typeof window !== 'undefined') {
-        window.location.href = '/auth/signin';
+      // Don't hard redirect here - let the auth context handle session refresh
+      // A hard redirect causes loops when middleware and client disagree on auth state
+      console.warn('API returned 401 - session may need refresh');
+
+      // Try to refresh the session
+      if (typeof window !== 'undefined' && isSupabaseConfigured()) {
+        try {
+          const supabase = getSupabase();
+          const { error: refreshError } = await supabase.auth.refreshSession();
+          if (refreshError) {
+            console.error('Failed to refresh session:', refreshError.message);
+          }
+        } catch (e) {
+          console.error('Session refresh error:', e);
+        }
       }
     }
 
