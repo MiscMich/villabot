@@ -1,9 +1,6 @@
 'use client';
 
-// Prevent static prerendering - this page uses useSearchParams for OAuth callback handling
-export const dynamic = 'force-dynamic';
-
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
@@ -1059,7 +1056,7 @@ function CompleteStep({
 // MAIN WIZARD COMPONENT
 // ============================================
 
-export default function SetupWizard() {
+function SetupWizardContent() {
   const { session } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -1417,5 +1414,30 @@ export default function SetupWizard() {
         </footer>
       )}
     </div>
+  );
+}
+
+// ============================================
+// PAGE EXPORT WITH SUSPENSE BOUNDARY
+// ============================================
+
+function SetupWizardFallback() {
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="text-center">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
+          <Sparkles className="w-8 h-8 text-primary animate-pulse" />
+        </div>
+        <p className="text-muted-foreground">Loading setup wizard...</p>
+      </div>
+    </div>
+  );
+}
+
+export default function SetupWizard() {
+  return (
+    <Suspense fallback={<SetupWizardFallback />}>
+      <SetupWizardContent />
+    </Suspense>
   );
 }
