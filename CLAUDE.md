@@ -6,7 +6,7 @@ Multi-tenant SaaS platform for AI-powered knowledge management. Features RAG-pow
 **Live URLs**:
 - Dashboard: https://cluebase.ai
 - API: https://api.cluebase.ai
-- Supabase: https://supabase.cluebase.ai
+- Supabase: https://grjociqyeotxwqdjovmt.supabase.co (cloud)
 
 ## Tech Stack
 - **Backend**: Node.js/TypeScript + Express (port 3000)
@@ -15,7 +15,7 @@ Multi-tenant SaaS platform for AI-powered knowledge management. Features RAG-pow
 - **Database**: Supabase + pgvector
 - **Integration**: Slack Bolt SDK, Google Drive API
 - **Package Manager**: pnpm (monorepo)
-- **Deployment**: Coolify + Docker + Supabase
+- **Deployment**: Coolify + Docker + Supabase Cloud
 
 ## Development Commands
 ```bash

@@ -384,3 +384,44 @@ workspacesRouter.get(
     }
   }
 );
+
+/**
+ * Get workspace usage by ID
+ */
+workspacesRouter.get('/:id/usage', authenticate, async (req, res) => {
+  try {
+    const workspaceId = req.params.id;
+
+    if (!workspaceId) {
+      return res.status(400).json({
+        error: 'Workspace ID is required',
+        code: 'MISSING_ID',
+      });
+    }
+
+    // Check membership
+    const { data: membership } = await supabase
+      .from('workspace_members')
+      .select('*')
+      .eq('workspace_id', workspaceId)
+      .eq('user_id', req.user!.id)
+      .eq('is_active', true)
+      .single();
+
+    if (!membership) {
+      return res.status(403).json({
+        error: 'Not a member of this workspace',
+        code: 'NOT_MEMBER',
+      });
+    }
+
+    const usage = await getUsageSummary(workspaceId);
+    res.json({ usage });
+  } catch (error) {
+    logger.error('Failed to get workspace usage', { error });
+    res.status(500).json({
+      error: 'Failed to get workspace usage',
+      code: 'USAGE_ERROR',
+    });
+  }
+});

@@ -1,13 +1,13 @@
 # Cluebase AI - Coolify Deployment Guide
 
-Complete guide for deploying Cluebase AI using Coolify for simplified self-hosted deployment.
+Complete guide for deploying Cluebase AI using Coolify for simplified deployment with Supabase Cloud.
 
-## Why Coolify?
+## Why Coolify + Supabase Cloud?
 
-- **One-Click Supabase**: Deploy the full Supabase stack with a template
+- **Supabase Cloud**: Managed database with built-in auth, emails, and edge functions
 - **Git-Based Deployments**: Push to GitHub → automatic deploy
 - **Automatic SSL**: Traefik handles SSL certificates automatically
-- **Self-Hosted UI**: Manage all services from a web dashboard
+- **Self-Hosted UI**: Manage API and Dashboard from a web dashboard
 - **No Docker Compose Complexity**: Coolify abstracts Docker management
 
 ## Architecture Overview
@@ -23,16 +23,23 @@ Complete guide for deploying Cluebase AI using Coolify for simplified self-hoste
 │                                                                  │
 │  cluebase.ai ───────────────────────────► Dashboard (Next.js)   │
 │  api.cluebase.ai ───────────────────────► API (Express)         │
-│  supabase.cluebase.ai ──────────────────► Supabase (Kong)       │
 └─────────────────────────────────────────────────────────────────┘
                                 │
-        ┌───────────────────────┼───────────────────────┐
-        ▼                       ▼                       ▼
-┌──────────────┐     ┌──────────────────┐     ┌──────────────────┐
-│     API      │     │     Dashboard    │     │     Supabase     │
-│  (Express)   │     │   (Next.js)      │     │  (Full Stack)    │
-│   :3000      │     │    :3001         │     │  PostgreSQL+     │
-└──────────────┘     └──────────────────┘     └──────────────────┘
+        ┌───────────────────────┴───────────────────────┐
+        ▼                                               ▼
+┌──────────────┐                             ┌──────────────────┐
+│     API      │                             │     Dashboard    │
+│  (Express)   │                             │   (Next.js)      │
+│   :3000      │                             │    :3001         │
+└──────┬───────┘                             └────────┬─────────┘
+       │                                              │
+       └──────────────────┬───────────────────────────┘
+                          ▼
+            ┌────────────────────────────┐
+            │     Supabase Cloud         │
+            │  grjociqyeotxwqdjovmt      │
+            │  (Managed PostgreSQL+)     │
+            └────────────────────────────┘
 ```
 
 ## Prerequisites
@@ -69,48 +76,46 @@ Add these DNS records in your DNS provider (e.g., Cloudflare):
 |------|------|---------|-------|
 | A | @ | YOUR_SERVER_IP | Yes |
 | A | api | YOUR_SERVER_IP | Yes |
-| A | supabase | YOUR_SERVER_IP | Yes |
 | A | www | YOUR_SERVER_IP | Yes |
 
 ---
 
-## Step 3: Deploy Supabase
+## Step 3: Configure Supabase Cloud
 
-In Coolify UI:
+We use Supabase Cloud for managed database, authentication, and edge functions.
 
-1. **Services** → **+ New Service**
-2. Search for **Supabase** template
-3. Configure:
-   - **Domain**: `supabase.cluebase.ai`
-   - Leave other defaults
-4. Click **Deploy**
+### Supabase Project Details
 
-Wait for all Supabase components to start (PostgreSQL, Kong, GoTrue, PostgREST, Realtime, Storage, Studio).
+- **Project URL**: `https://grjociqyeotxwqdjovmt.supabase.co`
+- **Dashboard**: `https://supabase.com/dashboard/project/grjociqyeotxwqdjovmt`
 
-### Capture Supabase Credentials
+### Get Supabase Credentials
 
-From the Coolify Supabase service dashboard, note these values:
-- `SUPABASE_URL`: `https://supabase.cluebase.ai`
-- `SUPABASE_ANON_KEY`: (from service configuration)
-- `SUPABASE_SERVICE_ROLE_KEY`: (from service configuration)
-- `JWT_SECRET`: (from service configuration)
+From the Supabase Dashboard → Settings → API:
+- `SUPABASE_URL`: `https://grjociqyeotxwqdjovmt.supabase.co`
+- `SUPABASE_ANON_KEY`: (from API settings)
+- `SUPABASE_SERVICE_ROLE_KEY`: (from API settings - keep secret!)
 
 ---
 
 ## Step 4: Apply Database Migrations
 
-Access the Supabase Studio at `https://supabase.cluebase.ai` and run the migrations:
+Migrations are applied via the Supabase MCP or SQL Editor.
 
-1. Go to **SQL Editor**
-2. Run migrations from `supabase/migrations/` in order:
-   - `00001_initial_schema.sql`
-   - `00002_...` (continue in order)
+### Option 1: Via MCP (Recommended)
+The migrations in `supabase/migrations/` have already been applied to the cloud project.
 
-Or use the Supabase CLI:
+### Option 2: Via SQL Editor
+1. Go to Supabase Dashboard → SQL Editor
+2. Run migrations from `supabase/migrations/` in order
 
+### Option 3: Via Supabase CLI
 ```bash
-# From your local machine with migrations folder
-supabase db push --db-url "postgresql://postgres:PASSWORD@supabase.cluebase.ai:5432/postgres"
+# Link to the cloud project
+supabase link --project-ref grjociqyeotxwqdjovmt
+
+# Push migrations
+supabase db push
 ```
 
 ---
@@ -132,10 +137,10 @@ NODE_ENV=production
 PORT=3000
 LOG_LEVEL=info
 
-# Supabase (from Step 3)
-SUPABASE_URL=https://supabase.cluebase.ai
-SUPABASE_ANON_KEY=your-anon-key-from-coolify
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-from-coolify
+# Supabase Cloud (from Step 3)
+SUPABASE_URL=https://grjociqyeotxwqdjovmt.supabase.co
+SUPABASE_ANON_KEY=your-anon-key-from-supabase-dashboard
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-from-supabase-dashboard
 
 # AI
 GEMINI_API_KEY=your-gemini-api-key
@@ -174,13 +179,13 @@ NODE_ENV=production
 PORT=3001
 
 # Supabase Anon Key (for build args - CRITICAL!)
-SUPABASE_ANON_KEY=your-anon-key-from-coolify
+SUPABASE_ANON_KEY=your-anon-key-from-supabase-dashboard
 
 # Internal API URL (for server-side calls)
 API_URL=http://api:3000
 ```
 
-**Important**: The `NEXT_PUBLIC_*` variables are baked into the build via the `docker-compose.coolify.yml` build args. Verify they match your domain.
+**Important**: The `NEXT_PUBLIC_*` variables are baked into the build via the `docker-compose.coolify.yml` build args. Update `NEXT_PUBLIC_SUPABASE_URL` to point to Supabase Cloud.
 
 5. Click **Deploy**
 
@@ -236,8 +241,8 @@ curl -I https://cluebase.ai
 
 **Build Args** (set in docker-compose.coolify.yml):
 - `NEXT_PUBLIC_API_URL`: `https://api.cluebase.ai`
-- `NEXT_PUBLIC_SUPABASE_URL`: `https://supabase.cluebase.ai`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`: From Coolify secrets
+- `NEXT_PUBLIC_SUPABASE_URL`: `https://grjociqyeotxwqdjovmt.supabase.co`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`: From Supabase Dashboard
 - `NEXT_PUBLIC_APP_NAME`: `Cluebase AI`
 - `NEXT_PUBLIC_APP_URL`: `https://cluebase.ai`
 
@@ -272,22 +277,11 @@ Coolify automatically monitors container health using the healthcheck defined in
 
 ### Database Backup
 
-Coolify Supabase template includes a database. To backup:
+Supabase Cloud provides automatic daily backups. For manual backups:
 
-```bash
-# SSH to server
-ssh root@YOUR_SERVER_IP
-
-# Find the PostgreSQL container
-docker ps | grep postgres
-
-# Create backup
-docker exec POSTGRES_CONTAINER_ID pg_dump -U postgres postgres > backup.sql
-```
-
-### Automated Backups
-
-Configure in Coolify under the Supabase service → **Backups**.
+1. Go to Supabase Dashboard → Settings → Database
+2. Use the backup/restore features
+3. Or use `pg_dump` with the connection string from Settings → Database
 
 ---
 
@@ -303,11 +297,12 @@ Configure in Coolify under the Supabase service → **Backups**.
 
 ### API Connection Failed
 
-**Cause**: Supabase credentials incorrect or service not running.
+**Cause**: Supabase credentials incorrect.
 
 **Solution**:
-1. Check Supabase service is running in Coolify
-2. Verify `SUPABASE_URL` and keys match
+1. Verify Supabase Cloud project is active at `https://supabase.com/dashboard`
+2. Verify `SUPABASE_URL` points to cloud: `https://grjociqyeotxwqdjovmt.supabase.co`
+3. Verify anon key and service role key are correct
 
 ### SSL Certificate Issues
 

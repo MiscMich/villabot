@@ -1,66 +1,93 @@
-# Deployment Status - 2025-12-21
+# Deployment Status - 2025-12-23 (Database Functions Fixed)
 
-## Code Changes Completed
+## Production Status
+- **Dashboard**: https://cluebase.ai - ✅ LIVE with cloud Supabase
+- **API**: https://api.cluebase.ai - ✅ LIVE with cloud Supabase
+- **Supabase**: https://grjociqyeotxwqdjovmt.supabase.co (CLOUD) - ✅ PRODUCTION
 
-### 1. Error Boundaries (3 files)
-- `apps/dashboard/src/app/error.tsx` - Root error boundary
-- `apps/dashboard/src/app/dashboard/error.tsx` - Dashboard error boundary
-- `apps/dashboard/src/app/admin/error.tsx` - Admin error boundary
+## Latest Bug Fixes Deployed (2025-12-23 22:45 UTC)
 
-### 2. Toast Notifications
-- `apps/dashboard/src/app/documents/page.tsx` - Sync, scrape, toggle, delete operations
-- `apps/dashboard/src/app/bots/page.tsx` - Activate, deactivate, delete operations
-- `apps/dashboard/src/app/team/page.tsx` - Invite, revoke, role update, remove operations
+### Multi-Tenant Database Functions Fix ✅ (migration applied)
+- **Issue**: Slack bot not responding to messages despite receiving events
+- **Root Cause**: Database RPC functions (`hybrid_search`, `match_documents`, `increment_query_count`) were missing workspace parameters required by multi-tenant RAG search
+- **Error in logs**: `Could not find the function public.hybrid_search(...p_workspace_id...)`
+- **Fix**: Applied migration `fix_multitenant_search_functions` that:
+  - Updated `hybrid_search()` with `p_workspace_id` and `p_bot_id` parameters
+  - Updated `match_documents()` with `p_workspace_id` parameter
+  - Updated `increment_query_count()` with `p_workspace_id` parameter
+  - Updated `match_learned_facts()` with `p_workspace_id` parameter
+- **Verification**: Functions now exist with correct signatures in production database
 
-### 3. Mobile Sidebar
-- `apps/dashboard/src/components/sidebar.tsx` - Added MobileSidebarProvider, MobileMenuButton, mobile-responsive Sidebar
-- `apps/dashboard/src/components/conditional-layout.tsx` - Integrated mobile sidebar components
+### Website Scraper Fix ✅ (commit 30797d7)
+- **Issue**: Website scraping silently failed - 0 pages scraped, 0 documents created
+- **Root Cause**: `scrapeWebsite()` read from `env.COMPANY_WEBSITE_URL` instead of the URL configured by users in setup wizard
+- **Fix**:
+  - Added `websiteUrl` parameter to `scrapeWebsite()` function
+  - Setup route now passes `website.url` from config to scraper
+  - Scheduler fetches website URL from workspace's `bot_config` table
+  - Falls back to env var for backwards compatibility
+- **Files Changed**: `website.ts`, `setup.ts`, `scheduler/index.ts`
 
-## Infrastructure Status
+### Scheduler Column Bug Fix ✅ (commit 30797d7)
+- **Issue**: `column workspaces.is_active does not exist` error in logs
+- **Root Cause**: Scheduler queried `workspaces.is_active` but column doesn't exist (table has `status`)
+- **Fix**: Changed query to use `status IN ('active', 'trialing')`
 
-### Coolify
-- **Supabase Service**: Running and healthy (status: `running:healthy`)
-- **API Service**: NOT DEPLOYED
-- **Dashboard Service**: NOT DEPLOYED
+## Previous Bug Fixes (2025-12-23 21:55 UTC)
 
-### Supabase
-- URL: https://supabase.cluebase.ai (returns 401 = working, requires auth)
-- MCP: Configured but execute_sql RPC not available (needs migration setup)
+### 1. Dashboard Infinite Loading Fix ✅
+- **Commit**: 0284fab
+- **Issue**: Dashboard stuck in infinite refresh loop
 
-## Remaining Manual Steps
+### 2. Bot Manager Activation Fix ✅
+- **Commit**: 91ccf38
+- **Issue**: Bots stayed in 'configuring' status
 
-### 1. Apply Database Migrations
-Run in Supabase Studio at https://supabase.cluebase.ai:
-```sql
--- Check current state first
-SELECT table_name FROM information_schema.tables 
-WHERE table_schema = 'public' ORDER BY table_name;
-```
-Then apply migrations 008-015 as needed from `supabase/migrations/`
+### 3. Slack App Installation Guidance ✅
+- **Commit**: 23fb07a
+- **Issue**: Users didn't know how to install bot in Slack
 
-### 2. Deploy to Coolify
-Follow `docs/COOLIFY_DEPLOYMENT.md`:
+### 4. Rate Limiter Middleware Order Fix ✅
+- **Commit**: 34a8dab
+- **Issue**: 401 "Workspace context required" errors
 
-**API Service:**
-1. Resources → + New → Docker Compose
-2. Git: https://github.com/MiscMich/cluebase-ai, branch: main
-3. Compose: apps/api/docker-compose.coolify.yml
-4. Domain: api.cluebase.ai
-5. Set environment variables
+## Dashboard UI Verification (2025-12-23 22:45 UTC)
 
-**Dashboard Service:**
-1. Resources → + New → Docker Compose
-2. Git: https://github.com/MiscMich/cluebase-ai, branch: main
-3. Compose: apps/dashboard/docker-compose.coolify.yml
-4. Domain: cluebase.ai
-5. Set SUPABASE_ANON_KEY
+### Pages Verified ✅
+1. **Dashboard Overview** (`/dashboard`) - Stats cards, service status, quick actions
+2. **Bots Management** (`/bots`) - Bot cards, activation controls, create wizard
+3. **Documents** (`/documents`) - Document list, Drive sync, Website scrape controls
+4. **Conversations** (`/conversations`) - Thread viewer with messages
+5. **Analytics** (`/analytics`) - Usage metrics and charts
+6. **Feedback** (`/feedback`) - Feedback review dashboard
+7. **Team** (`/team`) - Member management, invites
+8. **Settings** (`/settings`) - Workspace configuration
+9. **Billing** (`/billing`) - Subscription management
+10. **Setup Wizard** (`/setup`) - Onboarding flow
 
-### 3. Verification
-```bash
-curl https://api.cluebase.ai/health
-curl -I https://cluebase.ai
-```
+All pages have proper API integrations with React Query.
 
-## Deferred Features
-- Scrape Progress Tracking (SSE) - basic scrape works, progress is optional
-- Category Assignment - can be added post-launch
+## Current Health (Verified 2025-12-23 22:45 UTC)
+- API Status: `healthy`
+- Supabase Connection: `connected`
+- Gemini Connection: `connected`
+- **Active Slack Bots: 2** ✅
+- Scheduler: Running with 5 jobs
+- Database Functions: All multi-tenant functions verified ✅
+
+## Known Gaps (Not Bugs - Missing Features)
+1. **Google Drive folder selection**: Setup wizard only authenticates OAuth, doesn't allow folder selection
+   - Current workaround: Use `GOOGLE_DRIVE_FOLDER_ID` env var or manually insert into `bot_drive_folders` table
+   - Needs: UI in setup wizard or settings page to select Drive folders
+
+## Remaining Testing
+- [x] Verify scheduler no longer has is_active error ✅
+- [x] Database functions have correct multi-tenant signatures ✅
+- [x] Dashboard UI pages verified ✅
+- [ ] **User should test**: Send message to Slack bot to confirm RAG responses work
+- [ ] Test website scraping after reset (user should re-run setup or trigger manual scrape)
+- [ ] Verify scraped documents appear in dashboard
+
+## Cloud Supabase Credentials (Production)
+- **Project URL**: `https://grjociqyeotxwqdjovmt.supabase.co`
+- **Dashboard**: `https://supabase.com/dashboard/project/grjociqyeotxwqdjovmt`
