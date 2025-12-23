@@ -16,13 +16,14 @@
     "db:generate": "node scripts/generate-types.js"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.21.0",
-    "dotenv": "^16.4.7",
-    "@slack/bolt": "^3.22.0",
-    "@supabase/supabase-js": "^2.47.10",
     "@cluebase/shared": "workspace:*",
+    "@google/generative-ai": "^0.21.0",
+    "@slack/bolt": "^3.22.0",
+    "@slack/web-api": "^7.13.0",
+    "@supabase/supabase-js": "^2.47.10",
     "cheerio": "^1.0.0",
     "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "googleapis": "^144.0.0",
     "langchain": "^0.3.11",
