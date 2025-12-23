@@ -25,6 +25,7 @@ export interface DriveFile {
   modifiedTime: string;
   webViewLink?: string;
   size?: string;
+  parents?: string[];  // Parent folder IDs for change tracking
 }
 
 export interface DriveChangeToken {
@@ -216,6 +217,7 @@ export async function getStartPageToken(): Promise<string> {
 
 /**
  * List changes since a given page token
+ * Returns all changes - filtering by folder is done by the sync service
  */
 export async function listChanges(pageToken: string): Promise<{
   changes: Array<{
@@ -240,26 +242,20 @@ export async function listChanges(pageToken: string): Promise<{
 
     if (response.data.changes) {
       for (const change of response.data.changes) {
-        // Only include changes from our folder
-        const parents = change.file?.parents ?? [];
-        const folderId = env.GOOGLE_DRIVE_FOLDER_ID;
-        if (
-          change.removed ||
-          (folderId && parents.includes(folderId))
-        ) {
-          changes.push({
-            fileId: change.fileId!,
-            removed: change.removed ?? false,
-            file: change.file ? {
-              id: change.file.id!,
-              name: change.file.name!,
-              mimeType: change.file.mimeType!,
-              modifiedTime: change.file.modifiedTime!,
-              webViewLink: change.file.webViewLink ?? undefined,
-              size: change.file.size ?? undefined,
-            } : undefined,
-          });
-        }
+        // Include all changes - folder filtering is done by sync service based on bot_drive_folders
+        changes.push({
+          fileId: change.fileId!,
+          removed: change.removed ?? false,
+          file: change.file ? {
+            id: change.file.id!,
+            name: change.file.name!,
+            mimeType: change.file.mimeType!,
+            modifiedTime: change.file.modifiedTime!,
+            webViewLink: change.file.webViewLink ?? undefined,
+            size: change.file.size ?? undefined,
+            parents: change.file.parents ?? undefined,
+          } : undefined,
+        });
       }
     }
 

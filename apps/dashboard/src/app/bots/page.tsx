@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { BotFormModal } from '@/components/bot-form-modal';
+import { BotSetupWizard } from '@/components/bot-setup-wizard';
 import { useToast } from '@/components/ui/use-toast';
 import { GlassCardStatic } from '@/components/design-system/glass-card';
 import {
@@ -39,6 +40,7 @@ export default function BotsPage() {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [showFormModal, setShowFormModal] = useState(false);
+  const [showWizard, setShowWizard] = useState(false);
   const [editingBot, setEditingBot] = useState<BotData | null>(null);
 
   const { data: botsData, isLoading } = useQuery({
@@ -140,10 +142,7 @@ export default function BotsPage() {
           </p>
         </div>
         <Button
-          onClick={() => {
-            setEditingBot(null);
-            setShowFormModal(true);
-          }}
+          onClick={() => setShowWizard(true)}
           className="bg-gradient-to-r from-violet-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white shadow-lg"
         >
           <Plus className="h-4 w-4 mr-2" />
@@ -319,7 +318,13 @@ export default function BotsPage() {
         )}
       </div>
 
-      {/* Bot Form Modal */}
+      {/* Bot Setup Wizard (for new bots) */}
+      <BotSetupWizard
+        isOpen={showWizard}
+        onClose={() => setShowWizard(false)}
+      />
+
+      {/* Bot Form Modal (for editing existing bots) */}
       <BotFormModal
         isOpen={showFormModal}
         onClose={() => {

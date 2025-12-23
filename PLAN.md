@@ -2346,6 +2346,51 @@ When user clicks 👎:
 - [x] Search functionality for bots
 - [x] Update sidebar with Bots navigation link
 
+### Phase 3.5: Folder-to-Bot Architecture Fix ✅ COMPLETE (December 2024)
+
+**Problem Fixed:**
+The Google Drive sync was ignoring the `bot_drive_folders` table and syncing from a single hardcoded environment folder. Each bot should sync only from its assigned folders.
+
+**Changes Made:**
+
+**Database Migration (`016_document_tags.sql`):**
+- [x] Added `tags TEXT[]` column to documents for custom user tags
+- [x] Added `drive_folder_id VARCHAR` column to track source folder
+- [x] GIN index on tags for efficient filtering
+- [x] Deprecated old `category` column (use tags instead)
+
+**Google Drive Sync (`apps/api/src/services/google-drive/sync.ts`):**
+- [x] `fullSync()` now queries `bot_drive_folders` when botId provided
+- [x] Syncs each folder assigned to the bot individually
+- [x] Stores `drive_folder_id` on each document for tracking
+- [x] Filters changes to only include files in bot's assigned folders
+- [x] Workspace-wide sync gets all folders from all bots
+
+**Google Drive Client (`apps/api/src/services/google-drive/client.ts`):**
+- [x] Added `parents?: string[]` to DriveFile interface
+- [x] `listChanges()` returns parent folder IDs for filtering
+
+**Bot Setup Wizard (`apps/dashboard/src/components/bot-setup-wizard.tsx`):**
+- [x] 4-step wizard: Basic Info → Slack → Folders → Confirm
+- [x] Slack credential testing before proceeding
+- [x] Add/remove folders with ID extraction from URLs
+- [x] Summary view before creating bot
+
+**Backend API (`apps/api/src/routes/bots.ts`):**
+- [x] `POST /api/bots/test-slack` - Validate Slack credentials
+- [x] `POST /api/bots/:id/sync` - Trigger sync for specific bot
+
+**Document Tags API (`apps/api/src/routes/documents.ts`):**
+- [x] `GET /api/documents/tags` - Get unique tags for autocomplete
+- [x] `PATCH /api/documents/:id/tags` - Update document tags
+- [x] Added `bot_id` filter support to document list
+
+**Playwright E2E Tests (`apps/dashboard/e2e/`):**
+- [x] `auth.spec.ts` - Authentication flow tests
+- [x] `billing.spec.ts` - Billing page tests
+- [x] `bots.spec.ts` - Bot management and wizard tests
+- [x] `playwright.config.ts` - Playwright configuration
+
 ### Phase 4: Feedback System ✅ COMPLETE
 
 **Backend (Complete):**

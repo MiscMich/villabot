@@ -24,8 +24,15 @@ export interface Document {
 
   // Multi-bot fields
   botId: string | null;
+  /** @deprecated Use tags instead */
   category: DocumentCategory;
   priority: number;
+
+  // New fields for simplified categorization
+  /** Custom user-defined tags for document organization */
+  tags: string[];
+  /** Google Drive folder ID this document was synced from */
+  driveFolderId: string | null;
 }
 
 export interface DocumentChunk {
@@ -45,6 +52,10 @@ export interface ChunkMetadata {
   lastModified: string;
   pageNumber?: number;
   section?: string;
+  /** Custom tags for the document */
+  tags?: string[];
+  /** Bot ID this document belongs to */
+  botId?: string;
 }
 
 export interface DocumentSyncResult {

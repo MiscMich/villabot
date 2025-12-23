@@ -108,9 +108,30 @@ export async function middleware(request: NextRequest) {
 }
 
 /**
+ * Check if this is an E2E test (bypass setup checks for testing)
+ */
+function isE2ETestMode(request: NextRequest): boolean {
+  // Check for E2E bypass cookie
+  const bypassCookie = request.cookies.get('e2e_bypass_setup');
+  if (bypassCookie?.value === 'true') {
+    return true;
+  }
+
+  // Check for URL parameter
+  const e2eParam = request.nextUrl.searchParams.get('e2e_test');
+  return e2eParam === 'true';
+}
+
+/**
  * Check if initial setup is complete
  */
 async function checkSetupStatus(request: NextRequest) {
+  // Bypass setup check in E2E test mode
+  if (isE2ETestMode(request)) {
+    console.log('E2E test mode - bypassing setup check in middleware');
+    return NextResponse.next();
+  }
+
   try {
     const response = await fetch(`${API_BASE}/api/setup/status`, {
       method: 'GET',

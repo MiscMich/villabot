@@ -411,6 +411,60 @@ export const api = {
 
   deactivateBot: (id: string) => fetchApi(`/api/bots/${id}/deactivate`, { method: 'POST' }),
 
+  // Bot Slack Testing
+  testSlackCredentials: (data: {
+    botToken: string;
+    appToken: string;
+    signingSecret?: string;
+  }) => fetchApi<{
+    valid: boolean;
+    teamName?: string;
+    error?: string;
+  }>('/api/bots/test-slack', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+
+  // Bot Folders
+  getBotFolders: (botId: string) => fetchApi<{
+    folders: Array<{
+      id: string;
+      drive_folder_id: string;
+      folder_name: string;
+      category: string;
+      is_active: boolean;
+      last_synced: string | null;
+      created_at: string;
+    }>;
+  }>(`/api/bots/${botId}/folders`),
+
+  addBotFolder: (botId: string, data: {
+    driveFolderId: string;
+    folderName: string;
+    category?: string;
+  }) => fetchApi<{
+    folder: {
+      id: string;
+      drive_folder_id: string;
+      folder_name: string;
+    };
+  }>(`/api/bots/${botId}/folders`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+
+  removeBotFolder: (botId: string, folderId: string) =>
+    fetchApi(`/api/bots/${botId}/folders/${folderId}`, { method: 'DELETE' }),
+
+  // Bot Sync
+  triggerBotSync: (botId: string) => fetchApi<{
+    success: boolean;
+    added: number;
+    updated: number;
+    removed: number;
+    errors: string[];
+  }>(`/api/bots/${botId}/sync`, { method: 'POST' }),
+
   // Feedback
   getFeedback: (options: { limit?: number; offset?: number } = {}) => fetchApi<{
     feedback: Array<{

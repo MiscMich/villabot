@@ -27,20 +27,24 @@ documentsRouter.use(authenticate, resolveWorkspace);
  */
 documentsRouter.get('/', async (req, res) => {
   try {
-    const { source_type, is_active } = req.query;
+    const { source_type: sourceType, is_active: isActive, bot_id: botId } = req.query;
 
     let query = supabase
       .from('documents')
-      .select('id, title, file_type, source_type, source_url, last_modified, last_synced, is_active, created_at')
+      .select('id, title, file_type, source_type, source_url, last_modified, last_synced, is_active, created_at, tags, bot_id, drive_folder_id')
       .eq('workspace_id', req.workspace!.id)
       .order('last_modified', { ascending: false });
 
-    if (source_type) {
-      query = query.eq('source_type', source_type as string);
+    if (sourceType) {
+      query = query.eq('source_type', sourceType as string);
     }
 
-    if (is_active !== undefined) {
-      query = query.eq('is_active', is_active === 'true');
+    if (isActive !== undefined) {
+      query = query.eq('is_active', isActive === 'true');
+    }
+
+    if (botId) {
+      query = query.eq('bot_id', botId as string);
     }
 
     const { data, error, count } = await query;
@@ -271,5 +275,91 @@ documentsRouter.get('/scrape/status', async (req, res) => {
   } catch (error) {
     logger.error('Failed to get scrape status', { error, workspaceId: req.workspace!.id });
     res.status(500).json({ error: 'Failed to get scrape status' });
+  }
+});
+
+// ============================================
+// DOCUMENT TAGS
+// ============================================
+
+/**
+ * Get all unique tags in workspace (for autocomplete)
+ */
+documentsRouter.get('/tags', async (req, res) => {
+  try {
+    // Get all documents with tags for this workspace
+    const { data, error } = await supabase
+      .from('documents')
+      .select('tags')
+      .eq('workspace_id', req.workspace!.id)
+      .not('tags', 'is', null);
+
+    if (error) throw error;
+
+    // Extract unique tags
+    const allTags = new Set<string>();
+    for (const doc of data ?? []) {
+      if (Array.isArray(doc.tags)) {
+        for (const tag of doc.tags) {
+          allTags.add(tag);
+        }
+      }
+    }
+
+    res.json({
+      tags: Array.from(allTags).sort(),
+    });
+  } catch (error) {
+    logger.error('Failed to get tags', { error, workspaceId: req.workspace!.id });
+    res.status(500).json({ error: 'Failed to get tags' });
+  }
+});
+
+/**
+ * Update document tags
+ */
+documentsRouter.patch('/:id/tags', requireWorkspaceAdmin, async (req, res) => {
+  try {
+    const { tags } = req.body;
+
+    // Validate tags array
+    if (!Array.isArray(tags)) {
+      return res.status(400).json({ error: 'tags must be an array of strings' });
+    }
+
+    // Validate all tags are strings and sanitize
+    const sanitizedTags = tags
+      .filter((tag): tag is string => typeof tag === 'string')
+      .map(tag => tag.trim().toLowerCase())
+      .filter(tag => tag.length > 0 && tag.length <= 50);
+
+    // Remove duplicates
+    const uniqueTags = [...new Set(sanitizedTags)];
+
+    const { data, error } = await supabase
+      .from('documents')
+      .update({ tags: uniqueTags })
+      .eq('id', req.params.id)
+      .eq('workspace_id', req.workspace!.id)
+      .select('id, title, tags')
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+      throw error;
+    }
+
+    logger.info('Document tags updated', {
+      id: req.params.id,
+      tags: uniqueTags,
+      workspaceId: req.workspace!.id
+    });
+
+    res.json(data);
+  } catch (error) {
+    logger.error('Failed to update document tags', { error, id: req.params.id, workspaceId: req.workspace!.id });
+    res.status(500).json({ error: 'Failed to update document tags' });
   }
 });

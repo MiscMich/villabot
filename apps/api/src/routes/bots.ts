@@ -680,3 +680,167 @@ botsRouter.post('/:id/restart', requireWorkspaceAdmin, async (req, res) => {
     res.status(500).json({ error: 'Failed to restart bot' });
   }
 });
+
+// ============================================
+// SLACK CREDENTIAL TESTING
+// ============================================
+
+/**
+ * Test Slack credentials before saving
+ * POST /api/bots/test-slack
+ */
+botsRouter.post('/test-slack', async (req, res) => {
+  try {
+    const { botToken, appToken, signingSecret } = req.body;
+
+    if (!botToken || !appToken) {
+      return res.status(400).json({
+        valid: false,
+        error: 'Bot Token and App Token are required'
+      });
+    }
+
+    // Validate token formats
+    if (!botToken.startsWith('xoxb-')) {
+      return res.status(400).json({
+        valid: false,
+        error: 'Bot Token must start with xoxb-'
+      });
+    }
+
+    if (!appToken.startsWith('xapp-')) {
+      return res.status(400).json({
+        valid: false,
+        error: 'App Token must start with xapp-'
+      });
+    }
+
+    // Test the bot token by calling auth.test
+    const { WebClient } = await import('@slack/web-api');
+    const client = new WebClient(botToken);
+
+    const authResult = await client.auth.test();
+
+    if (!authResult.ok) {
+      return res.status(400).json({
+        valid: false,
+        error: 'Invalid Bot Token - authentication failed'
+      });
+    }
+
+    logger.info('Slack credentials validated successfully', {
+      teamId: authResult.team_id,
+      teamName: authResult.team,
+      botUserId: authResult.user_id
+    });
+
+    res.json({
+      valid: true,
+      teamName: authResult.team,
+      teamId: authResult.team_id,
+      botUserId: authResult.user_id
+    });
+  } catch (error) {
+    logger.error('Slack credential test failed', { error });
+
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+    // Check for specific Slack API errors
+    if (errorMessage.includes('invalid_auth')) {
+      return res.status(400).json({
+        valid: false,
+        error: 'Invalid Bot Token - please check your token'
+      });
+    }
+
+    if (errorMessage.includes('token_revoked')) {
+      return res.status(400).json({
+        valid: false,
+        error: 'Bot Token has been revoked'
+      });
+    }
+
+    res.status(400).json({
+      valid: false,
+      error: `Slack validation failed: ${errorMessage}`
+    });
+  }
+});
+
+// ============================================
+// BOT SYNC TRIGGER
+// ============================================
+
+/**
+ * Trigger sync for a specific bot
+ * POST /api/bots/:id/sync
+ */
+botsRouter.post('/:id/sync', requireWorkspaceAdmin, async (req, res) => {
+  try {
+    const botId = req.params.id;
+    const workspaceId = req.workspace!.id;
+
+    // Verify bot exists and belongs to workspace
+    const { data: bot, error: botError } = await supabase
+      .from('bots')
+      .select('id, name, status')
+      .eq('id', botId)
+      .eq('workspace_id', workspaceId)
+      .single();
+
+    if (botError || !bot) {
+      return res.status(404).json({ error: 'Bot not found' });
+    }
+
+    // Check if bot has any folders assigned
+    const { data: folders, error: foldersError } = await supabase
+      .from('bot_drive_folders')
+      .select('id, drive_folder_id, folder_name')
+      .eq('bot_id', botId)
+      .eq('is_active', true);
+
+    if (foldersError) {
+      logger.error('Failed to fetch bot folders', { error: foldersError, botId });
+      return res.status(500).json({ error: 'Failed to check bot folders' });
+    }
+
+    if (!folders || folders.length === 0) {
+      return res.status(400).json({
+        started: false,
+        error: 'No folders assigned to this bot. Add folders before syncing.'
+      });
+    }
+
+    // Import sync service
+    const { fullSync } = await import('../services/google-drive/sync.js');
+    const { isDriveClientInitialized } = await import('../services/google-drive/client.js');
+
+    // Check if Drive client is initialized
+    if (!isDriveClientInitialized()) {
+      return res.status(400).json({
+        started: false,
+        error: 'Google Drive not connected. Please connect Google Drive first.'
+      });
+    }
+
+    logger.info('Starting bot sync', { botId, workspaceId, folderCount: folders.length });
+
+    // Start sync in background (don't await)
+    fullSync({ workspaceId, botId })
+      .then((result) => {
+        logger.info('Bot sync completed', { botId, workspaceId, result });
+      })
+      .catch((error) => {
+        logger.error('Bot sync failed', { botId, workspaceId, error });
+      });
+
+    res.json({
+      started: true,
+      message: `Sync started for ${bot.name}. Syncing ${folders.length} folder(s).`,
+      folders: folders.map(f => f.folder_name)
+    });
+  } catch (error) {
+    logger.error('Error triggering bot sync', { error, id: req.params.id, workspaceId: req.workspace!.id });
+    res.status(500).json({ error: 'Failed to trigger sync' });
+  }
+});

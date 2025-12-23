@@ -28,6 +28,14 @@ interface SyncResult {
 interface SyncOptions {
   workspaceId: string;  // Required for tenant isolation
   botId?: string;  // Optional bot-specific sync
+  folderId?: string;  // Optional specific folder to sync
+}
+
+interface BotFolder {
+  id: string;
+  drive_folder_id: string;
+  folder_name: string;
+  is_active: boolean;
 }
 
 /**
@@ -59,73 +67,134 @@ async function storePageToken(workspaceId: string, token: string): Promise<void>
 
 /**
  * Perform full sync of all documents
+ * If botId is provided, syncs all folders assigned to that bot via bot_drive_folders
+ * If folderId is provided, syncs only that specific folder
  */
 export async function fullSync(options: SyncOptions): Promise<SyncResult> {
-  const { workspaceId, botId } = options;
+  const { workspaceId, botId, folderId } = options;
 
   if (!isDriveClientInitialized()) {
     logger.warn('Drive client not initialized, skipping sync');
     return { added: 0, updated: 0, removed: 0, errors: ['Drive client not initialized'] };
   }
 
-  logger.info('Starting full document sync', { workspaceId, botId });
+  logger.info('Starting full document sync', { workspaceId, botId, folderId });
   const result: SyncResult = { added: 0, updated: 0, removed: 0, errors: [] };
 
   try {
-    // Get all files from Drive
-    const driveFiles = await listFilesInFolder();
+    // Determine which folders to sync
+    let foldersToSync: BotFolder[] = [];
 
-    // Get all existing documents from DB for this workspace
-    let query = supabase
+    if (folderId) {
+      // Sync specific folder only
+      foldersToSync = [{
+        id: 'single',
+        drive_folder_id: folderId,
+        folder_name: 'Specified Folder',
+        is_active: true,
+      }];
+    } else if (botId) {
+      // Get folders assigned to this bot from bot_drive_folders table
+      const { data: botFolders, error: folderError } = await supabase
+        .from('bot_drive_folders')
+        .select('id, drive_folder_id, folder_name, is_active')
+        .eq('bot_id', botId)
+        .eq('is_active', true);
+
+      if (folderError) {
+        logger.error('Failed to fetch bot folders', { error: folderError, botId });
+        return { added: 0, updated: 0, removed: 0, errors: ['Failed to fetch bot folders'] };
+      }
+
+      if (!botFolders || botFolders.length === 0) {
+        logger.warn('No folders assigned to bot', { botId });
+        return { added: 0, updated: 0, removed: 0, errors: [] };
+      }
+
+      foldersToSync = botFolders;
+      logger.info(`Found ${foldersToSync.length} folders for bot`, { botId, folders: foldersToSync.map(f => f.folder_name) });
+    } else {
+      // Workspace-wide sync: get all folders from all bots in workspace
+      const { data: workspaceFolders, error: wsError } = await supabase
+        .from('bot_drive_folders')
+        .select('id, drive_folder_id, folder_name, is_active, bots!inner(workspace_id)')
+        .eq('bots.workspace_id', workspaceId)
+        .eq('is_active', true);
+
+      if (wsError) {
+        logger.error('Failed to fetch workspace folders', { error: wsError, workspaceId });
+        return { added: 0, updated: 0, removed: 0, errors: ['Failed to fetch workspace folders'] };
+      }
+
+      foldersToSync = (workspaceFolders ?? []) as unknown as BotFolder[];
+      logger.info(`Found ${foldersToSync.length} folders for workspace`, { workspaceId });
+    }
+
+    // Get all existing documents from DB for this scope
+    let existingQuery = supabase
       .from('documents')
-      .select('id, drive_file_id, content_hash')
+      .select('id, drive_file_id, content_hash, drive_folder_id')
       .eq('workspace_id', workspaceId)
       .eq('source_type', 'google_drive');
 
     if (botId) {
-      query = query.eq('bot_id', botId);
+      existingQuery = existingQuery.eq('bot_id', botId);
     }
 
-    const { data: existingDocs } = await query;
-
+    const { data: existingDocs } = await existingQuery;
     const existingMap = new Map(
       (existingDocs ?? []).map(d => [d.drive_file_id, d])
     );
     const processedIds = new Set<string>();
 
-    // Process each file
-    for (const file of driveFiles) {
+    // Sync each folder
+    for (const folder of foldersToSync) {
       try {
-        processedIds.add(file.id);
-        const existing = existingMap.get(file.id);
+        logger.info(`Syncing folder: ${folder.folder_name}`, { driveFolderId: folder.drive_folder_id });
 
-        // Parse and hash content
-        const parsed = await parseFile(file.id, file.mimeType, file.name);
-        const contentHash = hashContent(parsed.content);
+        // Get all files from this Drive folder
+        const driveFiles = await listFilesInFolder(folder.drive_folder_id);
+        logger.info(`Found ${driveFiles.length} files in folder`, { folder: folder.folder_name });
 
-        if (existing) {
-          // Check if content changed
-          if (existing.content_hash === contentHash) {
-            logger.debug(`Skipping unchanged file: ${file.name}`);
-            continue;
+        // Process each file in this folder
+        for (const file of driveFiles) {
+          try {
+            processedIds.add(file.id);
+            const existing = existingMap.get(file.id);
+
+            // Parse and hash content
+            const parsed = await parseFile(file.id, file.mimeType, file.name);
+            const contentHash = hashContent(parsed.content);
+
+            if (existing) {
+              // Check if content changed
+              if (existing.content_hash === contentHash) {
+                logger.debug(`Skipping unchanged file: ${file.name}`);
+                continue;
+              }
+
+              // Update existing document
+              await updateDocument(existing.id, file, parsed.content, contentHash);
+              result.updated++;
+            } else {
+              // Add new document with workspace, bot, and folder context
+              await addDocument(file, parsed.content, contentHash, workspaceId, botId, folder.drive_folder_id);
+              result.added++;
+            }
+          } catch (error) {
+            const message = `Failed to process ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+            logger.error(message);
+            result.errors.push(message);
           }
-
-          // Update existing document
-          await updateDocument(existing.id, file, parsed.content, contentHash);
-          result.updated++;
-        } else {
-          // Add new document with workspace context
-          await addDocument(file, parsed.content, contentHash, workspaceId, botId);
-          result.added++;
         }
       } catch (error) {
-        const message = `Failed to process ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+        const message = `Failed to sync folder ${folder.folder_name}: ${error instanceof Error ? error.message : 'Unknown error'}`;
         logger.error(message);
         result.errors.push(message);
       }
     }
 
-    // Remove documents that no longer exist in Drive
+    // Remove documents that no longer exist in any synced folder
     for (const [driveFileId, doc] of existingMap) {
       if (!processedIds.has(driveFileId)) {
         await supabase.from('documents').delete().eq('id', doc.id);
@@ -137,7 +206,7 @@ export async function fullSync(options: SyncOptions): Promise<SyncResult> {
     const pageToken = await getStartPageToken();
     await storePageToken(workspaceId, pageToken);
 
-    logger.info('Full sync completed', { ...result, workspaceId });
+    logger.info('Full sync completed', { ...result, workspaceId, botId });
     return result;
   } catch (error) {
     logger.error('Full sync failed', { error, workspaceId });
@@ -147,6 +216,7 @@ export async function fullSync(options: SyncOptions): Promise<SyncResult> {
 
 /**
  * Perform incremental sync based on changes
+ * Filters changes to only include files in bot's assigned folders
  */
 export async function incrementalSync(options: SyncOptions): Promise<SyncResult> {
   const { workspaceId, botId } = options;
@@ -167,7 +237,34 @@ export async function incrementalSync(options: SyncOptions): Promise<SyncResult>
       return fullSync(options);
     }
 
-    logger.info('Starting incremental sync', { workspaceId });
+    logger.info('Starting incremental sync', { workspaceId, botId });
+
+    // Get folders assigned to this bot/workspace for filtering changes
+    let allowedFolderIds: Set<string> = new Set();
+
+    if (botId) {
+      const { data: botFolders } = await supabase
+        .from('bot_drive_folders')
+        .select('drive_folder_id')
+        .eq('bot_id', botId)
+        .eq('is_active', true);
+
+      allowedFolderIds = new Set((botFolders ?? []).map(f => f.drive_folder_id));
+    } else {
+      // Workspace-wide: get all folders from all bots
+      const { data: workspaceFolders } = await supabase
+        .from('bot_drive_folders')
+        .select('drive_folder_id, bots!inner(workspace_id)')
+        .eq('bots.workspace_id', workspaceId)
+        .eq('is_active', true);
+
+      allowedFolderIds = new Set((workspaceFolders ?? []).map(f => f.drive_folder_id));
+    }
+
+    if (allowedFolderIds.size === 0) {
+      logger.warn('No folders configured for sync', { workspaceId, botId });
+      return result;
+    }
 
     // Get changes since last sync
     const { changes, newPageToken } = await listChanges(pageToken);
@@ -183,25 +280,42 @@ export async function incrementalSync(options: SyncOptions): Promise<SyncResult>
     for (const change of changes) {
       try {
         if (change.removed) {
-          // File was deleted - only delete for this workspace
-          const { data } = await supabase
+          // File was deleted - only delete for this workspace/bot
+          let deleteQuery = supabase
             .from('documents')
             .delete()
             .eq('workspace_id', workspaceId)
-            .eq('drive_file_id', change.fileId)
-            .select('id');
+            .eq('drive_file_id', change.fileId);
+
+          if (botId) {
+            deleteQuery = deleteQuery.eq('bot_id', botId);
+          }
+
+          const { data } = await deleteQuery.select('id');
 
           if (data && data.length > 0) {
             result.removed++;
           }
         } else if (change.file) {
+          // Check if file's parent folder is in our allowed folders
+          const fileParentId = change.file.parents?.[0];
+          if (!fileParentId || !allowedFolderIds.has(fileParentId)) {
+            logger.debug(`Skipping file not in assigned folders: ${change.file.name}`);
+            continue;
+          }
+
           // File was added or modified - check within workspace
-          const { data: existing } = await supabase
+          let existingQuery = supabase
             .from('documents')
-            .select('id, content_hash')
+            .select('id, content_hash, drive_folder_id')
             .eq('workspace_id', workspaceId)
-            .eq('drive_file_id', change.fileId)
-            .single();
+            .eq('drive_file_id', change.fileId);
+
+          if (botId) {
+            existingQuery = existingQuery.eq('bot_id', botId);
+          }
+
+          const { data: existing } = await existingQuery.single();
 
           const parsed = await parseFile(
             change.file.id,
@@ -216,7 +330,8 @@ export async function incrementalSync(options: SyncOptions): Promise<SyncResult>
               result.updated++;
             }
           } else {
-            await addDocument(change.file, parsed.content, contentHash, workspaceId, botId);
+            // Add new document with folder context
+            await addDocument(change.file, parsed.content, contentHash, workspaceId, botId, fileParentId);
             result.added++;
           }
         }
@@ -230,7 +345,7 @@ export async function incrementalSync(options: SyncOptions): Promise<SyncResult>
     // Store new page token for this workspace
     await storePageToken(workspaceId, newPageToken);
 
-    logger.info('Incremental sync completed', { ...result, workspaceId });
+    logger.info('Incremental sync completed', { ...result, workspaceId, botId });
     return result;
   } catch (error) {
     logger.error('Incremental sync failed', { error, workspaceId });
@@ -246,9 +361,10 @@ async function addDocument(
   content: string,
   contentHash: string,
   workspaceId: string,
-  botId?: string
+  botId?: string,
+  driveFolderId?: string
 ): Promise<void> {
-  logger.info(`Adding document: ${file.name}`, { workspaceId });
+  logger.info(`Adding document: ${file.name}`, { workspaceId, botId, driveFolderId });
 
   // Insert document metadata with workspace context
   const insertData: Record<string, unknown> = {
@@ -260,10 +376,15 @@ async function addDocument(
     source_url: file.webViewLink,
     content_hash: contentHash,
     last_modified: file.modifiedTime,
+    tags: [],  // Initialize empty tags array for user customization
   };
 
   if (botId) {
     insertData.bot_id = botId;
+  }
+
+  if (driveFolderId) {
+    insertData.drive_folder_id = driveFolderId;
   }
 
   const { data: doc, error: docError } = await supabase

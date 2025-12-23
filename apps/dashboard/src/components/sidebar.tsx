@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { useState, useEffect, createContext, useContext } from 'react';
 import { useSetupStatus, getSetupProgress } from '@/hooks/useSetupStatus';
+import { useAuth } from '@/contexts/AuthContext';
 import { fadeInUp, staggerContainer } from '@/lib/motion';
 
 // Mobile sidebar context
@@ -119,6 +120,7 @@ export function Sidebar() {
   const setupProgress = getSetupProgress(setupStatus);
   const isSetupComplete = setupStatus?.completed ?? true;
   const { isOpen, setIsOpen } = useMobileSidebar();
+  const { signOut } = useAuth();
 
   // Close sidebar on navigation
   useEffect(() => {
@@ -278,7 +280,7 @@ export function Sidebar() {
 
         {/* User section */}
         <div className="px-4 py-4 border-t border-white/5 relative">
-          <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors group cursor-pointer">
+          <div data-testid="user-menu" className="flex items-center gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors group cursor-pointer">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-pink-600 shadow-glow-purple">
               <User className="h-5 w-5 text-white" />
             </div>
@@ -286,7 +288,12 @@ export function Sidebar() {
               <p className="text-sm font-medium text-white truncate">User Account</p>
               <p className="text-xs text-white/50 truncate">Manage profile</p>
             </div>
-            <button className="p-2 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors">
+            <button
+              aria-label="Sign out"
+              data-testid="sign-out-button"
+              onClick={signOut}
+              className="p-2 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors"
+            >
               <LogOut className="h-4 w-4" />
             </button>
           </div>
