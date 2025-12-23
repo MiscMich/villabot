@@ -102,13 +102,18 @@ export async function middleware(request: NextRequest) {
   // For non-public routes, also check setup status
   if (!isPublicRoute && !pathname.startsWith('/setup') && session) {
     // Get user's default workspace ID from their profile
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('user_profiles')
       .select('default_workspace_id')
       .eq('id', session.user.id)
       .single();
 
+    if (profileError) {
+      console.error('[Middleware] Failed to get user profile:', profileError.message, 'userId:', session.user.id);
+    }
+
     const workspaceId = profile?.default_workspace_id;
+    console.log('[Middleware] Setup check:', { userId: session.user.id, workspaceId, hasProfile: !!profile });
     return await checkSetupStatus(request, workspaceId);
   }
 
@@ -146,6 +151,8 @@ async function checkSetupStatus(request: NextRequest, workspaceId?: string) {
       ? `${API_BASE}/api/setup/status?workspaceId=${encodeURIComponent(workspaceId)}`
       : `${API_BASE}/api/setup/status`;
 
+    console.log('[Middleware] Checking setup status:', { url, workspaceId, API_BASE });
+
     const response = await fetch(url, {
       method: 'GET',
       headers: {
@@ -156,15 +163,19 @@ async function checkSetupStatus(request: NextRequest, workspaceId?: string) {
 
     if (response.ok) {
       const status = await response.json();
+      console.log('[Middleware] Setup status response:', status);
 
       if (!status.completed) {
+        console.log('[Middleware] Setup not complete, redirecting to /setup');
         const setupUrl = new URL('/setup', request.url);
         return NextResponse.redirect(setupUrl);
       }
+    } else {
+      console.error('[Middleware] Setup status check failed:', response.status, response.statusText);
     }
   } catch (error) {
     // If API is unavailable, allow through
-    console.warn('Setup status check failed:', error);
+    console.warn('[Middleware] Setup status check error:', error);
   }
 
   return NextResponse.next();
