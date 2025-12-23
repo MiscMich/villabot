@@ -432,6 +432,7 @@ setupRouter.post('/complete', authenticate, async (req, res) => {
     if (website?.url) {
       scrapeWebsite({
         workspaceId,
+        websiteUrl: website.url,
         maxPages: website.maxPages ?? 200,
       })
         .then((result) => {

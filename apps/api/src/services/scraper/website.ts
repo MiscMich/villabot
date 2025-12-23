@@ -26,6 +26,7 @@ interface ScrapedPage {
 
 interface ScrapeOptions {
   workspaceId: string;  // Required for tenant isolation
+  websiteUrl?: string;  // URL to scrape (from setup config or env var fallback)
   botId?: string;  // Optional bot-specific scraping
   maxPages?: number;
   rateLimitMs?: number;
@@ -43,11 +44,12 @@ export async function scrapeWebsite(options: ScrapeOptions): Promise<{
   chunksCreated: number;
   errors: string[];
 }> {
-  const { workspaceId, botId } = options;
+  const { workspaceId, botId, websiteUrl: configuredUrl } = options;
 
-  const websiteUrl = env.COMPANY_WEBSITE_URL;
+  // Use URL from options (setup config), fall back to env var for backwards compatibility
+  const websiteUrl = configuredUrl || env.COMPANY_WEBSITE_URL;
   if (!websiteUrl) {
-    logger.warn('No website URL configured, skipping scrape');
+    logger.warn('No website URL configured, skipping scrape', { workspaceId });
     return { pagesScraped: 0, chunksCreated: 0, errors: ['No website URL configured'] };
   }
 

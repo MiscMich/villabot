@@ -24,12 +24,13 @@ const jobs: Map<string, ScheduledJob> = new Map();
 
 /**
  * Get all active workspaces for scheduled jobs
+ * Active means status is 'active' or 'trialing' (not 'suspended' or 'cancelled')
  */
 async function getActiveWorkspaces(): Promise<Array<{ id: string; name: string }>> {
   const { data, error } = await supabase
     .from('workspaces')
     .select('id, name')
-    .eq('is_active', true);
+    .in('status', ['active', 'trialing']);
 
   if (error) {
     logger.error('Failed to get active workspaces', { error });
@@ -179,6 +180,28 @@ async function runSessionCleanup(): Promise<void> {
 }
 
 /**
+ * Get website URL for a workspace from its setup config
+ */
+async function getWorkspaceWebsiteUrl(workspaceId: string): Promise<{ url: string; maxPages: number } | null> {
+  const { data } = await supabase
+    .from('bot_config')
+    .select('value')
+    .eq('workspace_id', workspaceId)
+    .eq('key', 'setup_config')
+    .single();
+
+  if (!data?.value) return null;
+
+  const config = data.value as { website?: { url?: string; maxPages?: number } };
+  if (!config.website?.url) return null;
+
+  return {
+    url: config.website.url,
+    maxPages: config.website.maxPages ?? 200,
+  };
+}
+
+/**
  * Run website scraping for all workspaces
  */
 async function runWebsiteScrape(): Promise<void> {
@@ -186,7 +209,18 @@ async function runWebsiteScrape(): Promise<void> {
 
   for (const workspace of workspaces) {
     try {
-      const result = await scrapeWebsite({ workspaceId: workspace.id });
+      // Get website URL from workspace's setup config
+      const websiteConfig = await getWorkspaceWebsiteUrl(workspace.id);
+      if (!websiteConfig) {
+        logger.debug('No website URL configured for workspace, skipping', { workspaceId: workspace.id });
+        continue;
+      }
+
+      const result = await scrapeWebsite({
+        workspaceId: workspace.id,
+        websiteUrl: websiteConfig.url,
+        maxPages: websiteConfig.maxPages,
+      });
       logger.info('Website scrape completed', { ...result, workspaceId: workspace.id });
 
       await supabase.from('analytics').insert({
@@ -277,7 +311,19 @@ export async function triggerWebsiteScrape(workspaceId: string): Promise<{
   errors: string[];
 }> {
   logger.info('Triggering immediate website scrape', { workspaceId });
-  return scrapeWebsite({ workspaceId });
+
+  // Get website URL from workspace's setup config
+  const websiteConfig = await getWorkspaceWebsiteUrl(workspaceId);
+  if (!websiteConfig) {
+    logger.warn('No website URL configured for workspace', { workspaceId });
+    return { pagesScraped: 0, chunksCreated: 0, errors: ['No website URL configured'] };
+  }
+
+  return scrapeWebsite({
+    workspaceId,
+    websiteUrl: websiteConfig.url,
+    maxPages: websiteConfig.maxPages,
+  });
 }
 
 /**
