@@ -579,14 +579,14 @@ function SlackStep({
               <a href="https://api.slack.com/apps" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline inline-flex items-center gap-1">
                 api.slack.com/apps <ExternalLink className="w-3 h-3" />
               </a>{' '}
-              and click &quot;Create New App&quot; → &quot;From scratch&quot;.
+              and click &quot;Create New App&quot; → &quot;From scratch&quot;. Give it a name (e.g., &quot;Cluebase AI&quot;) and select your workspace.
             </p>
           </div>
 
           <div className="space-y-3">
             <h4 className="font-semibold text-foreground">2. Enable Socket Mode</h4>
             <p className="text-muted-foreground">
-              Go to &quot;Socket Mode&quot; in the sidebar and toggle it on. Create an App-Level Token with <span className="font-mono bg-secondary px-1.5 py-0.5 rounded">connections:write</span> scope.
+              Go to &quot;Socket Mode&quot; in the sidebar and toggle it on. Create an App-Level Token with <span className="font-mono bg-secondary px-1.5 py-0.5 rounded">connections:write</span> scope. Copy this token - it&apos;s your App-Level Token (xapp-...).
             </p>
           </div>
 
@@ -596,7 +596,7 @@ function SlackStep({
               Under &quot;OAuth & Permissions&quot;, add these Bot Token Scopes:
             </p>
             <div className="flex flex-wrap gap-2">
-              {['app_mentions:read', 'channels:history', 'chat:write', 'reactions:read', 'users:read'].map((scope) => (
+              {['app_mentions:read', 'channels:history', 'chat:write', 'reactions:read', 'users:read', 'channels:read', 'groups:history', 'groups:read', 'im:history', 'im:read', 'im:write', 'mpim:history', 'mpim:read'].map((scope) => (
                 <span key={scope} className="px-2 py-1 bg-secondary rounded-md font-mono text-xs">
                   {scope}
                 </span>
@@ -605,17 +605,45 @@ function SlackStep({
           </div>
 
           <div className="space-y-3">
-            <h4 className="font-semibold text-foreground">4. Install to Workspace</h4>
+            <h4 className="font-semibold text-foreground">4. Enable Event Subscriptions</h4>
             <p className="text-muted-foreground">
-              Click &quot;Install to Workspace&quot; and copy the Bot Token from &quot;OAuth & Permissions&quot;.
+              Go to &quot;Event Subscriptions&quot; and turn it on. Under &quot;Subscribe to bot events&quot;, add:
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {['app_mention', 'message.channels', 'message.groups', 'message.im', 'message.mpim'].map((event) => (
+                <span key={event} className="px-2 py-1 bg-secondary rounded-md font-mono text-xs">
+                  {event}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <h4 className="font-semibold text-foreground text-success">5. Install to Workspace (Required!)</h4>
+            <p className="text-muted-foreground">
+              <strong className="text-foreground">This step is essential.</strong> Click &quot;Install to Workspace&quot; at the top of the &quot;OAuth & Permissions&quot; page. Authorize the app, then copy the <span className="font-mono bg-secondary px-1.5 py-0.5 rounded">Bot User OAuth Token</span> (starts with xoxb-).
             </p>
           </div>
 
           <div className="space-y-3">
-            <h4 className="font-semibold text-foreground">5. Get Signing Secret</h4>
+            <h4 className="font-semibold text-foreground">6. Get Signing Secret</h4>
             <p className="text-muted-foreground">
               Find the Signing Secret in &quot;Basic Information&quot; under App Credentials.
             </p>
+          </div>
+
+          <div className="mt-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-medium text-amber-600 dark:text-amber-400">After Setup: Invite Your Bot!</p>
+                <p className="text-amber-600/80 dark:text-amber-400/80 text-sm">
+                  Once setup is complete, you must invite the bot to channels. In Slack, go to any channel and type:
+                  <code className="block mt-2 px-3 py-2 bg-secondary rounded font-mono text-sm">/invite @YourBotName</code>
+                  The bot will only respond in channels it&apos;s been invited to.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </InfoModal>
@@ -1229,7 +1257,7 @@ function SetupWizardContent() {
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
           transition={{ type: 'spring', stiffness: 200, damping: 15 }}
-          className="text-center space-y-6"
+          className="text-center space-y-6 max-w-lg"
         >
           <motion.div
             initial={{ scale: 0 }}
@@ -1255,6 +1283,31 @@ function SetupWizardContent() {
           >
             Your bot is now running and ready to help your team.
           </motion.p>
+
+          {/* Important: Invite bot to channels */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.55 }}
+            className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-left"
+          >
+            <div className="flex items-start gap-3">
+              <MessageSquare className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+              <div className="space-y-2">
+                <p className="font-medium text-amber-600 dark:text-amber-400">Next Step: Invite Your Bot to Channels</p>
+                <p className="text-amber-600/80 dark:text-amber-400/80 text-sm">
+                  In Slack, go to any channel where you want the bot to respond and type:
+                </p>
+                <code className="block px-3 py-2 bg-secondary rounded font-mono text-sm text-center">
+                  /invite @{config.bot.name || 'YourBotName'}
+                </code>
+                <p className="text-amber-600/70 dark:text-amber-400/70 text-xs">
+                  The bot will only respond in channels it&apos;s been invited to. You can also mention it directly with @{config.bot.name || 'YourBotName'}.
+                </p>
+              </div>
+            </div>
+          </motion.div>
+
           <motion.a
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
