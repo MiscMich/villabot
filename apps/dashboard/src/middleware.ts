@@ -100,8 +100,16 @@ export async function middleware(request: NextRequest) {
   }
 
   // For non-public routes, also check setup status
-  if (!isPublicRoute && !pathname.startsWith('/setup')) {
-    return await checkSetupStatus(request);
+  if (!isPublicRoute && !pathname.startsWith('/setup') && session) {
+    // Get user's default workspace ID from their profile
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('default_workspace_id')
+      .eq('id', session.user.id)
+      .single();
+
+    const workspaceId = profile?.default_workspace_id;
+    return await checkSetupStatus(request, workspaceId);
   }
 
   return NextResponse.next();
@@ -125,7 +133,7 @@ function isE2ETestMode(request: NextRequest): boolean {
 /**
  * Check if initial setup is complete
  */
-async function checkSetupStatus(request: NextRequest) {
+async function checkSetupStatus(request: NextRequest, workspaceId?: string) {
   // Bypass setup check in E2E test mode
   if (isE2ETestMode(request)) {
     console.log('E2E test mode - bypassing setup check in middleware');
@@ -133,7 +141,12 @@ async function checkSetupStatus(request: NextRequest) {
   }
 
   try {
-    const response = await fetch(`${API_BASE}/api/setup/status`, {
+    // Include workspace ID in the request if available
+    const url = workspaceId
+      ? `${API_BASE}/api/setup/status?workspaceId=${encodeURIComponent(workspaceId)}`
+      : `${API_BASE}/api/setup/status`;
+
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
