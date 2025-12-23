@@ -276,8 +276,8 @@ setupRouter.post('/complete', authenticate, async (req, res) => {
           });
         }
 
-        // Create owner membership
-        await supabase
+        // Create owner membership - CRITICAL: must succeed or rollback
+        const { error: memberError } = await supabase
           .from('workspace_members')
           .insert({
             workspace_id: newWorkspace.id,
@@ -285,6 +285,21 @@ setupRouter.post('/complete', authenticate, async (req, res) => {
             role: 'owner',
             is_active: true,
           });
+
+        if (memberError) {
+          // Rollback: delete the orphan workspace we just created
+          await supabase.from('workspaces').delete().eq('id', newWorkspace.id);
+          logger.error('Failed to create workspace membership, rolled back workspace', {
+            workspaceId: newWorkspace.id,
+            userId,
+            error: memberError,
+          });
+          return res.status(500).json({
+            success: false,
+            error: 'Failed to associate user with workspace',
+            details: memberError.message,
+          });
+        }
 
         // Update user profile with default workspace
         await supabase
