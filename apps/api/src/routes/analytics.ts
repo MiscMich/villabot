@@ -10,12 +10,14 @@ import {
   authenticate,
   resolveWorkspace,
   requireWorkspaceAdmin,
+  generalApiRateLimiter,
 } from '../middleware/index.js';
 
 export const analyticsRouter = Router();
 
-// Apply authentication and workspace resolution to all routes
-analyticsRouter.use(authenticate, resolveWorkspace);
+// Apply authentication, workspace resolution, and rate limiting to all routes
+// Order matters: authenticate first, then resolveWorkspace, then rate limiter
+analyticsRouter.use(authenticate, resolveWorkspace, generalApiRateLimiter);
 
 /**
  * Get dashboard overview stats for the workspace

@@ -25,11 +25,7 @@ import { initializeSlackBots, isSlackBotRunning, shutdownSlackBots, botManager }
 // Legacy import for backwards compatibility during transition
 import { initializeSlackBot as initializeLegacyBot, shutdownSlackBot as shutdownLegacyBot, isSlackBotRunning as isLegacyBotRunning } from './services/slack/bot.js';
 import { initializeScheduler, stopScheduler } from './services/scheduler/index.js';
-import {
-  documentSyncRateLimiter,
-  generalApiRateLimiter,
-  isPlatformAdmin,
-} from './middleware/rateLimit.js';
+import { isPlatformAdmin } from './middleware/rateLimit.js';
 
 const app = express();
 
@@ -67,21 +63,23 @@ app.use('/health', healthRouter);
 app.use('/api/auth', usersAuthRouter);
 app.use('/auth', authRouter); // Google Drive OAuth (legacy path)
 
-// Protected routes (with rate limiting)
-// Note: Rate limiters require authenticate + resolveWorkspace middleware on routes
+// Protected routes
+// Note: Rate limiters are now applied INSIDE routers, AFTER authenticate + resolveWorkspace
+// This ensures req.workspace is set before rate limiting checks
 // Workspaces router doesn't use resolveWorkspace (it manages workspaces directly)
 app.use('/api/workspaces', workspacesRouter);
-app.use('/api/team', generalApiRateLimiter, teamRouter);
-app.use('/api/config', generalApiRateLimiter, configRouter);
-app.use('/api/documents', documentSyncRateLimiter, documentsRouter);
-app.use('/api/analytics', generalApiRateLimiter, analyticsRouter);
-app.use('/api/errors', generalApiRateLimiter, errorsRouter);
-app.use('/api/conversations', generalApiRateLimiter, conversationsRouter);
-app.use('/api/bots', generalApiRateLimiter, botsRouter);
-app.use('/api/feedback', generalApiRateLimiter, feedbackRouter);
+app.use('/api/team', teamRouter);
+app.use('/api/config', configRouter);
+app.use('/api/documents', documentsRouter);
+app.use('/api/analytics', analyticsRouter);
+app.use('/api/errors', errorsRouter);
+app.use('/api/conversations', conversationsRouter);
+app.use('/api/bots', botsRouter);
+app.use('/api/feedback', feedbackRouter);
 // Setup router doesn't use resolveWorkspace (used during initial setup before workspace exists)
 app.use('/api/setup', setupRouter);
-app.use('/api/billing', generalApiRateLimiter, billingRouter);
+// Billing routes handle their own auth per-route (some need workspace, some don't)
+app.use('/api/billing', billingRouter);
 
 // Platform admin routes - NO rate limiting (platform admins bypass limits)
 app.use('/api/admin', adminRouter);

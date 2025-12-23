@@ -12,13 +12,15 @@ import {
   resolveWorkspace,
   requireWorkspaceAdmin,
   checkUsageLimit,
+  generalApiRateLimiter,
 } from '../middleware/index.js';
 import type { BotCreateInput, BotUpdateInput } from '@cluebase/shared';
 
 export const botsRouter = Router();
 
-// Apply authentication and workspace resolution to all routes
-botsRouter.use(authenticate, resolveWorkspace);
+// Apply authentication, workspace resolution, and rate limiting to all routes
+// Order matters: authenticate first, then resolveWorkspace, then rate limiter
+botsRouter.use(authenticate, resolveWorkspace, generalApiRateLimiter);
 
 // ============================================
 // BOT CRUD

@@ -10,13 +10,15 @@ import {
   authenticate,
   resolveWorkspace,
   requireWorkspaceAdmin,
+  generalApiRateLimiter,
 } from '../middleware/index.js';
 import type { FeedbackSubmitInput, FeedbackReviewInput } from '@cluebase/shared';
 
 export const feedbackRouter = Router();
 
-// Apply authentication and workspace resolution to all routes
-feedbackRouter.use(authenticate, resolveWorkspace);
+// Apply authentication, workspace resolution, and rate limiting to all routes
+// Order matters: authenticate first, then resolveWorkspace, then rate limiter
+feedbackRouter.use(authenticate, resolveWorkspace, generalApiRateLimiter);
 
 /**
  * Submit feedback for a bot response

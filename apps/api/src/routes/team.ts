@@ -11,6 +11,7 @@ import {
   resolveWorkspace,
   requireWorkspaceAdmin,
   checkUsageLimit,
+  generalApiRateLimiter,
 } from '../middleware/index.js';
 import { randomBytes } from 'crypto';
 import { env } from '../config/env.js';
@@ -22,8 +23,9 @@ import type {
 
 export const teamRouter = Router();
 
-// Apply authentication and workspace resolution to all routes
-teamRouter.use(authenticate, resolveWorkspace);
+// Apply authentication, workspace resolution, and rate limiting to all routes
+// Order matters: authenticate first, then resolveWorkspace, then rate limiter
+teamRouter.use(authenticate, resolveWorkspace, generalApiRateLimiter);
 
 /**
  * List all members in the workspace

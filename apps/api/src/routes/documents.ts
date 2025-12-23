@@ -15,12 +15,14 @@ import {
   resolveWorkspace,
   requireWorkspaceAdmin,
   checkUsageLimit,
+  documentSyncRateLimiter,
 } from '../middleware/index.js';
 
 export const documentsRouter = Router();
 
-// Apply authentication and workspace resolution to all routes
-documentsRouter.use(authenticate, resolveWorkspace);
+// Apply authentication, workspace resolution, and rate limiting to all routes
+// Order matters: authenticate first, then resolveWorkspace, then rate limiter
+documentsRouter.use(authenticate, resolveWorkspace, documentSyncRateLimiter);
 
 /**
  * List all documents for the workspace

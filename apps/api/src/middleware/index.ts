@@ -23,3 +23,10 @@ export {
   requireFeature,
   getUsageSummary,
 } from './subscription.js';
+
+// Rate limiting
+export {
+  generalApiRateLimiter,
+  documentSyncRateLimiter,
+  isPlatformAdmin,
+} from './rateLimit.js';

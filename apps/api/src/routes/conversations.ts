@@ -9,12 +9,14 @@ import { logger } from '../utils/logger.js';
 import {
   authenticate,
   resolveWorkspace,
+  generalApiRateLimiter,
 } from '../middleware/index.js';
 
 const router = Router();
 
-// Apply authentication and workspace resolution to all routes
-router.use(authenticate, resolveWorkspace);
+// Apply authentication, workspace resolution, and rate limiting to all routes
+// Order matters: authenticate first, then resolveWorkspace, then rate limiter
+router.use(authenticate, resolveWorkspace, generalApiRateLimiter);
 
 /**
  * GET /api/conversations
