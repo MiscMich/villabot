@@ -271,8 +271,13 @@ ${searchResults.length > 1 ? `\n_I also found related information in: ${searchRe
         confidence: 0.4,
       };
     }
-  } catch {
-    // Search also failed, provide generic fallback
+  } catch (fallbackError) {
+    // Search also failed, log the error for observability
+    logger.error('Fallback search also failed during response generation', {
+      error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+      stack: fallbackError instanceof Error ? fallbackError.stack : undefined,
+      workspaceId,
+    });
   }
 
   return {

@@ -41,6 +41,9 @@ services:
       retries: 3
       start_period: 60s
     restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
     networks:
       - coolify
     # Note: Coolify manages Traefik routing automatically
@@ -64,8 +67,32 @@ services:
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
     restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
     networks:
       - coolify
+
+  # Redis for rate limiting and caching
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory 100mb --maxmemory-policy allkeys-lru
+    expose:
+      - "6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - coolify
+
+volumes:
+  redis_data:
 
 networks:
   coolify:

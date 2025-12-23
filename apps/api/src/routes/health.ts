@@ -13,29 +13,43 @@ interface HealthStatus {
   uptime: number;
   services: {
     supabase: 'connected' | 'disconnected';
-    slack: 'connected' | 'disconnected';
     gemini: 'connected' | 'disconnected';
-    googleDrive: 'connected' | 'disconnected';
+  };
+  // Per-workspace integrations - informational only, don't affect platform health
+  integrations: {
+    activeSlackBots: number;
+    workspacesWithGoogleDrive: number;
   };
   version: string;
 }
 
-// Track service status
+// Track PLATFORM-LEVEL service status only
+// Slack and Google Drive are per-workspace OAuth integrations, not platform services
 const serviceStatus = {
   supabase: false,
-  slack: false,
   gemini: false,
-  googleDrive: false,
+};
+
+// Track workspace integration counts (informational)
+const integrationCounts = {
+  activeSlackBots: 0,
+  workspacesWithGoogleDrive: 0,
 };
 
 export function updateServiceStatus(service: keyof typeof serviceStatus, status: boolean): void {
   serviceStatus[service] = status;
 }
 
+export function updateIntegrationCounts(counts: Partial<typeof integrationCounts>): void {
+  Object.assign(integrationCounts, counts);
+}
+
 healthRouter.get('/', async (_req: Request, res: Response) => {
   const supabaseOk = await testSupabaseConnection();
   updateServiceStatus('supabase', supabaseOk);
 
+  // Platform health is based on core services only (Supabase + Gemini)
+  // Slack/Drive are per-workspace integrations - they don't affect platform health
   const allHealthy = Object.values(serviceStatus).every(Boolean);
   const anyHealthy = Object.values(serviceStatus).some(Boolean);
 
@@ -45,9 +59,12 @@ healthRouter.get('/', async (_req: Request, res: Response) => {
     uptime: process.uptime(),
     services: {
       supabase: serviceStatus.supabase ? 'connected' : 'disconnected',
-      slack: serviceStatus.slack ? 'connected' : 'disconnected',
       gemini: serviceStatus.gemini ? 'connected' : 'disconnected',
-      googleDrive: serviceStatus.googleDrive ? 'connected' : 'disconnected',
+    },
+    // Per-workspace integrations (informational - doesn't affect platform status)
+    integrations: {
+      activeSlackBots: integrationCounts.activeSlackBots,
+      workspacesWithGoogleDrive: integrationCounts.workspacesWithGoogleDrive,
     },
     version: process.env.npm_package_version ?? '0.1.0',
   };

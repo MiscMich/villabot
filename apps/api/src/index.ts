@@ -3,11 +3,11 @@ import express from 'express';
 import cors from 'cors';
 import { env } from './config/env.js';
 import { logger } from './utils/logger.js';
-import { healthRouter, updateServiceStatus } from './routes/health.js';
+import { healthRouter, updateServiceStatus, updateIntegrationCounts } from './routes/health.js';
 import { configRouter } from './routes/config.js';
 import { documentsRouter } from './routes/documents.js';
 import { analyticsRouter } from './routes/analytics.js';
-import { authRouter, initializeDriveFromStoredTokens } from './routes/auth.js';
+import { authRouter } from './routes/auth.js';
 import { usersAuthRouter } from './routes/users-auth.js';
 import { workspacesRouter } from './routes/workspaces.js';
 import { teamRouter } from './routes/team.js';
@@ -139,42 +139,39 @@ async function start(): Promise<void> {
     logger.warn('✗ Supabase connection failed - running in degraded mode');
   }
 
-  // Initialize Google Drive from stored tokens
+  // Google Drive OAuth is configured at platform level (client credentials)
+  // but connections are per-workspace - this just verifies OAuth is available
   if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) {
-    const driveOk = await initializeDriveFromStoredTokens();
-    updateServiceStatus('googleDrive', driveOk);
-    if (driveOk) {
-      logger.info('✓ Google Drive connection established');
-    } else {
-      logger.info('○ Google Drive not connected - use /auth/google to connect');
-    }
+    logger.info('✓ Google Drive OAuth available (per-workspace integration)');
+    // Count will be updated dynamically when workspaces connect Drive
   } else {
-    logger.info('○ Google Drive credentials not configured');
+    logger.info('○ Google Drive OAuth credentials not configured');
   }
 
-  // Initialize Slack bots
+  // Initialize Slack bots (per-workspace integration)
+  // Slack is NOT a platform service - each workspace configures their own bot
   try {
     // Try multi-bot system first (loads active bots from database)
     await initializeSlackBots();
 
     if (isSlackBotRunning()) {
       const runningCount = botManager.getRunningCount();
-      updateServiceStatus('slack', true);
-      logger.info(`✓ Slack bots connected (${runningCount} bot(s))`);
+      updateIntegrationCounts({ activeSlackBots: runningCount });
+      logger.info(`✓ Slack bots running (${runningCount} active from workspaces)`);
     } else if (env.SLACK_BOT_TOKEN && env.SLACK_APP_TOKEN) {
       // Fall back to legacy single bot if no bots in database
       logger.info('No bots in database, using legacy single-bot mode');
       await initializeLegacyBot();
-      updateServiceStatus('slack', isLegacyBotRunning());
       if (isLegacyBotRunning()) {
-        logger.info('✓ Slack bot connected (legacy mode)');
+        updateIntegrationCounts({ activeSlackBots: 1 });
+        logger.info('✓ Slack bot running (legacy mode)');
       }
     } else {
-      logger.info('○ Slack credentials not configured');
+      logger.info('○ No Slack bots configured by any workspace yet');
     }
   } catch (error) {
-    logger.error('✗ Slack bot(s) failed to connect', { error });
-    updateServiceStatus('slack', false);
+    logger.error('✗ Slack bot initialization failed', { error });
+    updateIntegrationCounts({ activeSlackBots: 0 });
   }
 
   // Check Gemini API

@@ -23,6 +23,7 @@
  */
 
 import { Request, Response, NextFunction, RequestHandler } from 'express';
+import { Redis } from 'ioredis';
 import { supabase } from '../services/supabase/client.js';
 import { logger } from '../utils/logger.js';
 import { LRUCache } from '../utils/cache.js';
@@ -113,34 +114,160 @@ class InMemoryRateLimiter {
 const inMemoryLimiter = new InMemoryRateLimiter();
 
 // ============================================
-// REDIS INTEGRATION (Optional)
+// REDIS INTEGRATION
 // ============================================
 
-// Note: Redis client can be initialized here if REDIS_URL is provided
-// For now, we'll use in-memory as the primary implementation
+let redisClient: Redis | null = null;
 let redisAvailable = false;
 
 /**
- * Initialize Redis connection (optional)
- * This can be enhanced to connect to Redis if needed
+ * Redis-based rate limiter for multi-instance deployments
+ */
+class RedisRateLimiter {
+  private client: Redis;
+
+  constructor(client: Redis) {
+    this.client = client;
+  }
+
+  async increment(key: string, windowMs: number): Promise<RateLimitInfo> {
+    const now = Date.now();
+    // windowSec could be used for EXPIRE command, but we use pexpire with ms instead
+    // const windowSec = Math.ceil(windowMs / 1000);
+
+    try {
+      // Use Redis MULTI for atomic increment + TTL
+      const pipeline = this.client.pipeline();
+      pipeline.incr(key);
+      pipeline.pttl(key);
+      const results = await pipeline.exec();
+
+      if (!results) {
+        throw new Error('Redis pipeline returned null');
+      }
+
+      const [[incrErr, count], [ttlErr, ttl]] = results as [[Error | null, number], [Error | null, number]];
+
+      if (incrErr) throw incrErr;
+      if (ttlErr) throw ttlErr;
+
+      // Set TTL if this is a new key (TTL returns -1 for no expiry, -2 for non-existent)
+      if (ttl === -1 || ttl === -2) {
+        await this.client.pexpire(key, windowMs);
+      }
+
+      const resetAt = ttl > 0 ? now + ttl : now + windowMs;
+
+      return {
+        limit: -1, // Will be set by caller
+        current: count,
+        remaining: -1,
+        resetAt: new Date(resetAt),
+      };
+    } catch (error) {
+      logger.error('Redis rate limit increment failed, falling back to in-memory', { error, key });
+      // Fall back to in-memory on Redis error
+      return inMemoryLimiter.increment(key, windowMs);
+    }
+  }
+
+  async reset(key: string): Promise<void> {
+    try {
+      await this.client.del(key);
+    } catch (error) {
+      logger.error('Redis rate limit reset failed', { error, key });
+    }
+  }
+}
+
+let redisLimiter: RedisRateLimiter | null = null;
+
+/**
+ * Initialize Redis connection if REDIS_URL is provided
+ * Falls back to in-memory storage if Redis is unavailable
  */
 export function initializeRedis(): void {
-  // TODO: Initialize Redis client if REDIS_URL env var is set
-  // For now, we use in-memory storage as fallback
-  redisAvailable = false;
-  logger.info('Rate limiter using in-memory storage');
+  const redisUrl = process.env.REDIS_URL;
+
+  if (!redisUrl) {
+    redisAvailable = false;
+    logger.info('Rate limiter using in-memory storage (REDIS_URL not set)');
+    return;
+  }
+
+  try {
+    const client = new Redis(redisUrl, {
+      maxRetriesPerRequest: 3,
+      enableReadyCheck: true,
+      lazyConnect: true,
+      connectTimeout: 10000,
+    });
+
+    client.on('connect', () => {
+      logger.info('Redis connected for rate limiting');
+      redisAvailable = true;
+    });
+
+    client.on('error', (error: Error) => {
+      logger.error('Redis connection error', { error: error.message });
+      redisAvailable = false;
+    });
+
+    client.on('close', () => {
+      logger.warn('Redis connection closed');
+      redisAvailable = false;
+    });
+
+    // Store in module-level variable
+    redisClient = client;
+
+    // Attempt connection
+    client.connect().then(() => {
+      redisLimiter = new RedisRateLimiter(client);
+      redisAvailable = true;
+      logger.info('Rate limiter using Redis storage');
+    }).catch((error: Error) => {
+      logger.error('Failed to connect to Redis, using in-memory fallback', { error: error.message });
+      redisAvailable = false;
+    });
+  } catch (error) {
+    logger.error('Failed to initialize Redis client', { error });
+    redisAvailable = false;
+    logger.info('Rate limiter using in-memory storage (Redis initialization failed)');
+  }
+}
+
+/**
+ * Gracefully shutdown Redis connection
+ */
+export async function shutdownRedis(): Promise<void> {
+  if (redisClient) {
+    try {
+      await redisClient.quit();
+      logger.info('Redis connection closed gracefully');
+    } catch (error) {
+      logger.error('Error closing Redis connection', { error });
+    }
+  }
+}
+
+/**
+ * Check if Redis is currently available
+ */
+export function isRedisAvailable(): boolean {
+  return redisAvailable && redisLimiter !== null;
 }
 
 /**
  * Increment rate limit counter
+ * Uses Redis if available, falls back to in-memory
  */
 async function incrementRateLimit(
   key: string,
   windowMs: number
 ): Promise<RateLimitInfo> {
-  if (redisAvailable) {
-    // TODO: Use Redis implementation
-    // For now, fall back to in-memory
+  if (redisAvailable && redisLimiter) {
+    return redisLimiter.increment(key, windowMs);
   }
 
   return inMemoryLimiter.increment(key, windowMs);
