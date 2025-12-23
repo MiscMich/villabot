@@ -31,7 +31,7 @@ authRouter.get('/google', (_req, res) => {
  */
 authRouter.get('/google/callback', async (req, res) => {
   try {
-    const { code } = req.query;
+    const { code, state } = req.query;
 
     if (!code || typeof code !== 'string') {
       return res.status(400).json({ error: 'Authorization code is required' });
@@ -55,11 +55,21 @@ authRouter.get('/google/callback', async (req, res) => {
 
     logger.info('Google Drive connected successfully');
 
-    // Redirect to dashboard or return success
-    res.redirect(`${env.APP_URL}/settings?google_connected=true`);
+    // Redirect based on state - setup wizard or settings page
+    if (state === 'setup') {
+      res.redirect(`${env.APP_URL}/setup?google_auth=success`);
+    } else {
+      res.redirect(`${env.APP_URL}/settings?google_connected=true`);
+    }
   } catch (error) {
     logger.error('OAuth callback failed', { error });
-    res.status(500).json({ error: 'Failed to complete OAuth flow' });
+    // Redirect with error state
+    const state = req.query.state;
+    if (state === 'setup') {
+      res.redirect(`${env.APP_URL}/setup?google_auth=error`);
+    } else {
+      res.redirect(`${env.APP_URL}/settings?google_connected=false`);
+    }
   }
 });
 

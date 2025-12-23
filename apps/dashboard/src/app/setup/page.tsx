@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useCallback, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -626,9 +626,13 @@ function SlackStep({
 function GoogleDriveStep({
   config,
   onUpdate,
+  fullConfig,
+  currentStep,
 }: {
   config: SetupConfig['googleDrive'];
   onUpdate: (data: Partial<SetupConfig['googleDrive']>) => void;
+  fullConfig: SetupConfig;
+  currentStep: number;
 }) {
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -640,7 +644,9 @@ function GoogleDriveStep({
       const response = await fetch(`${API_BASE}/api/setup/google-auth-url`);
       const result = await response.json();
       if (result.authUrl) {
-        // Store the pending auth state and redirect to Google OAuth
+        // Save wizard state before OAuth redirect
+        sessionStorage.setItem('setup_wizard_config', JSON.stringify(fullConfig));
+        sessionStorage.setItem('setup_wizard_step', String(currentStep));
         sessionStorage.setItem('setup_pending_google_auth', 'true');
         window.location.href = result.authUrl;
       } else {
@@ -1047,6 +1053,7 @@ function CompleteStep({
 export default function SetupWizard() {
   const { session } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [currentStep, setCurrentStep] = useState(0);
   const [isLaunching, setIsLaunching] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
@@ -1058,6 +1065,44 @@ export default function SetupWizard() {
     knowledgeSources: { driveEnabled: true, websiteEnabled: false, websiteUrl: '', maxPages: 200 },
     bot: { name: 'Cluebase', slug: 'cluebase', personality: 'Friendly and professional', instructions: '' },
   });
+
+  // Handle OAuth callback - restore state after Google redirect
+  useEffect(() => {
+    const googleAuthResult = searchParams.get('google_auth');
+    const savedConfig = sessionStorage.getItem('setup_wizard_config');
+    const savedStep = sessionStorage.getItem('setup_wizard_step');
+
+    if (googleAuthResult && savedConfig) {
+      try {
+        const parsedConfig = JSON.parse(savedConfig) as SetupConfig;
+
+        // Restore the saved config
+        setConfig({
+          ...parsedConfig,
+          googleDrive: {
+            ...parsedConfig.googleDrive,
+            authenticated: googleAuthResult === 'success',
+          },
+        });
+
+        // Restore to Google Drive step (step 3)
+        if (savedStep) {
+          setCurrentStep(parseInt(savedStep, 10));
+        }
+
+        // Clean up sessionStorage and URL
+        sessionStorage.removeItem('setup_wizard_config');
+        sessionStorage.removeItem('setup_wizard_step');
+        sessionStorage.removeItem('setup_pending_google_auth');
+
+        // Remove query params from URL without reload
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, '', newUrl);
+      } catch (e) {
+        console.error('Failed to restore setup wizard state:', e);
+      }
+    }
+  }, [searchParams]);
 
   const updateConfig = useCallback(
     <K extends keyof SetupConfig>(key: K) =>
@@ -1079,7 +1124,7 @@ export default function SetupWizard() {
       case 2:
         return config.slack.connected;
       case 3:
-        return config.googleDrive.authenticated;
+        return true; // Google Drive is optional - can skip
       case 4:
         return true; // Knowledge sources are optional
       case 5:
@@ -1307,6 +1352,8 @@ export default function SetupWizard() {
                   <GoogleDriveStep
                     config={config.googleDrive}
                     onUpdate={updateConfig('googleDrive')}
+                    fullConfig={config}
+                    currentStep={currentStep}
                   />
                 )}
                 {currentStep === 4 && (
