@@ -13,7 +13,7 @@ const publicRoutes = [
   '/auth/forgot-password',
   '/auth/callback',
   '/auth/reset-password',
-  '/setup',
+  // NOTE: /setup is NOT public - users must be authenticated to complete setup
   '/pricing',
   '/features',
 ];

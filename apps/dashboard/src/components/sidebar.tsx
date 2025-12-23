@@ -120,7 +120,11 @@ export function Sidebar() {
   const setupProgress = getSetupProgress(setupStatus);
   const isSetupComplete = setupStatus?.completed ?? true;
   const { isOpen, setIsOpen } = useMobileSidebar();
-  const { signOut } = useAuth();
+  const { signOut, user, profile } = useAuth();
+
+  // Get display name and email from auth context
+  const displayName = profile?.full_name || user?.email?.split('@')[0] || 'User';
+  const displayEmail = user?.email || 'No email';
 
   // Close sidebar on navigation
   useEffect(() => {
@@ -282,17 +286,20 @@ export function Sidebar() {
         <div className="px-4 py-4 border-t border-white/5 relative">
           <div data-testid="user-menu" className="flex items-center gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors group cursor-pointer">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-pink-600 shadow-glow-purple">
-              <User className="h-5 w-5 text-white" />
+              <span className="text-sm font-bold text-white">
+                {displayName.charAt(0).toUpperCase()}
+              </span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white truncate">User Account</p>
-              <p className="text-xs text-white/50 truncate">Manage profile</p>
+              <p className="text-sm font-medium text-white truncate">{displayName}</p>
+              <p className="text-xs text-white/50 truncate">{displayEmail}</p>
             </div>
             <button
               aria-label="Sign out"
               data-testid="sign-out-button"
               onClick={signOut}
               className="p-2 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors"
+              title="Sign out"
             >
               <LogOut className="h-4 w-4" />
             </button>

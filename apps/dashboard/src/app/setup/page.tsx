@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth, useRequireAuth } from '@/contexts/AuthContext';
 
 // API Base URL
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
@@ -1057,7 +1057,8 @@ function CompleteStep({
 // ============================================
 
 function SetupWizardContent() {
-  const { session } = useAuth();
+  // Enforce authentication - redirects to signin if not authenticated
+  const { session, isLoading: authLoading, user } = useRequireAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [currentStep, setCurrentStep] = useState(0);
@@ -1200,6 +1201,25 @@ function SetupWizardContent() {
       setIsLaunching(false);
     }
   };
+
+  // Show loading while auth is being checked (useRequireAuth handles redirect)
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="relative">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center shadow-lg">
+              <Sparkles className="w-8 h-8 text-white" />
+            </div>
+            <div className="absolute -bottom-1 -right-1">
+              <Loader2 className="w-6 h-6 text-violet-500 animate-spin" />
+            </div>
+          </div>
+          <p className="text-muted-foreground text-sm">Checking authentication...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Completion Animation
   if (isComplete) {

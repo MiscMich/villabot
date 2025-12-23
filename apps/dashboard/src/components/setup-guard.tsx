@@ -10,6 +10,8 @@ interface SetupGuardProps {
 }
 
 // Public routes that should skip setup guard
+// NOTE: /setup is NOT here because authenticated users who haven't completed
+// setup should be redirected TO /setup, not away from it
 const PUBLIC_ROUTES = [
   '/',           // Landing page
   '/auth',       // All auth pages

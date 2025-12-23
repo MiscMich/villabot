@@ -9,12 +9,14 @@ interface ConditionalLayoutProps {
 }
 
 // Public routes that should NOT have the dashboard layout (sidebar, etc.)
+// NOTE: These routes skip the sidebar layout, but /setup still REQUIRES authentication
+// (enforced by middleware) - it just doesn't show the sidebar for a focused experience
 const PUBLIC_ROUTES = [
   '/',           // Landing page
   '/auth',       // All auth pages
   '/pricing',    // Pricing page
   '/features',   // Features page
-  '/setup',      // Setup wizard (full-page experience)
+  '/setup',      // Setup wizard (full-page experience, but auth required via middleware)
 ];
 
 /**

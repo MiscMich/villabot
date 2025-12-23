@@ -21,12 +21,43 @@ import {
   Slack,
   Sparkles,
   Sliders,
+  User,
+  LogOut,
+  Mail,
+  Shield,
 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function SettingsPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { user, profile, signOut } = useAuth();
   const [saving, setSaving] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+
+  // User display info
+  const displayName = profile?.full_name || user?.email?.split('@')[0] || 'User';
+  const displayEmail = user?.email || 'No email';
+
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    try {
+      await signOut();
+      toast({
+        title: 'Signed out',
+        description: 'You have been signed out successfully.',
+        variant: 'success',
+      });
+    } catch (error) {
+      toast({
+        title: 'Sign out failed',
+        description: error instanceof Error ? error.message : 'An error occurred while signing out.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSigningOut(false);
+    }
+  };
 
   const { data: config, isLoading: configLoading } = useQuery({
     queryKey: ['config'],
@@ -179,6 +210,10 @@ export default function SettingsPage() {
 
       <Tabs defaultValue="general" className="opacity-0 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
         <TabsList className="bg-secondary/50 p-1">
+          <TabsTrigger value="account" className="data-[state=active]:bg-background">
+            <User className="h-4 w-4 mr-2" />
+            Account
+          </TabsTrigger>
           <TabsTrigger value="general" className="data-[state=active]:bg-background">
             <Sliders className="h-4 w-4 mr-2" />
             General
@@ -196,6 +231,74 @@ export default function SettingsPage() {
             Sync
           </TabsTrigger>
         </TabsList>
+
+        {/* Account Settings */}
+        <TabsContent value="account" className="mt-6 space-y-6">
+          {/* User Profile Card */}
+          <div className="glass-card">
+            <div className="p-6 border-b border-border/50">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-gradient-to-br from-violet-500/20 to-pink-500/20">
+                  <User className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+                </div>
+                <div>
+                  <h2 className="font-display text-xl font-semibold">Your Account</h2>
+                  <p className="text-sm text-muted-foreground">Manage your personal account settings</p>
+                </div>
+              </div>
+            </div>
+            <div className="p-6 space-y-6">
+              {/* User Avatar and Info */}
+              <div className="flex items-center gap-4 p-4 rounded-xl bg-secondary/50 border border-border/50">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-pink-600 shadow-lg">
+                  <span className="text-2xl font-bold text-white">
+                    {displayName.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-lg font-semibold truncate">{displayName}</p>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Mail className="h-4 w-4" />
+                    <span className="text-sm truncate">{displayEmail}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Account Details */}
+              <div className="grid gap-4">
+                <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/30 border border-border/50">
+                  <div className="flex items-center gap-3">
+                    <Shield className="h-5 w-5 text-muted-foreground" />
+                    <div>
+                      <p className="font-medium">Authentication</p>
+                      <p className="text-sm text-muted-foreground">Signed in with email</p>
+                    </div>
+                  </div>
+                  <span className="flex items-center gap-2 text-sm font-medium px-3 py-1 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                    <CheckCircle className="h-4 w-4" />
+                    Active
+                  </span>
+                </div>
+              </div>
+
+              {/* Sign Out Button */}
+              <div className="pt-4 border-t border-border/50">
+                <Button
+                  variant="outline"
+                  onClick={handleSignOut}
+                  disabled={signingOut}
+                  className="hover:border-red-500/50 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  {signingOut ? 'Signing out...' : 'Sign Out'}
+                </Button>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Sign out of your account on this device
+                </p>
+              </div>
+            </div>
+          </div>
+        </TabsContent>
 
         {/* General Settings */}
         <TabsContent value="general" className="mt-6">
