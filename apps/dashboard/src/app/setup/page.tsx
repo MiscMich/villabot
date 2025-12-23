@@ -1,5 +1,8 @@
 'use client';
 
+// Prevent static prerendering - this page uses useSearchParams for OAuth callback handling
+export const dynamic = 'force-dynamic';
+
 import { useState, useCallback, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
