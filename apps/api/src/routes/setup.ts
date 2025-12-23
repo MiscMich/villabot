@@ -372,6 +372,23 @@ setupRouter.post('/complete', authenticate, async (req, res) => {
       slackSigningSecret: slack.signingSecret ?? undefined,
     });
 
+    // Activate the bot and start it in the bot manager
+    const { botManager } = await import('../services/slack/manager.js');
+
+    // Update bot status to 'active'
+    await supabase
+      .from('bots')
+      .update({ status: 'active', is_default: true })
+      .eq('id', newBot.id);
+
+    // Start the bot in the manager
+    const botStarted = await botManager.startBot(newBot.id);
+    if (botStarted) {
+      logger.info('Bot started successfully during setup', { botId: newBot.id });
+    } else {
+      logger.warn('Bot created but failed to start - may need manual restart', { botId: newBot.id });
+    }
+
     // Mark setup as complete
     const setupStatus: SetupStatus = {
       completed: true,

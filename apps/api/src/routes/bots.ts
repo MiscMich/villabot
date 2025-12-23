@@ -465,22 +465,39 @@ botsRouter.delete('/:botId/channels/:channelId', requireWorkspaceAdmin, async (r
 // ============================================
 
 /**
- * Activate a bot
+ * Activate a bot - updates status AND starts it in the BotManager
  */
 botsRouter.post('/:id/activate', requireWorkspaceAdmin, async (req, res) => {
   try {
+    const botId = req.params.id as string;
+    const workspaceId = req.workspace!.id;
+
     const { data: bot, error } = await supabase
       .from('bots')
       .update({ status: 'active', updated_at: new Date().toISOString() })
-      .eq('id', req.params.id)
-      .eq('workspace_id', req.workspace!.id)
+      .eq('id', botId)
+      .eq('workspace_id', workspaceId)
       .select()
       .single();
 
     if (error) throw error;
 
-    logger.info('Bot activated', { id: req.params.id, workspaceId: req.workspace!.id });
-    res.json({ bot });
+    // Start the bot in the manager
+    const started = await botManager.startBot(botId);
+
+    logger.info('Bot activated', {
+      id: botId,
+      workspaceId,
+      started,
+    });
+
+    res.json({
+      bot,
+      started,
+      message: started
+        ? 'Bot activated and started successfully'
+        : 'Bot activated but failed to start - check Slack credentials',
+    });
   } catch (error) {
     logger.error('Failed to activate bot', { error, id: req.params.id, workspaceId: req.workspace!.id });
     res.status(500).json({ error: 'Failed to activate bot' });
@@ -488,22 +505,37 @@ botsRouter.post('/:id/activate', requireWorkspaceAdmin, async (req, res) => {
 });
 
 /**
- * Deactivate a bot
+ * Deactivate a bot - updates status AND stops it in the BotManager
  */
 botsRouter.post('/:id/deactivate', requireWorkspaceAdmin, async (req, res) => {
   try {
+    const botId = req.params.id as string;
+    const workspaceId = req.workspace!.id;
+
+    // Stop the bot in the manager first
+    const stopped = await botManager.stopBot(botId);
+
     const { data: bot, error } = await supabase
       .from('bots')
       .update({ status: 'inactive', updated_at: new Date().toISOString() })
-      .eq('id', req.params.id)
-      .eq('workspace_id', req.workspace!.id)
+      .eq('id', botId)
+      .eq('workspace_id', workspaceId)
       .select()
       .single();
 
     if (error) throw error;
 
-    logger.info('Bot deactivated', { id: req.params.id, workspaceId: req.workspace!.id });
-    res.json({ bot });
+    logger.info('Bot deactivated', {
+      id: botId,
+      workspaceId,
+      stopped,
+    });
+
+    res.json({
+      bot,
+      stopped,
+      message: 'Bot deactivated successfully',
+    });
   } catch (error) {
     logger.error('Failed to deactivate bot', { error, id: req.params.id, workspaceId: req.workspace!.id });
     res.status(500).json({ error: 'Failed to deactivate bot' });
