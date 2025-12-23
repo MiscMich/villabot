@@ -14,6 +14,7 @@ const PUBLIC_ROUTES = [
   '/auth',       // All auth pages
   '/pricing',    // Pricing page
   '/features',   // Features page
+  '/setup',      // Setup wizard (full-page experience)
 ];
 
 /**

@@ -133,12 +133,38 @@ After deployment, verify:
 - No longer requires Google Drive authentication
 - Website URL serves as valid knowledge source alternative
 
-### Remaining Backend Issue
+### Backend Issue - ROOT CAUSE FOUND (2025-12-23)
 
-The `POST /api/setup/complete` endpoint returns 500 error when attempting to launch the bot. This is a **separate backend issue** unrelated to the UI fixes:
-- Possible causes: database schema, `createBot()` function, workspace creation
-- UI fixes are complete and working correctly
-- Backend investigation needed separately
+The `POST /api/setup/complete` endpoint returns 500 error when attempting to launch the bot.
+
+**ROOT CAUSE IDENTIFIED:**
+The `bot_config` table has an OLD unique constraint `bot_config_key_key` (UNIQUE on just `key` column) that prevents multiple rows with the same key for different workspaces.
+
+When the setup wizard tries to upsert a `setup_config` entry for a new workspace, it fails because:
+```
+duplicate key value violates unique constraint "bot_config_key_key"
+Key (key)=(setup_config) already exists.
+```
+
+**Fixes Applied (Partial):**
+1. ✅ Added `workspace_id` to `createBot()` INSERT statement
+2. ✅ Added `workspace_id` column to `bot_config` table
+3. ❌ **MISSING:** Old constraint `bot_config_key_key` NOT dropped
+4. ❌ **MISSING:** New constraint `bot_config_workspace_key_unique` NOT added
+
+**SQL to Run in Supabase Studio:**
+```sql
+-- Drop the old unique constraint on just 'key'
+ALTER TABLE bot_config DROP CONSTRAINT IF EXISTS bot_config_key_key;
+
+-- Add new unique constraint that's per-workspace
+ALTER TABLE bot_config ADD CONSTRAINT bot_config_workspace_key_unique UNIQUE (workspace_id, key);
+
+-- Create index for faster lookups by workspace
+CREATE INDEX IF NOT EXISTS idx_bot_config_workspace_id ON bot_config(workspace_id);
+```
+
+**Status:** Waiting for database constraint fix. Once the SQL above is executed in Supabase Studio, the setup wizard should work correctly.
 
 ## Testing Credentials Used
 
