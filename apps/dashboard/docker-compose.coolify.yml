@@ -16,7 +16,7 @@ services:
       args:
         # These are baked into the build at compile time
         - NEXT_PUBLIC_API_URL=https://api.cluebase.ai
-        - NEXT_PUBLIC_SUPABASE_URL=https://supabase.cluebase.ai
+        - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
         - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
         - NEXT_PUBLIC_APP_NAME=Cluebase AI
         - NEXT_PUBLIC_APP_URL=https://cluebase.ai
