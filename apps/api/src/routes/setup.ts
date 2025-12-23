@@ -335,12 +335,15 @@ setupRouter.post('/complete', authenticate, async (req, res) => {
     // Save setup config
     await supabase
       .from('bot_config')
-      .upsert({
-        key: SETUP_CONFIG_KEY,
-        value: configToSave,
-        workspace_id: workspaceId,
-        updated_at: new Date().toISOString(),
-      });
+      .upsert(
+        {
+          key: SETUP_CONFIG_KEY,
+          value: configToSave,
+          workspace_id: workspaceId,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'workspace_id,key' }
+      );
 
     // Create the first bot with Slack credentials
     const newBot = await createBot({
@@ -368,12 +371,15 @@ setupRouter.post('/complete', authenticate, async (req, res) => {
 
     await supabase
       .from('bot_config')
-      .upsert({
-        key: SETUP_STATUS_KEY,
-        value: setupStatus,
-        workspace_id: workspaceId,
-        updated_at: new Date().toISOString(),
-      });
+      .upsert(
+        {
+          key: SETUP_STATUS_KEY,
+          value: setupStatus,
+          workspace_id: workspaceId,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'workspace_id,key' }
+      );
 
     // Trigger initial sync operations in background (don't await)
     // These run asynchronously so setup completes immediately
@@ -426,10 +432,19 @@ setupRouter.post('/complete', authenticate, async (req, res) => {
       },
     });
   } catch (error) {
-    logger.error('Setup completion failed', { error });
+    // Enhanced error logging for debugging
+    const errorDetails = {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      code: (error as { code?: string })?.code,
+      details: (error as { details?: string })?.details,
+      hint: (error as { hint?: string })?.hint,
+      stack: error instanceof Error ? error.stack : undefined,
+    };
+    logger.error('Setup completion failed', { error: errorDetails });
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to complete setup',
+      details: errorDetails.code || errorDetails.details || undefined,
     });
   }
 });
