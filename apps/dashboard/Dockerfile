@@ -2,7 +2,8 @@
 # Multi-stage build for production Next.js
 
 # Stage 1: Dependencies
-FROM node:20-alpine AS deps
+# Using GCR mirror to avoid Docker Hub rate limits
+FROM mirror.gcr.io/library/node:20-alpine AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
@@ -18,7 +19,7 @@ COPY packages/shared/package.json ./packages/shared/
 RUN pnpm install --frozen-lockfile
 
 # Stage 2: Builder
-FROM node:20-alpine AS builder
+FROM mirror.gcr.io/library/node:20-alpine AS builder
 RUN corepack enable && corepack prepare pnpm@latest --activate
 WORKDIR /app
 
@@ -47,7 +48,7 @@ RUN pnpm --filter @cluebase/shared build
 RUN pnpm --filter @cluebase/dashboard build
 
 # Stage 3: Runner
-FROM node:20-alpine AS runner
+FROM mirror.gcr.io/library/node:20-alpine AS runner
 RUN apk add --no-cache dumb-init
 WORKDIR /app
 
