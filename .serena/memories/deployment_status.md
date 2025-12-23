@@ -1,11 +1,27 @@
-# Deployment Status - 2025-12-23 (Database Functions Fixed)
+# Deployment Status - 2025-12-23 (All Issues Resolved)
 
 ## Production Status
-- **Dashboard**: https://cluebase.ai - ✅ LIVE with cloud Supabase
-- **API**: https://api.cluebase.ai - ✅ LIVE with cloud Supabase
+- **Dashboard**: https://cluebase.ai - ✅ LIVE and WORKING
+- **API**: https://api.cluebase.ai - ✅ LIVE and WORKING
 - **Supabase**: https://grjociqyeotxwqdjovmt.supabase.co (CLOUD) - ✅ PRODUCTION
 
-## Latest Bug Fixes Deployed (2025-12-23 22:45 UTC)
+## Latest Bug Fixes Deployed (2025-12-24 ~00:00 UTC)
+
+### Dashboard Redirect Loop Fix ✅ (commit e27cdbb)
+- **Issue**: Dashboard stuck on /setup page, infinite redirect loop
+- **Root Cause**: RLS policy `admin_read_all_users` on `user_profiles` table had recursive subquery causing "infinite recursion detected in policy" error
+- **Fix**:
+  - Created `is_current_user_admin()` security definer function to check admin status without recursion
+  - Updated RLS policy to use the function instead of recursive subquery
+  - Migration: `fix_user_profiles_rls_recursion`
+- **Verification**: All dashboard pages now load correctly (Dashboard, Documents, Analytics, Bots, Settings, etc.)
+
+### Missing /usage API Endpoint Fix ✅ (commit e27cdbb)
+- **Issue**: Dashboard calling `/api/workspaces/{id}/usage` but API only had `/api/workspaces/current/usage`
+- **Fix**: Added `/api/workspaces/:id/usage` endpoint with proper membership checking
+- **File Changed**: `apps/api/src/routes/workspaces.ts`
+
+## Previous Bug Fixes (2025-12-23 22:45 UTC)
 
 ### Multi-Tenant Database Functions Fix ✅ (migration applied)
 - **Issue**: Slack bot not responding to messages despite receiving events
@@ -84,6 +100,8 @@ All pages have proper API integrations with React Query.
 - [x] Verify scheduler no longer has is_active error ✅
 - [x] Database functions have correct multi-tenant signatures ✅
 - [x] Dashboard UI pages verified ✅
+- [x] Dashboard redirect loop fixed ✅
+- [x] /usage endpoint added ✅
 - [ ] **User should test**: Send message to Slack bot to confirm RAG responses work
 - [ ] Test website scraping after reset (user should re-run setup or trigger manual scrape)
 - [ ] Verify scraped documents appear in dashboard
