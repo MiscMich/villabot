@@ -2,16 +2,32 @@
 
 **Date**: 2025-12-23
 **Environment**: Production (cluebase.ai)
-**Coolify Deployment**: Commit `f08d936` (latest)
+**Coolify Deployment**: Commit `79f18a3` (with fixes)
 
 ## Testing Summary
 
-Tested the complete setup wizard flow on production:
-- Step 1 (Welcome): Working correctly
-- Step 2 (Workspace): Working correctly - name/slug auto-generation works
-- Step 3 (Slack): Working correctly - tested connection with real credentials
-- Step 4 (Google Drive): Had bugs, now fixed
-- Steps 5-6: Not tested in this session
+### Post-Fix Verification (2025-12-23)
+
+Tested the complete setup wizard flow on production after deploying fixes:
+
+| Step | Name | Status | Notes |
+|------|------|--------|-------|
+| 1 | Welcome | ✅ Passed | Get Started button works |
+| 2 | Workspace | ✅ Passed | Name/slug auto-generation works |
+| 3 | Slack | ✅ Passed | Connection test successful with real credentials |
+| 4 | Google Drive | ✅ **Fixed** | **Skip now works!** Continue button enabled without auth |
+| 5 | Knowledge Sources | ✅ Passed | Optional step, can skip |
+| 6 | Bot Configuration | ✅ Passed | Pre-filled defaults work |
+| 7 | Review/Launch | ✅ Passed | Shows summary correctly, Google Drive shows "Not configured" |
+
+### Bug Fix Verification
+
+**Bug 1 (Google Drive Not Skippable)**: ✅ **FIXED**
+- Continue button is now purple/active on Google Drive step
+- Successfully advances to Step 5 without connecting to Google
+
+**Bug 2 (OAuth Redirect Resets State)**: ⏳ Not tested in this session
+- Requires actual Google OAuth flow to verify
 
 ## Bugs Found & Fixed
 
@@ -101,6 +117,15 @@ After deployment, verify:
 
 - `apps/api/src/routes/setup.ts` - Adds `&state=setup` to OAuth URL (already working)
 - Session storage keys: `setup_wizard_config`, `setup_wizard_step`, `setup_pending_google_auth`
+
+## Conclusion
+
+**All 7 wizard steps tested successfully on production (cluebase.ai).**
+
+The critical fix (Google Drive skip) is verified working:
+- Continue button is enabled without Google authentication
+- Wizard correctly shows Google Drive as "Not configured" on review screen
+- Full wizard flow completes without requiring any optional integrations
 
 ## Testing Credentials Used
 

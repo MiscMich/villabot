@@ -1,0 +1,122 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      service:
+        description: 'Service to deploy'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - api
+          - dashboard
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy-api:
+    name: Deploy API
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.service == 'all' || github.event.inputs.service == 'api' || github.event.inputs.service == '' }}
+
+    steps:
+      - name: Trigger Coolify API Deployment
+        run: |
+          response=$(curl -s -w "\n%{http_code}" -X POST "${{ secrets.COOLIFY_API_WEBHOOK_URL }}")
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | head -n-1)
+
+          echo "Response: $body"
+          echo "HTTP Code: $http_code"
+
+          if [ "$http_code" != "200" ] && [ "$http_code" != "201" ] && [ "$http_code" != "202" ]; then
+            echo "Deployment trigger failed with status $http_code"
+            exit 1
+          fi
+
+          echo "API deployment triggered successfully"
+
+  deploy-dashboard:
+    name: Deploy Dashboard
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.service == 'all' || github.event.inputs.service == 'dashboard' || github.event.inputs.service == '' }}
+
+    steps:
+      - name: Trigger Coolify Dashboard Deployment
+        run: |
+          response=$(curl -s -w "\n%{http_code}" -X POST "${{ secrets.COOLIFY_DASHBOARD_WEBHOOK_URL }}")
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | head -n-1)
+
+          echo "Response: $body"
+          echo "HTTP Code: $http_code"
+
+          if [ "$http_code" != "200" ] && [ "$http_code" != "201" ] && [ "$http_code" != "202" ]; then
+            echo "Deployment trigger failed with status $http_code"
+            exit 1
+          fi
+
+          echo "Dashboard deployment triggered successfully"
+
+  verify:
+    name: Verify Deployment
+    runs-on: ubuntu-latest
+    needs: [deploy-api, deploy-dashboard]
+    if: always() && (needs.deploy-api.result == 'success' || needs.deploy-dashboard.result == 'success')
+
+    steps:
+      - name: Wait for deployment
+        run: sleep 120
+
+      - name: Health check API
+        run: |
+          for i in {1..5}; do
+            response=$(curl -s -w "\n%{http_code}" https://api.cluebase.ai/health)
+            http_code=$(echo "$response" | tail -n1)
+            body=$(echo "$response" | head -n-1)
+
+            echo "Attempt $i - HTTP Code: $http_code"
+            echo "Response: $body"
+
+            if [ "$http_code" = "200" ]; then
+              echo "API health check passed"
+              exit 0
+            fi
+
+            sleep 30
+          done
+
+          echo "API health check failed after 5 attempts"
+          exit 1
+
+      - name: Health check Dashboard
+        run: |
+          for i in {1..5}; do
+            http_code=$(curl -s -o /dev/null -w "%{http_code}" https://cluebase.ai)
+
+            echo "Attempt $i - HTTP Code: $http_code"
+
+            if [ "$http_code" = "200" ]; then
+              echo "Dashboard health check passed"
+              exit 0
+            fi
+
+            sleep 30
+          done
+
+          echo "Dashboard health check failed after 5 attempts"
+          exit 1
+
+      - name: Notify success
+        if: success()
+        run: echo "Deployment verified successfully"
+
+      - name: Notify failure
+        if: failure()
+        run: echo "Deployment verification failed - manual investigation required"

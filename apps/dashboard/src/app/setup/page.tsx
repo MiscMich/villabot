@@ -927,14 +927,20 @@ function CompleteStep({
   isLaunching: boolean;
   error: string | null;
 }) {
+  // Knowledge source check: Google Drive OR website with URL
+  const hasKnowledgeSource = config.googleDrive.authenticated ||
+    (config.knowledgeSources.websiteEnabled && config.knowledgeSources.websiteUrl.length > 0);
+
   const checks = [
     { label: 'Workspace', passed: config.workspace.name.length > 0, icon: Building2 },
     { label: 'Slack', passed: config.slack.connected, icon: MessageSquare },
-    { label: 'Google Drive', passed: config.googleDrive.authenticated, icon: FolderOpen },
+    { label: 'Google Drive', passed: config.googleDrive.authenticated, icon: FolderOpen, optional: true },
     { label: 'Bot', passed: config.bot.name.length > 0, icon: Bot },
   ];
 
-  const allPassed = checks.every((c) => c.passed);
+  // All required checks must pass, plus at least one knowledge source
+  const requiredPassed = checks.filter(c => !c.optional).every(c => c.passed);
+  const allPassed = requiredPassed && hasKnowledgeSource;
 
   return (
     <div className="space-y-8">
