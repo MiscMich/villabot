@@ -157,7 +157,47 @@ export async function getDefaultBot(): Promise<Bot | null> {
   return mapBotRow(data);
 }
 
+/**
+ * Custom error for duplicate Slack bot token
+ */
+export class DuplicateBotTokenError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DuplicateBotTokenError';
+  }
+}
+
+/**
+ * Check if a Slack bot token is already in use by another bot
+ */
+async function checkTokenUniqueness(token: string, excludeBotId?: string): Promise<void> {
+  if (!token) return;
+
+  const query = supabase
+    .from('bots')
+    .select('id, workspace_id')
+    .eq('slack_bot_token', token);
+
+  // Exclude current bot when updating
+  if (excludeBotId) {
+    query.neq('id', excludeBotId);
+  }
+
+  const { data: existingBot } = await query.single();
+
+  if (existingBot) {
+    throw new DuplicateBotTokenError(
+      'This Slack bot is already registered to another workspace. Each Slack bot can only be used by one workspace.'
+    );
+  }
+}
+
 export async function createBot(input: BotCreateInput): Promise<Bot> {
+  // Check for duplicate token before creating
+  if (input.slackBotToken) {
+    await checkTokenUniqueness(input.slackBotToken);
+  }
+
   const { data, error } = await supabase
     .from('bots')
     .insert({
@@ -182,6 +222,12 @@ export async function createBot(input: BotCreateInput): Promise<Bot> {
     .single();
 
   if (error) {
+    // Check for unique constraint violation
+    if (error.code === '23505' && error.message?.includes('slack_bot_token')) {
+      throw new DuplicateBotTokenError(
+        'This Slack bot is already registered to another workspace. Each Slack bot can only be used by one workspace.'
+      );
+    }
     logger.error('Failed to create bot', { error, input });
     throw error;
   }
@@ -191,6 +237,11 @@ export async function createBot(input: BotCreateInput): Promise<Bot> {
 }
 
 export async function updateBot(id: string, input: BotUpdateInput): Promise<Bot> {
+  // Check for duplicate token before updating (if token is being changed)
+  if (input.slackBotToken) {
+    await checkTokenUniqueness(input.slackBotToken, id);
+  }
+
   const updateData: Record<string, unknown> = {};
 
   if (input.name !== undefined) updateData.name = input.name;
@@ -215,6 +266,12 @@ export async function updateBot(id: string, input: BotUpdateInput): Promise<Bot>
     .single();
 
   if (error) {
+    // Check for unique constraint violation
+    if (error.code === '23505' && error.message?.includes('slack_bot_token')) {
+      throw new DuplicateBotTokenError(
+        'This Slack bot is already registered to another workspace. Each Slack bot can only be used by one workspace.'
+      );
+    }
     logger.error('Failed to update bot', { error, id, input });
     throw error;
   }

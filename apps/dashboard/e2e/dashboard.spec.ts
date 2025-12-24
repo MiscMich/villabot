@@ -1,200 +1,199 @@
+/**
+ * Dashboard Page E2E Tests
+ *
+ * Tests the main dashboard overview page with stats and metrics.
+ */
+
 import { test, expect } from '@playwright/test';
 
-test.describe('Dashboard', () => {
-  // Auth state is handled by playwright.config.ts chromium project
+test.describe('Dashboard Page', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/dashboard');
+    await page.waitForLoadState('networkidle');
+  });
 
-  test.describe('Dashboard Overview', () => {
-    test('should display dashboard page', async ({ page }) => {
-      await page.goto('/dashboard');
-
-      // Dashboard page should render (sidebar always visible even if content loading)
-      await expect(page.locator('nav, aside').first()).toBeVisible({ timeout: 10000 });
-
-      // URL should be dashboard
-      await expect(page).toHaveURL(/dashboard/);
+  test.describe('Page Layout', () => {
+    test('should display dashboard header', async ({ page }) => {
+      await expect(page.getByRole('heading', { name: /dashboard|overview|welcome/i })).toBeVisible();
     });
 
-    test('should show welcome message or loading', async ({ page }) => {
-      await page.goto('/dashboard');
+    test('should display sidebar navigation', async ({ page }) => {
+      const sidebar = page.locator('nav, [data-testid="sidebar"]');
+      await expect(sidebar).toBeVisible();
+    });
 
-      // Should show either welcome content OR loading skeleton (both are valid states)
-      const hasContent = await page.getByText(/welcome|hello|overview|dashboard/i).first().isVisible().catch(() => false);
-      const hasLoading = await page.locator('.animate-pulse').first().isVisible().catch(() => false);
-
-      expect(hasContent || hasLoading).toBeTruthy();
+    test('should have navigation links', async ({ page }) => {
+      // Should have main navigation items
+      await expect(page.getByRole('link', { name: /dashboard/i })).toBeVisible();
+      await expect(page.getByRole('link', { name: /documents/i })).toBeVisible();
+      await expect(page.getByRole('link', { name: /bots/i })).toBeVisible();
     });
   });
 
-  test.describe('Statistics Cards', () => {
-    test('should display statistics cards or loading', async ({ page }) => {
-      await page.goto('/dashboard');
+  test.describe('Stats Cards', () => {
+    test('should display document stats', async ({ page }) => {
+      const hasDocStats = await Promise.race([
+        page.getByText(/documents|total docs/i).isVisible(),
+        page.locator('[data-testid="doc-stats"]').isVisible(),
+      ]).catch(() => false);
 
-      // Wait for sidebar to be visible
-      await expect(page.locator('nav, aside').first()).toBeVisible({ timeout: 10000 });
-
-      // Should show stat cards OR loading skeletons
-      const hasCards = await page.locator('.glass-card, [data-testid="stat-card"]').first().isVisible().catch(() => false);
-      const hasLoading = await page.locator('.animate-pulse').first().isVisible().catch(() => false);
-
-      expect(hasCards || hasLoading).toBeTruthy();
+      expect(hasDocStats).toBe(true);
     });
 
-    test('should show bot count in sidebar', async ({ page }) => {
-      await page.goto('/dashboard');
+    test('should display activity stats', async ({ page }) => {
+      const hasActivityStats = await Promise.race([
+        page.getByText(/messages|activity|this week/i).isVisible(),
+        page.locator('[data-testid="activity-stats"]').isVisible(),
+      ]).catch(() => false);
 
-      // Sidebar navigation always has "Bots" link
-      await expect(page.getByRole('link', { name: /bot/i }).first()).toBeVisible();
+      expect(hasActivityStats).toBe(true);
     });
 
-    test('should show document link in sidebar', async ({ page }) => {
-      await page.goto('/dashboard');
+    test('should display knowledge stats', async ({ page }) => {
+      const hasKnowledgeStats = await Promise.race([
+        page.getByText(/knowledge|facts|learned/i).isVisible(),
+        page.locator('[data-testid="knowledge-stats"]').isVisible(),
+      ]).catch(() => false);
 
-      // Sidebar navigation always has "Documents" link
-      await expect(page.getByRole('link', { name: /document/i }).first()).toBeVisible();
-    });
-
-    test('should show query/usage metrics link', async ({ page }) => {
-      await page.goto('/dashboard');
-
-      // Sidebar should have analytics link
-      await expect(page.getByRole('link', { name: /analytic/i }).first()).toBeVisible();
+      expect(hasKnowledgeStats).toBe(true);
     });
   });
 
   test.describe('Quick Actions', () => {
-    test('should have navigation buttons', async ({ page }) => {
-      await page.goto('/dashboard');
-
-      // Should have navigation links in sidebar
-      const navLinks = page.locator('nav a, aside a').filter({
-        hasText: /dashboard|document|bot|setting/i,
-      });
-
-      await expect(navLinks.first()).toBeVisible();
+    test('should have link to documents', async ({ page }) => {
+      const docsLink = page.getByRole('link', { name: /documents|view docs/i });
+      await expect(docsLink).toBeVisible();
     });
 
-    test('should navigate to bots from sidebar', async ({ page }) => {
-      await page.goto('/dashboard');
-      await expect(page).toHaveURL(/dashboard/, { timeout: 10000 });
-      await expect(page.locator('nav, aside').first()).toBeVisible({ timeout: 10000 });
-
-      // Wait for navigation items to load
-      await page.waitForTimeout(1000);
-
-      // Find link to bots in sidebar (exact name is "Bots")
-      const botsLink = page.getByRole('link', { name: /bots/i }).first();
-      await expect(botsLink).toBeVisible({ timeout: 5000 });
-
-      // Click and wait for navigation
-      await Promise.all([
-        page.waitForURL(/bots/, { timeout: 15000 }),
-        botsLink.click(),
-      ]);
+    test('should have link to bots', async ({ page }) => {
+      const botsLink = page.getByRole('link', { name: /bots|manage bots/i });
+      await expect(botsLink).toBeVisible();
     });
 
-    test('should navigate to documents from sidebar', async ({ page }) => {
-      await page.goto('/dashboard');
-      await expect(page).toHaveURL(/dashboard/, { timeout: 10000 });
-      await expect(page.locator('nav, aside').first()).toBeVisible({ timeout: 10000 });
-
-      // Wait for navigation items to load
-      await page.waitForTimeout(1000);
-
-      // Find link to documents (exact name is "Documents")
-      const docsLink = page.getByRole('link', { name: /documents/i }).first();
-      await expect(docsLink).toBeVisible({ timeout: 5000 });
-
-      // Click and wait for navigation
-      await Promise.all([
-        page.waitForURL(/documents/, { timeout: 15000 }),
-        docsLink.click(),
-      ]);
+    test('should have link to knowledge', async ({ page }) => {
+      const knowledgeLink = page.getByRole('link', { name: /knowledge|facts/i });
+      await expect(knowledgeLink).toBeVisible();
     });
   });
 
-  test.describe('Recent Activity', () => {
-    test('should show recent activity or loading', async ({ page }) => {
-      await page.goto('/dashboard');
-      await expect(page.locator('nav, aside').first()).toBeVisible({ timeout: 10000 });
-
-      // Should have activity section, sidebar, or loading state
-      const hasActivity = await page.getByText(/recent|activity|latest|sync/i).first().isVisible().catch(() => false);
-      const hasLoading = await page.locator('.animate-pulse, .shimmer').first().isVisible().catch(() => false);
-      const hasSidebar = await page.locator('nav, aside').first().isVisible().catch(() => false);
-
-      expect(hasActivity || hasLoading || hasSidebar).toBeTruthy();
+  test.describe('Navigation', () => {
+    test('should navigate to documents page', async ({ page }) => {
+      await page.getByRole('link', { name: /documents/i }).click();
+      await expect(page).toHaveURL(/\/documents/);
     });
-  });
 
-  test.describe('Setup Status', () => {
-    test('should show setup progress if incomplete', async ({ page }) => {
-      await page.goto('/dashboard');
+    test('should navigate to bots page', async ({ page }) => {
+      await page.getByRole('link', { name: /bots/i }).click();
+      await expect(page).toHaveURL(/\/bots/);
+    });
 
-      // May show setup progress in sidebar
-      const setupIndicator = page.getByText(/setup|getting started|complete|connect/i);
+    test('should navigate to knowledge page', async ({ page }) => {
+      await page.getByRole('link', { name: /knowledge/i }).click();
+      await expect(page).toHaveURL(/\/knowledge/);
+    });
 
-      // This is optional - workspace may be fully set up
-      if (await setupIndicator.first().isVisible().catch(() => false)) {
-        await expect(setupIndicator.first()).toBeVisible();
+    test('should navigate to settings page', async ({ page }) => {
+      await page.getByRole('link', { name: /settings/i }).click();
+      await expect(page).toHaveURL(/\/settings/);
+    });
+
+    test('should navigate to billing page', async ({ page }) => {
+      const billingLink = page.getByRole('link', { name: /billing/i });
+      if (await billingLink.isVisible()) {
+        await billingLink.click();
+        await expect(page).toHaveURL(/\/billing/);
+      }
+    });
+
+    test('should navigate to team page', async ({ page }) => {
+      const teamLink = page.getByRole('link', { name: /team/i });
+      if (await teamLink.isVisible()) {
+        await teamLink.click();
+        await expect(page).toHaveURL(/\/team/);
       }
     });
   });
 
-  test.describe('Sidebar Navigation', () => {
-    test('should display sidebar', async ({ page }) => {
+  test.describe('Responsive Design', () => {
+    test('should work on mobile viewport', async ({ page }) => {
+      await page.setViewportSize({ width: 375, height: 667 });
       await page.goto('/dashboard');
 
-      // Should have sidebar navigation
-      const sidebar = page.locator('aside').or(page.locator('nav'));
-      await expect(sidebar.first()).toBeVisible();
-    });
+      // Content should still be visible
+      await expect(page.getByRole('heading', { name: /dashboard|overview/i })).toBeVisible();
 
-    test('should have navigation links', async ({ page }) => {
-      await page.goto('/dashboard');
-      await expect(page.locator('nav, aside').first()).toBeVisible({ timeout: 10000 });
+      // May have hamburger menu for navigation
+      const hasNavigation = await Promise.race([
+        page.locator('nav').isVisible(),
+        page.getByRole('button', { name: /menu/i }).isVisible(),
+        page.locator('[data-testid="mobile-menu"]').isVisible(),
+      ]).catch(() => false);
 
-      // Should have main navigation links - exact names from sidebar
-      await expect(page.getByRole('link', { name: /overview/i }).first()).toBeVisible({ timeout: 5000 });
-      await expect(page.getByRole('link', { name: /bots/i })).toBeVisible({ timeout: 5000 });
-      await expect(page.getByRole('link', { name: /documents/i })).toBeVisible({ timeout: 5000 });
-    });
-
-    test('should highlight active page', async ({ page }) => {
-      await page.goto('/dashboard');
-
-      // Dashboard/Overview link should be visible
-      const dashboardLink = page.getByRole('link', { name: /overview|dashboard/i }).first();
-      await expect(dashboardLink).toBeVisible();
-
-      // The link is active since we're on dashboard
-      const href = await dashboardLink.getAttribute('href');
-      expect(href).toMatch(/dashboard/);
+      expect(hasNavigation).toBe(true);
     });
   });
 
-  test.describe('Responsive Design', () => {
-    test('should be responsive on mobile', async ({ page }) => {
-      // Set mobile viewport
-      await page.setViewportSize({ width: 375, height: 667 });
-      await page.goto('/dashboard');
+  test.describe('Loading States', () => {
+    test('should show content after loading', async ({ page }) => {
+      await page.goto('/dashboard', { waitUntil: 'commit' });
 
-      // Should still render (mobile menu or visible content)
-      await expect(page.locator('body')).toBeVisible();
+      // Wait for content to load
+      await page.waitForLoadState('networkidle');
+
+      // Should show dashboard content
+      await expect(page.getByRole('heading', { name: /dashboard|overview/i })).toBeVisible();
+    });
+  });
+
+  test.describe('Accessibility', () => {
+    test('should have proper heading hierarchy', async ({ page }) => {
+      await expect(page.locator('h1')).toBeVisible();
     });
 
-    test('should show mobile menu on small screens', async ({ page }) => {
-      await page.setViewportSize({ width: 375, height: 667 });
+    test('should have accessible navigation', async ({ page }) => {
+      const nav = page.locator('nav');
+      await expect(nav).toBeVisible();
+
+      // Navigation links should be accessible
+      const links = nav.getByRole('link');
+      const count = await links.count();
+      expect(count).toBeGreaterThan(0);
+    });
+
+    test('should have skip link or landmarks', async ({ page }) => {
+      // Should have main content area
+      const hasLandmarks = await Promise.race([
+        page.locator('main, [role="main"]').isVisible(),
+        page.locator('[data-testid="main-content"]').isVisible(),
+      ]).catch(() => false);
+
+      expect(hasLandmarks).toBe(true);
+    });
+  });
+
+  test.describe('Error Handling', () => {
+    test('should handle API errors gracefully', async ({ page }) => {
+      // Intercept API calls and simulate error
+      await page.route('**/api/**', (route) => {
+        if (route.request().url().includes('/analytics')) {
+          route.fulfill({ status: 500, body: 'Server Error' });
+        } else {
+          route.continue();
+        }
+      });
+
       await page.goto('/dashboard');
 
-      // Look for mobile menu button (hamburger)
-      const menuButton = page.getByRole('button', { name: /menu|toggle/i }).or(
-        page.locator('[data-testid="mobile-menu"]').or(
-          page.locator('[aria-label*="menu" i]')
-        )
-      );
+      // Page should still load without crashing
+      await expect(page.locator('body')).toBeVisible();
 
-      // Mobile menu button should be visible on small screens
-      await expect(menuButton.first()).toBeVisible({ timeout: 5000 });
+      // May show error state or fallback content
+      const hasErrorOrContent = await Promise.race([
+        page.getByText(/error|failed|try again/i).isVisible(),
+        page.getByRole('heading').isVisible(),
+      ]).catch(() => false);
+
+      expect(hasErrorOrContent).toBe(true);
     });
   });
 });

@@ -128,6 +128,22 @@ botsRouter.post('/', requireWorkspaceAdmin, checkUsageLimit('bots'), async (req,
       return res.status(409).json({ error: 'A bot with this slug already exists' });
     }
 
+    // Check if Slack token is already in use by another workspace
+    if (input.slackBotToken) {
+      const { data: tokenInUse } = await supabase
+        .from('bots')
+        .select('id, workspace_id')
+        .eq('slack_bot_token', input.slackBotToken)
+        .single();
+
+      if (tokenInUse) {
+        return res.status(409).json({
+          error: 'This Slack bot is already registered to another workspace. Each Slack bot can only be used by one workspace.',
+          code: 'DUPLICATE_BOT_TOKEN',
+        });
+      }
+    }
+
     // Create the bot
     const { data: bot, error } = await supabase
       .from('bots')
@@ -138,13 +154,25 @@ botsRouter.post('/', requireWorkspaceAdmin, checkUsageLimit('bots'), async (req,
         description: input.description ?? null,
         personality: input.personality ?? 'helpful',
         system_instructions: input.systemInstructions ?? null,
+        slack_bot_token: input.slackBotToken ?? null,
+        slack_app_token: input.slackAppToken ?? null,
+        slack_signing_secret: input.slackSigningSecret ?? null,
         status: 'active',
         is_default: false,
       })
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // Handle unique constraint violation (backup check in case of race condition)
+      if (error.code === '23505' && error.message?.includes('slack_bot_token')) {
+        return res.status(409).json({
+          error: 'This Slack bot is already registered to another workspace. Each Slack bot can only be used by one workspace.',
+          code: 'DUPLICATE_BOT_TOKEN',
+        });
+      }
+      throw error;
+    }
 
     logger.info('Bot created', { botId: bot.id, workspaceId });
     res.status(201).json({ bot });
@@ -161,6 +189,24 @@ botsRouter.patch('/:id', requireWorkspaceAdmin, async (req, res) => {
   try {
     const input: BotUpdateInput = req.body;
     const workspaceId = req.workspace!.id;
+    const botId = req.params.id;
+
+    // Check if Slack token is already in use by another bot (not this one)
+    if (input.slackBotToken) {
+      const { data: tokenInUse } = await supabase
+        .from('bots')
+        .select('id, workspace_id')
+        .eq('slack_bot_token', input.slackBotToken)
+        .neq('id', botId)
+        .single();
+
+      if (tokenInUse) {
+        return res.status(409).json({
+          error: 'This Slack bot is already registered to another workspace. Each Slack bot can only be used by one workspace.',
+          code: 'DUPLICATE_BOT_TOKEN',
+        });
+      }
+    }
 
     const updateData: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
@@ -178,14 +224,23 @@ botsRouter.patch('/:id', requireWorkspaceAdmin, async (req, res) => {
     const { data: bot, error } = await supabase
       .from('bots')
       .update(updateData)
-      .eq('id', req.params.id)
+      .eq('id', botId)
       .eq('workspace_id', workspaceId)
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // Handle unique constraint violation (backup check in case of race condition)
+      if (error.code === '23505' && error.message?.includes('slack_bot_token')) {
+        return res.status(409).json({
+          error: 'This Slack bot is already registered to another workspace. Each Slack bot can only be used by one workspace.',
+          code: 'DUPLICATE_BOT_TOKEN',
+        });
+      }
+      throw error;
+    }
 
-    logger.info('Bot updated', { botId: req.params.id, workspaceId });
+    logger.info('Bot updated', { botId, workspaceId });
     res.json({ bot });
   } catch (error) {
     logger.error('Failed to update bot', { error, id: req.params.id, workspaceId: req.workspace!.id });

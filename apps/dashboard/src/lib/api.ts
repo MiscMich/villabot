@@ -301,6 +301,18 @@ export const api = {
   deleteFact: (id: string) =>
     fetchApi(`/api/analytics/learned-facts/${id}`, { method: 'DELETE' }),
 
+  createFact: (data: { fact: string; source?: string }) =>
+    fetchApi<{
+      id: string;
+      fact: string;
+      source: string;
+      is_verified: boolean;
+      created_at: string;
+    }>('/api/analytics/learned-facts', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
   // Auth (Google Drive OAuth - legacy)
   getAuthStatus: () => fetchApi<{
     google: { connected: boolean; connectedAt: string | null };
@@ -309,6 +321,29 @@ export const api = {
   getGoogleAuthUrl: () => fetchApi<{ authUrl: string }>('/auth/google'),
 
   disconnectGoogle: () => fetchApi('/auth/google', { method: 'DELETE' }),
+
+  // Google Drive (workspace-scoped)
+  getDriveStatus: () => fetchApi<{
+    connected: boolean;
+    connectedAt: string | null;
+    legacy?: boolean;
+  }>('/api/drive/status'),
+
+  getDriveFolders: (parentId?: string, pageToken?: string) => {
+    const params = new URLSearchParams();
+    if (parentId) params.append('parentId', parentId);
+    if (pageToken) params.append('pageToken', pageToken);
+    const queryString = params.toString();
+    return fetchApi<{
+      folders: Array<{
+        id: string;
+        name: string;
+        modifiedTime: string;
+        parentId?: string;
+      }>;
+      nextPageToken?: string;
+    }>(`/api/drive/folders${queryString ? `?${queryString}` : ''}`);
+  },
 
   // Conversations
   getConversations: (page = 1, limit = 20) => fetchApi<{
@@ -473,6 +508,34 @@ export const api = {
 
   removeBotFolder: (botId: string, folderId: string) =>
     fetchApi(`/api/bots/${botId}/folders/${folderId}`, { method: 'DELETE' }),
+
+  // Bot Channels
+  getBotChannels: (botId: string) => fetchApi<{
+    channels: Array<{
+      id: string;
+      slack_channel_id: string;
+      channel_name: string | null;
+      is_enabled: boolean;
+      created_at: string;
+    }>;
+  }>(`/api/bots/${botId}/channels`),
+
+  addBotChannel: (botId: string, data: {
+    slackChannelId: string;
+    channelName?: string;
+  }) => fetchApi<{
+    channel: {
+      id: string;
+      slack_channel_id: string;
+      channel_name: string | null;
+    };
+  }>(`/api/bots/${botId}/channels`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+
+  removeBotChannel: (botId: string, channelId: string) =>
+    fetchApi(`/api/bots/${botId}/channels/${channelId}`, { method: 'DELETE' }),
 
   // Bot Sync
   triggerBotSync: (botId: string) => fetchApi<{

@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { DriveFolderPicker, SelectedFolder } from '@/components/drive-folder-picker';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,7 +21,13 @@ import {
   MessageSquare,
   Key,
   FolderOpen,
+  Folder,
+  FolderPlus,
+  Trash2,
   Check,
+  AlertTriangle,
+  Plus,
+  Slack,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -68,6 +75,73 @@ export function BotFormModal({ isOpen, onClose, editBot }: BotFormModalProps) {
   const [showAppToken, setShowAppToken] = useState(false);
   const [showSigningSecret, setShowSigningSecret] = useState(false);
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+  const [folderPickerOpen, setFolderPickerOpen] = useState(false);
+
+  // Fetch Drive connection status
+  const { data: driveStatus } = useQuery({
+    queryKey: ['drive-status'],
+    queryFn: api.getDriveStatus,
+    enabled: isOpen && isEditing,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  // Fetch existing folders for the bot
+  const { data: botFolders, refetch: refetchFolders } = useQuery({
+    queryKey: ['bot-folders', editBot?.id],
+    queryFn: () => api.getBotFolders(editBot!.id),
+    enabled: isOpen && isEditing && !!editBot?.id,
+    staleTime: 1000 * 60 * 2,
+  });
+
+  // Add folder mutation
+  const addFolderMutation = useMutation({
+    mutationFn: ({ botId, data }: { botId: string; data: { driveFolderId: string; folderName: string } }) =>
+      api.addBotFolder(botId, data),
+    onSuccess: () => {
+      refetchFolders();
+    },
+  });
+
+  // Remove folder mutation
+  const removeFolderMutation = useMutation({
+    mutationFn: ({ botId, folderId }: { botId: string; folderId: string }) =>
+      api.removeBotFolder(botId, folderId),
+    onSuccess: () => {
+      refetchFolders();
+    },
+  });
+
+  // Channel state
+  const [newChannelId, setNewChannelId] = useState('');
+  const [newChannelName, setNewChannelName] = useState('');
+
+  // Fetch existing channels for the bot
+  const { data: botChannels, refetch: refetchChannels } = useQuery({
+    queryKey: ['bot-channels', editBot?.id],
+    queryFn: () => api.getBotChannels(editBot!.id),
+    enabled: isOpen && isEditing && !!editBot?.id,
+    staleTime: 1000 * 60 * 2,
+  });
+
+  // Add channel mutation
+  const addChannelMutation = useMutation({
+    mutationFn: ({ botId, data }: { botId: string; data: { slackChannelId: string; channelName?: string } }) =>
+      api.addBotChannel(botId, data),
+    onSuccess: () => {
+      refetchChannels();
+      setNewChannelId('');
+      setNewChannelName('');
+    },
+  });
+
+  // Remove channel mutation
+  const removeChannelMutation = useMutation({
+    mutationFn: ({ botId, channelId }: { botId: string; channelId: string }) =>
+      api.removeBotChannel(botId, channelId),
+    onSuccess: () => {
+      refetchChannels();
+    },
+  });
 
   // Reset form when modal opens/closes or editBot changes
   useEffect(() => {
@@ -160,7 +234,46 @@ export function BotFormModal({ isOpen, onClose, editBot }: BotFormModalProps) {
     );
   };
 
-  const isPending = createMutation.isPending || updateMutation.isPending;
+  // Handle folder selection from picker
+  const handleFolderPickerSelect = async (selectedFolders: SelectedFolder[]) => {
+    if (!editBot?.id) return;
+
+    const existingIds = new Set((botFolders?.folders ?? []).map(f => f.drive_folder_id));
+    const newFolders = selectedFolders.filter(sf => !existingIds.has(sf.id));
+
+    for (const folder of newFolders) {
+      await addFolderMutation.mutateAsync({
+        botId: editBot.id,
+        data: { driveFolderId: folder.id, folderName: folder.name },
+      });
+    }
+  };
+
+  // Handle folder removal
+  const handleRemoveFolder = async (folderId: string) => {
+    if (!editBot?.id) return;
+    await removeFolderMutation.mutateAsync({ botId: editBot.id, folderId });
+  };
+
+  // Handle adding a channel
+  const handleAddChannel = async () => {
+    if (!editBot?.id || !newChannelId.trim()) return;
+    await addChannelMutation.mutateAsync({
+      botId: editBot.id,
+      data: {
+        slackChannelId: newChannelId.trim(),
+        channelName: newChannelName.trim() || undefined,
+      },
+    });
+  };
+
+  // Handle channel removal
+  const handleRemoveChannel = async (channelId: string) => {
+    if (!editBot?.id) return;
+    await removeChannelMutation.mutateAsync({ botId: editBot.id, channelId });
+  };
+
+  const isPending = createMutation.isPending || updateMutation.isPending || addFolderMutation.isPending || removeFolderMutation.isPending || addChannelMutation.isPending || removeChannelMutation.isPending;
   const error = createMutation.error || updateMutation.error;
 
   if (!isOpen) return null;
@@ -336,6 +449,178 @@ export function BotFormModal({ isOpen, onClose, editBot }: BotFormModalProps) {
               )}
             </div>
 
+            {/* Knowledge Sources Section - Only when editing */}
+            {isEditing && (
+              <div className="space-y-4 pt-4 border-t border-border/50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                    <Folder className="w-4 h-4" />
+                    <span>Knowledge Sources</span>
+                  </div>
+                  {driveStatus?.connected && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setFolderPickerOpen(true)}
+                      disabled={addFolderMutation.isPending}
+                    >
+                      <FolderPlus className="w-4 h-4 mr-2" />
+                      Add Folder
+                    </Button>
+                  )}
+                </div>
+
+                {!driveStatus?.connected && (
+                  <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                      <p className="text-xs text-amber-700 dark:text-amber-300">
+                        Connect Google Drive in{' '}
+                        <a href="/settings" className="underline hover:no-underline">Settings → Integrations</a>{' '}
+                        to browse and add folders.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Folder list */}
+                {(botFolders?.folders ?? []).length > 0 ? (
+                  <div className="space-y-2">
+                    {botFolders?.folders.map((folder) => (
+                      <div
+                        key={folder.id}
+                        className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 border border-border/50"
+                      >
+                        <div className="flex items-center gap-3">
+                          <Folder className="w-5 h-5 text-blue-500" />
+                          <div>
+                            <p className="font-medium text-sm">{folder.folder_name}</p>
+                            <p className="text-xs text-muted-foreground font-mono">
+                              {folder.drive_folder_id.length > 25
+                                ? `${folder.drive_folder_id.slice(0, 25)}...`
+                                : folder.drive_folder_id}
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveFolder(folder.id)}
+                          disabled={removeFolderMutation.isPending}
+                          className="text-muted-foreground hover:text-red-600"
+                        >
+                          {removeFolderMutation.isPending ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 text-muted-foreground">
+                    <Folder className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No folders linked to this bot</p>
+                    <p className="text-xs mt-1">Add folders to give this bot knowledge from Google Drive</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Slack Channels Section - Only when editing */}
+            {isEditing && (
+              <div className="space-y-4 pt-4 border-t border-border/50">
+                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <Slack className="w-4 h-4" />
+                  <span>Slack Channels</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Configure which Slack channels this bot should listen to. Leave empty to respond in all channels where it&apos;s mentioned.
+                </p>
+
+                {/* Add Channel Form */}
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <Input
+                      value={newChannelId}
+                      onChange={(e) => setNewChannelId(e.target.value)}
+                      placeholder="Channel ID (e.g., C01ABC123)"
+                      className="font-mono text-sm"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <Input
+                      value={newChannelName}
+                      onChange={(e) => setNewChannelName(e.target.value)}
+                      placeholder="Channel name (optional)"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={handleAddChannel}
+                    disabled={!newChannelId.trim() || addChannelMutation.isPending}
+                  >
+                    {addChannelMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Plus className="w-4 h-4" />
+                    )}
+                  </Button>
+                </div>
+
+                {/* Channel list */}
+                {(botChannels?.channels ?? []).length > 0 ? (
+                  <div className="space-y-2">
+                    {botChannels?.channels.map((channel) => (
+                      <div
+                        key={channel.id}
+                        className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 border border-border/50"
+                      >
+                        <div className="flex items-center gap-3">
+                          <Hash className="w-5 h-5 text-violet-500" />
+                          <div>
+                            <p className="font-medium text-sm">
+                              {channel.channel_name || channel.slack_channel_id}
+                            </p>
+                            {channel.channel_name && (
+                              <p className="text-xs text-muted-foreground font-mono">
+                                {channel.slack_channel_id}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveChannel(channel.id)}
+                          disabled={removeChannelMutation.isPending}
+                          className="text-muted-foreground hover:text-red-600"
+                        >
+                          {removeChannelMutation.isPending ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-muted-foreground">
+                    <Hash className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No channel restrictions</p>
+                    <p className="text-xs mt-1">Bot will respond in all channels where mentioned</p>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Slack Credentials Section - Only for new bots */}
             {!isEditing && (
               <div className="space-y-4 pt-4 border-t border-border/50">
@@ -456,6 +741,20 @@ export function BotFormModal({ isOpen, onClose, editBot }: BotFormModalProps) {
           </div>
         </form>
       </div>
+
+      {/* Drive Folder Picker Modal */}
+      {isEditing && (
+        <DriveFolderPicker
+          isOpen={folderPickerOpen}
+          onClose={() => setFolderPickerOpen(false)}
+          onSelect={handleFolderPickerSelect}
+          selectedFolders={(botFolders?.folders ?? []).map(f => ({
+            id: f.drive_folder_id,
+            name: f.folder_name,
+          }))}
+          maxSelections={10}
+        />
+      )}
     </div>
   );
 }

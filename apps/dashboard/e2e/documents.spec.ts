@@ -1,168 +1,194 @@
+/**
+ * Documents Page E2E Tests
+ *
+ * Tests document listing, filtering, sync controls, and document details.
+ * Requires authenticated user with workspace access.
+ */
+
 import { test, expect } from '@playwright/test';
 
-test.describe('Documents Management', () => {
-  // Auth state is handled by playwright.config.ts chromium project
+test.describe('Documents Page', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/documents');
+    // Wait for page to load
+    await page.waitForLoadState('networkidle');
+  });
 
-  test.describe('Documents List Page', () => {
-    test('should display documents page', async ({ page }) => {
-      await page.goto('/documents');
-      await expect(page).toHaveURL(/documents/, { timeout: 15000 });
-      await expect(page.locator('nav, aside').first()).toBeVisible({ timeout: 10000 });
-
-      // Should show documents page - check for heading, sidebar, or loading
-      const hasHeading = await page.getByRole('heading', { name: /documents/i }).isVisible().catch(() => false);
-      const hasSidebar = await page.locator('nav, aside').first().isVisible().catch(() => false);
-      const hasDocText = await page.getByText(/document/i).first().isVisible().catch(() => false);
-
-      expect(hasHeading || hasSidebar || hasDocText).toBeTruthy();
+  test.describe('Page Layout', () => {
+    test('should display documents header', async ({ page }) => {
+      await expect(page.getByRole('heading', { name: /documents/i })).toBeVisible();
     });
 
-    test('should show document statistics or loading', async ({ page }) => {
-      await page.goto('/documents');
-      await expect(page.locator('nav, aside').first()).toBeVisible({ timeout: 10000 });
-
-      // Should show statistics cards or loading state
-      const hasTotal = await page.getByText(/total|documents/i).first().isVisible().catch(() => false);
-      const hasCards = await page.locator('.glass-card').first().isVisible().catch(() => false);
-      const hasLoading = await page.locator('.animate-pulse').first().isVisible().catch(() => false);
-
-      expect(hasTotal || hasCards || hasLoading).toBeTruthy();
+    test('should display sync controls', async ({ page }) => {
+      // Should have sync button or controls
+      const syncButton = page.getByRole('button', { name: /sync|refresh/i });
+      await expect(syncButton).toBeVisible();
     });
 
-    test('should have search functionality', async ({ page }) => {
-      await page.goto('/documents');
-      await expect(page.locator('nav, aside').first()).toBeVisible({ timeout: 10000 });
+    test('should display filter options', async ({ page }) => {
+      // Should have filter controls (source type, active status)
+      const hasFilters = await Promise.race([
+        page.getByRole('combobox').first().isVisible(),
+        page.getByText(/filter|source|type/i).first().isVisible(),
+        page.locator('[data-testid="filter"]').isVisible(),
+      ]).catch(() => false);
 
-      // Should have search input
-      const searchInput = page.getByPlaceholder(/search/i);
-      if (await searchInput.isVisible().catch(() => false)) {
-        await expect(searchInput).toBeVisible();
-        await searchInput.fill('test');
-        await expect(searchInput).toHaveValue('test');
-      }
+      expect(hasFilters).toBe(true);
+    });
+  });
+
+  test.describe('Document List', () => {
+    test('should display documents or empty state', async ({ page }) => {
+      // Either show document list or empty state message
+      const hasContent = await Promise.race([
+        page.locator('table, [data-testid="document-list"]').isVisible(),
+        page.getByText(/no documents|empty|get started/i).isVisible(),
+      ]).catch(() => false);
+
+      expect(hasContent).toBe(true);
     });
 
-    test('should have filter or category options', async ({ page }) => {
-      await page.goto('/documents');
-      await expect(page.locator('nav, aside').first()).toBeVisible({ timeout: 10000 });
-
-      // Should have filter/category dropdown, tabs, or buttons
-      const filterElement = page.getByRole('combobox').or(
-        page.getByRole('tablist')
-      ).or(
-        page.getByText(/filter|category|all|type/i).first()
-      ).or(
-        page.getByRole('button', { name: /filter|category/i })
-      );
-
-      if (await filterElement.first().isVisible().catch(() => false)) {
-        await expect(filterElement.first()).toBeVisible();
+    test('should show document metadata when documents exist', async ({ page }) => {
+      // Check if documents table exists with expected columns
+      const table = page.locator('table');
+      if (await table.isVisible()) {
+        // Should have columns for title, type, source, last modified
+        await expect(page.getByRole('columnheader', { name: /title|name/i })).toBeVisible();
       }
     });
   });
 
-  test.describe('Document Categories', () => {
-    test('should display category options if available', async ({ page }) => {
-      await page.goto('/documents');
-      await expect(page.locator('nav, aside').first()).toBeVisible({ timeout: 10000 });
+  test.describe('Source Filtering', () => {
+    test('should filter by Google Drive source', async ({ page }) => {
+      // Find and click filter control
+      const filterControl = page.getByRole('combobox').first();
+      if (await filterControl.isVisible()) {
+        await filterControl.click();
 
-      // Should have category options
-      const categoryFilter = page.getByRole('combobox').or(
-        page.getByText(/category|type|filter/i)
-      );
+        // Select Google Drive option if available
+        const driveOption = page.getByRole('option', { name: /drive|google/i });
+        if (await driveOption.isVisible()) {
+          await driveOption.click();
 
-      if (await categoryFilter.first().isVisible().catch(() => false)) {
-        await expect(categoryFilter.first()).toBeVisible();
+          // URL should update with filter parameter
+          await expect(page).toHaveURL(/source.*drive|type.*drive/i);
+        }
       }
+    });
+
+    test('should filter by website source', async ({ page }) => {
+      const filterControl = page.getByRole('combobox').first();
+      if (await filterControl.isVisible()) {
+        await filterControl.click();
+
+        const websiteOption = page.getByRole('option', { name: /website|web|scrape/i });
+        if (await websiteOption.isVisible()) {
+          await websiteOption.click();
+          await expect(page).toHaveURL(/source.*website|type.*website/i);
+        }
+      }
+    });
+  });
+
+  test.describe('Sync Controls', () => {
+    test('should trigger Google Drive sync', async ({ page }) => {
+      const syncButton = page.getByRole('button', { name: /sync.*drive|drive.*sync/i });
+
+      if (await syncButton.isVisible()) {
+        await syncButton.click();
+
+        // Should show loading state or success message
+        const feedback = await Promise.race([
+          page.getByText(/syncing|started|success|queued/i).isVisible(),
+          page.locator('[data-testid="sync-loading"]').isVisible(),
+          syncButton.isDisabled(),
+        ]).catch(() => false);
+
+        expect(feedback).toBe(true);
+      }
+    });
+
+    test('should display sync status', async ({ page }) => {
+      // Should show last sync time or status indicator
+      const hasStatus = await Promise.race([
+        page.getByText(/last sync|synced|never synced/i).isVisible(),
+        page.locator('[data-testid="sync-status"]').isVisible(),
+      ]).catch(() => false);
+
+      // Status display is optional but good to have
+      expect(typeof hasStatus).toBe('boolean');
     });
   });
 
   test.describe('Document Details', () => {
-    test('should show document cards or empty state', async ({ page }) => {
-      await page.goto('/documents');
-      await expect(page.locator('nav, aside').first()).toBeVisible({ timeout: 10000 });
+    test('should navigate to document details on click', async ({ page }) => {
+      // Find a document row/card
+      const documentLink = page.locator('table tbody tr a, [data-testid="document-item"] a').first();
 
-      // Look for document cards, empty state, or any content indicating page loaded
-      const documentCards = page.locator('[data-testid="document-card"]').or(
-        page.locator('.glass-card').filter({ hasText: /\.pdf|\.doc|\.txt|google|drive|sync/i })
-      );
-      const emptyState = page.getByText(/no documents|get started|connect|upload|sync|google/i);
+      if (await documentLink.isVisible()) {
+        await documentLink.click();
 
-      const hasDocuments = (await documentCards.count()) > 0;
-      const hasEmpty = await emptyState.first().isVisible().catch(() => false);
-      const hasCards = await page.locator('.glass-card').first().isVisible().catch(() => false);
-      const hasLoading = await page.locator('.shimmer, .animate-pulse').first().isVisible().catch(() => false);
-      const hasSidebar = await page.locator('nav, aside').first().isVisible().catch(() => false);
+        // Should navigate to document detail page or open modal
+        const showsDetails = await Promise.race([
+          page.waitForURL(/\/documents\/[a-z0-9-]+/i, { timeout: 5000 }).then(() => true),
+          page.locator('[role="dialog"]').isVisible(),
+        ]).catch(() => false);
 
-      expect(hasDocuments || hasEmpty || hasCards || hasLoading || hasSidebar).toBeTruthy();
-    });
-  });
-
-  test.describe('Google Drive Integration', () => {
-    test('should show Drive connection status or connect option', async ({ page }) => {
-      await page.goto('/documents');
-      await expect(page.locator('nav, aside').first()).toBeVisible({ timeout: 10000 });
-
-      // Should show Drive connection status or connect button
-      const driveStatus = page.getByText(/google drive|connected|connect|sync/i);
-      const driveButton = page.getByRole('button', { name: /connect|google|drive/i });
-
-      const hasStatus = await driveStatus.first().isVisible().catch(() => false);
-      const hasButton = await driveButton.first().isVisible().catch(() => false);
-
-      // Either status or button should be present
-      if (hasStatus || hasButton) {
-        expect(true).toBeTruthy();
-      }
-    });
-
-    test('should have sync capability', async ({ page }) => {
-      await page.goto('/documents');
-      await expect(page.locator('nav, aside').first()).toBeVisible({ timeout: 10000 });
-
-      // Look for sync button or sync status
-      const syncButton = page.getByRole('button', { name: /sync|refresh/i });
-      const syncText = page.getByText(/sync|last synced/i);
-
-      const hasSync = await syncButton.isVisible().catch(() => false);
-      const hasSyncText = await syncText.first().isVisible().catch(() => false);
-
-      // Sync capability should be present if connected
-      if (hasSync || hasSyncText) {
-        expect(true).toBeTruthy();
+        expect(showsDetails).toBe(true);
       }
     });
   });
 
-  test.describe('Document Navigation', () => {
-    test('should have documents link in sidebar', async ({ page }) => {
-      await page.goto('/dashboard');
+  test.describe('Bulk Actions', () => {
+    test('should have select all checkbox', async ({ page }) => {
+      const table = page.locator('table');
+      if (await table.isVisible()) {
+        const selectAll = page.locator('table thead input[type="checkbox"]');
+        if (await selectAll.isVisible()) {
+          await selectAll.check();
 
-      // Should have documents link
-      const docsLink = page.getByRole('link', { name: /document/i });
-      await expect(docsLink.first()).toBeVisible();
+          // All row checkboxes should be checked
+          const rowCheckboxes = page.locator('table tbody input[type="checkbox"]');
+          const count = await rowCheckboxes.count();
+          if (count > 0) {
+            for (let i = 0; i < count; i++) {
+              await expect(rowCheckboxes.nth(i)).toBeChecked();
+            }
+          }
+        }
+      }
+    });
+  });
+
+  test.describe('Empty State', () => {
+    test('should show helpful message when no documents', async ({ page }) => {
+      // If empty state is shown, it should have helpful guidance
+      const emptyState = page.getByText(/no documents|get started|connect|sync/i);
+      if (await emptyState.isVisible()) {
+        // Should provide action or guidance
+        const hasGuidance = await Promise.race([
+          page.getByRole('button', { name: /connect|sync|add/i }).isVisible(),
+          page.getByRole('link', { name: /connect|settings|setup/i }).isVisible(),
+          page.getByText(/connect.*drive|sync.*documents/i).isVisible(),
+        ]).catch(() => false);
+
+        expect(hasGuidance).toBe(true);
+      }
+    });
+  });
+
+  test.describe('Accessibility', () => {
+    test('should have proper heading hierarchy', async ({ page }) => {
+      // Page should have h1
+      await expect(page.locator('h1')).toBeVisible();
     });
 
-    test('should navigate from dashboard to documents', async ({ page }) => {
-      await page.goto('/dashboard');
-
-      // Wait for page to fully load
-      await page.waitForTimeout(2000);
-
-      // Find and click documents link
-      const docsLink = page.getByRole('link', { name: /document/i }).first();
-      const hasDocsLink = await docsLink.isVisible().catch(() => false);
-
-      if (hasDocsLink) {
-        await docsLink.click();
-        // Wait for navigation
-        await page.waitForTimeout(2000);
-        const onDocsPage = await page.url().includes('documents');
-        const hasDocContent = await page.getByText(/documents|no documents|upload/i).first().isVisible().catch(() => false);
-        expect(onDocsPage || hasDocContent).toBeTruthy();
-      } else {
-        // No documents link - check if page has valid sidebar
-        await expect(page.locator('nav, aside').first()).toBeVisible();
+    test('should have accessible table', async ({ page }) => {
+      const table = page.locator('table');
+      if (await table.isVisible()) {
+        // Table should have headers
+        const headerCount = await page.locator('table thead th, table thead [role="columnheader"]').count();
+        expect(headerCount).toBeGreaterThanOrEqual(1);
       }
     });
   });

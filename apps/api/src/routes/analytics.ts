@@ -266,6 +266,39 @@ analyticsRouter.get('/learned-facts', async (req, res) => {
 });
 
 /**
+ * Create a new learned fact manually
+ */
+analyticsRouter.post('/learned-facts', requireWorkspaceAdmin, async (req, res) => {
+  try {
+    const { fact, source } = req.body;
+
+    if (!fact || typeof fact !== 'string' || fact.trim().length === 0) {
+      return res.status(400).json({ error: 'fact is required and must be a non-empty string' });
+    }
+
+    const { data, error } = await supabase
+      .from('learned_facts')
+      .insert({
+        workspace_id: req.workspace!.id,
+        fact: fact.trim(),
+        source: source || 'manual',
+        is_verified: true, // Manual facts are auto-verified
+        taught_by_user_id: req.user!.id,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    logger.info('Learned fact created', { id: data.id, workspaceId: req.workspace!.id });
+    res.status(201).json(data);
+  } catch (error) {
+    logger.error('Failed to create learned fact', { error, workspaceId: req.workspace!.id });
+    res.status(500).json({ error: 'Failed to create learned fact' });
+  }
+});
+
+/**
  * Verify or reject a learned fact
  */
 analyticsRouter.patch('/learned-facts/:id', requireWorkspaceAdmin, async (req, res) => {

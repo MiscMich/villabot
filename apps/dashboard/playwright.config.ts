@@ -58,6 +58,7 @@ export default defineConfig({
         '**/bots.spec.ts',
         '**/billing.spec.ts',
         '**/documents.spec.ts',
+        '**/knowledge.spec.ts',
         '**/settings.spec.ts',
         '**/dashboard.spec.ts',
       ],

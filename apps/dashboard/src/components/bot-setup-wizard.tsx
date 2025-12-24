@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { DriveFolderPicker, SelectedFolder } from '@/components/drive-folder-picker';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -77,6 +78,15 @@ export function BotSetupWizard({ isOpen, onClose }: BotSetupWizardProps) {
   const [folders, setFolders] = useState<FolderEntry[]>([]);
   const [newFolderId, setNewFolderId] = useState('');
   const [newFolderName, setNewFolderName] = useState('');
+  const [folderPickerOpen, setFolderPickerOpen] = useState(false);
+
+  // Check Drive connection status
+  const { data: driveStatus } = useQuery({
+    queryKey: ['drive-status'],
+    queryFn: api.getDriveStatus,
+    enabled: isOpen,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
 
   // Creation state
   const [createdBotId, setCreatedBotId] = useState<string | null>(null);
@@ -198,6 +208,18 @@ export function BotSetupWizard({ isOpen, onClose }: BotSetupWizardProps) {
   // Remove folder from list
   const handleRemoveFolder = (id: string) => {
     setFolders(folders.filter(f => f.id !== id));
+  };
+
+  // Handle folder selection from picker
+  const handleFolderPickerSelect = (selectedFolders: SelectedFolder[]) => {
+    const newFolders: FolderEntry[] = selectedFolders
+      .filter(sf => !folders.some(f => f.driveFolderId === sf.id))
+      .map(sf => ({
+        id: crypto.randomUUID(),
+        driveFolderId: sf.id,
+        folderName: sf.name,
+      }));
+    setFolders([...folders, ...newFolders]);
   };
 
   // Handle final creation
@@ -578,48 +600,81 @@ export function BotSetupWizard({ isOpen, onClose }: BotSetupWizardProps) {
                 You can add multiple folders.
               </p>
 
-              {/* Add Folder Form */}
-              <div className="p-4 rounded-lg border border-dashed border-border bg-secondary/30">
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="newFolderId">Folder ID or URL</Label>
-                    <Input
-                      id="newFolderId"
-                      value={newFolderId}
-                      onChange={(e) => setNewFolderId(e.target.value)}
-                      placeholder="1ABC...xyz or https://drive.google.com/..."
-                      className="font-mono text-sm"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Copy from your Google Drive folder URL
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="newFolderName">Folder Name</Label>
-                    <Input
-                      id="newFolderName"
-                      value={newFolderName}
-                      onChange={(e) => setNewFolderName(e.target.value)}
-                      placeholder="Marketing Documents"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      A friendly name to identify this folder
-                    </p>
-                  </div>
-                </div>
-
+              {/* Browse Google Drive Button */}
+              {driveStatus?.connected ? (
                 <Button
                   type="button"
-                  variant="outline"
-                  onClick={handleAddFolder}
-                  disabled={!newFolderId || !newFolderName}
-                  className="mt-3 w-full"
+                  onClick={() => setFolderPickerOpen(true)}
+                  className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white"
                 >
-                  <FolderPlus className="w-4 h-4 mr-2" />
-                  Add Folder
+                  <Folder className="w-4 h-4 mr-2" />
+                  Browse Google Drive
                 </Button>
-              </div>
+              ) : (
+                <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-amber-700 dark:text-amber-300">
+                      <p className="font-medium">Google Drive not connected</p>
+                      <p className="mt-1">
+                        Connect Google Drive in{' '}
+                        <a href="/settings" className="underline hover:no-underline">Settings → Integrations</a>{' '}
+                        to browse folders visually. You can still add folders manually below.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Manual Add Folder Form - Collapsible */}
+              <details className="group">
+                <summary className="flex items-center gap-2 cursor-pointer text-sm text-muted-foreground hover:text-foreground transition-colors">
+                  <span className="text-xs">▶</span>
+                  <span className="group-open:hidden">Add folder manually</span>
+                  <span className="hidden group-open:inline">Hide manual entry</span>
+                </summary>
+                <div className="mt-3 p-4 rounded-lg border border-dashed border-border bg-secondary/30">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="newFolderId">Folder ID or URL</Label>
+                      <Input
+                        id="newFolderId"
+                        value={newFolderId}
+                        onChange={(e) => setNewFolderId(e.target.value)}
+                        placeholder="1ABC...xyz or https://drive.google.com/..."
+                        className="font-mono text-sm"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Copy from your Google Drive folder URL
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="newFolderName">Folder Name</Label>
+                      <Input
+                        id="newFolderName"
+                        value={newFolderName}
+                        onChange={(e) => setNewFolderName(e.target.value)}
+                        placeholder="Marketing Documents"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        A friendly name to identify this folder
+                      </p>
+                    </div>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleAddFolder}
+                    disabled={!newFolderId || !newFolderName}
+                    className="mt-3 w-full"
+                  >
+                    <FolderPlus className="w-4 h-4 mr-2" />
+                    Add Folder
+                  </Button>
+                </div>
+              </details>
 
               {/* Folder List */}
               {folders.length > 0 ? (
@@ -804,6 +859,15 @@ export function BotSetupWizard({ isOpen, onClose }: BotSetupWizardProps) {
           </div>
         </div>
       </div>
+
+      {/* Drive Folder Picker Modal */}
+      <DriveFolderPicker
+        isOpen={folderPickerOpen}
+        onClose={() => setFolderPickerOpen(false)}
+        onSelect={handleFolderPickerSelect}
+        selectedFolders={folders.map(f => ({ id: f.driveFolderId, name: f.folderName }))}
+        maxSelections={10}
+      />
     </div>
   );
 }

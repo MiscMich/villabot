@@ -28,6 +28,13 @@ export interface DriveFile {
   parents?: string[];  // Parent folder IDs for change tracking
 }
 
+export interface DriveFolder {
+  id: string;
+  name: string;
+  modifiedTime: string;
+  parentId?: string;
+}
+
 export interface DriveChangeToken {
   token: string;
   expiresAt: Date;
@@ -142,6 +149,43 @@ export async function listFilesInFolder(folderId?: string): Promise<DriveFile[]>
 
   logger.info(`Found ${files.length} files in folder`);
   return files;
+}
+
+/**
+ * List folders in Drive
+ * Used for folder picker UI
+ */
+export async function listFolders(
+  parentId?: string,
+  pageToken?: string
+): Promise<{
+  folders: DriveFolder[];
+  nextPageToken?: string;
+}> {
+  const drive = getDriveClient();
+  const targetParentId = parentId ?? 'root';
+
+  const response = await drive.files.list({
+    q: `'${targetParentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+    fields: 'nextPageToken, files(id, name, modifiedTime, parents)',
+    pageSize: 50,
+    pageToken: pageToken ?? undefined,
+    orderBy: 'name',
+  });
+
+  const folders: DriveFolder[] = (response.data.files ?? []).map(file => ({
+    id: file.id!,
+    name: file.name!,
+    modifiedTime: file.modifiedTime!,
+    parentId: file.parents?.[0] ?? undefined,
+  }));
+
+  logger.debug(`Listed ${folders.length} folders in ${targetParentId}`);
+
+  return {
+    folders,
+    nextPageToken: response.data.nextPageToken ?? undefined,
+  };
 }
 
 /**

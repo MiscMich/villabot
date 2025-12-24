@@ -14,18 +14,17 @@ import { teamRouter } from './routes/team.js';
 import errorsRouter from './routes/errors.js';
 import conversationsRouter from './routes/conversations.js';
 import { botsRouter } from './routes/bots.js';
+import { driveRouter } from './routes/drive.js';
 import { feedbackRouter } from './routes/feedback.js';
 import { setupRouter } from './routes/setup.js';
 import billingRouter from './routes/billing.js';
 import webhooksRouter from './routes/webhooks.js';
 import adminRouter from './routes/admin.js';
-import { testSupabaseConnection } from './services/supabase/client.js';
+import { testSupabaseConnection, supabase } from './services/supabase/client.js';
 import { isStripeConfigured } from './services/billing/stripe.js';
 import { initializeSlackBots, isSlackBotRunning, shutdownSlackBots, botManager } from './services/slack/manager.js';
-// Legacy import for backwards compatibility during transition
-import { initializeSlackBot as initializeLegacyBot, shutdownSlackBot as shutdownLegacyBot, isSlackBotRunning as isLegacyBotRunning } from './services/slack/bot.js';
 import { initializeScheduler, stopScheduler } from './services/scheduler/index.js';
-import { isPlatformAdmin } from './middleware/rateLimit.js';
+import { isPlatformAdmin, isRedisAvailable } from './middleware/rateLimit.js';
 
 const app = express();
 
@@ -75,6 +74,7 @@ app.use('/api/analytics', analyticsRouter);
 app.use('/api/errors', errorsRouter);
 app.use('/api/conversations', conversationsRouter);
 app.use('/api/bots', botsRouter);
+app.use('/api/drive', driveRouter);
 app.use('/api/feedback', feedbackRouter);
 // Setup router doesn't use resolveWorkspace (used during initial setup before workspace exists)
 app.use('/api/setup', setupRouter);
@@ -106,6 +106,7 @@ app.get('/', (_req, res) => {
       analytics: '/api/analytics',
       conversations: '/api/conversations',
       bots: '/api/bots',
+      drive: '/api/drive',
       feedback: '/api/feedback',
       setup: '/api/setup',
       // Billing
@@ -157,12 +158,61 @@ async function start(): Promise<void> {
       updateIntegrationCounts({ activeSlackBots: runningCount });
       logger.info(`✓ Slack bots running (${runningCount} active from workspaces)`);
     } else if (env.SLACK_BOT_TOKEN && env.SLACK_APP_TOKEN) {
-      // Fall back to legacy single bot if no bots in database
-      logger.info('No bots in database, using legacy single-bot mode');
-      await initializeLegacyBot();
-      if (isLegacyBotRunning()) {
-        updateIntegrationCounts({ activeSlackBots: 1 });
-        logger.info('✓ Slack bot running (legacy mode)');
+      // No bots in database but env vars exist - create a default bot
+      logger.info('No bots in database, creating default bot from env vars');
+
+      // Find or create a default workspace
+      const { data: existingWorkspace } = await supabase
+        .from('workspaces')
+        .select('id')
+        .in('status', ['active', 'trialing'])
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .single();
+
+      if (existingWorkspace) {
+        // Check if a bot with this token already exists
+        const { data: existingBot } = await supabase
+          .from('bots')
+          .select('id')
+          .eq('slack_bot_token', env.SLACK_BOT_TOKEN)
+          .single();
+
+        if (!existingBot) {
+          // Create a default bot in the database
+          const { error: createError } = await supabase
+            .from('bots')
+            .insert({
+              workspace_id: existingWorkspace.id,
+              name: 'Default Bot',
+              slug: 'default-bot',
+              slack_bot_token: env.SLACK_BOT_TOKEN,
+              slack_app_token: env.SLACK_APP_TOKEN,
+              status: 'active',
+              is_default: true,
+            });
+
+          if (createError) {
+            logger.error('Failed to create default bot', { error: createError });
+          } else {
+            logger.info('Created default bot in database from env vars');
+            // Re-initialize to pick up the new bot
+            await initializeSlackBots();
+            if (isSlackBotRunning()) {
+              updateIntegrationCounts({ activeSlackBots: botManager.getRunningCount() });
+              logger.info('✓ Default Slack bot started from env vars');
+            }
+          }
+        } else {
+          logger.info('Bot with env token already exists, starting via manager');
+          await botManager.startBot(existingBot.id);
+          if (isSlackBotRunning()) {
+            updateIntegrationCounts({ activeSlackBots: botManager.getRunningCount() });
+            logger.info('✓ Slack bot started');
+          }
+        }
+      } else {
+        logger.info('○ No workspace exists yet - bot will start after setup');
       }
     } else {
       logger.info('○ No Slack bots configured by any workspace yet');
@@ -191,6 +241,18 @@ async function start(): Promise<void> {
   initializeScheduler();
   logger.info('✓ Scheduler initialized');
 
+  // Check Redis for production rate limiting
+  if (env.NODE_ENV === 'production') {
+    if (isRedisAvailable()) {
+      logger.info('✓ Redis connected for rate limiting');
+    } else {
+      logger.warn('⚠ Redis not available in production - rate limits use in-memory storage');
+      logger.warn('  • Rate limits reset on server restart');
+      logger.warn('  • Rate limits not shared across instances');
+      logger.warn('  → Set REDIS_URL environment variable for persistent rate limiting');
+    }
+  }
+
   // Start HTTP server
   app.listen(env.PORT, () => {
     logger.info(`✓ Server running on http://localhost:${env.PORT}`);
@@ -211,14 +273,9 @@ async function shutdown(): Promise<void> {
 
   stopScheduler();
 
-  // Shutdown multi-bot manager
+  // Shutdown all bots via manager
   if (isSlackBotRunning()) {
     await shutdownSlackBots();
-  }
-
-  // Also shutdown legacy bot if running
-  if (isLegacyBotRunning()) {
-    await shutdownLegacyBot();
   }
 
   process.exit(0);

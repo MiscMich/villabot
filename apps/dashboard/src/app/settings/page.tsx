@@ -15,16 +15,13 @@ import {
   Link as LinkIcon,
   Unlink,
   Settings,
-  Cpu,
   Cloud,
-  RefreshCw,
-  Slack,
   Sparkles,
-  Sliders,
   User,
   LogOut,
   Mail,
   Shield,
+  ExternalLink,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -70,31 +67,19 @@ export default function SettingsPage() {
   });
 
   const [generalSettings, setGeneralSettings] = useState({
-    botName: 'Cluebase',
     timezone: 'America/Los_Angeles',
-  });
-
-  const [aiSettings, setAiSettings] = useState({
-    model: 'gemini-1.5-flash',
-    temperature: 0.3,
-    maxResponseLength: 2000,
-  });
-
-  const [syncSettings, setSyncSettings] = useState({
-    drivePollIntervalMs: 300000,
-    websiteScrapeSchedule: '0 0 * * 0',
+    weeklyDigest: false,
   });
 
   useEffect(() => {
     if (config?.config) {
-      if (config.config.general) {
-        setGeneralSettings(config.config.general as typeof generalSettings);
-      }
-      if (config.config.ai) {
-        setAiSettings(config.config.ai as typeof aiSettings);
-      }
-      if (config.config.sync) {
-        setSyncSettings(config.config.sync as typeof syncSettings);
+      const general = config.config.general as { timezone?: string; weeklyDigest?: boolean } | undefined;
+      if (general) {
+        setGeneralSettings(prev => ({
+          ...prev,
+          timezone: general.timezone || prev.timezone,
+          weeklyDigest: general.weeklyDigest || prev.weeklyDigest,
+        }));
       }
     }
   }, [config]);
@@ -114,46 +99,6 @@ export default function SettingsPage() {
       toast({
         title: 'Settings saved',
         description: 'General settings have been updated successfully.',
-        variant: 'success',
-      });
-    } catch (error) {
-      toast({
-        title: 'Failed to save',
-        description: error instanceof Error ? error.message : 'An error occurred while saving settings.',
-        variant: 'destructive',
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleSaveAI = async () => {
-    setSaving(true);
-    try {
-      await updateMutation.mutateAsync({ key: 'ai', value: aiSettings });
-      toast({
-        title: 'Settings saved',
-        description: 'AI settings have been updated successfully.',
-        variant: 'success',
-      });
-    } catch (error) {
-      toast({
-        title: 'Failed to save',
-        description: error instanceof Error ? error.message : 'An error occurred while saving settings.',
-        variant: 'destructive',
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleSaveSync = async () => {
-    setSaving(true);
-    try {
-      await updateMutation.mutateAsync({ key: 'sync', value: syncSettings });
-      toast({
-        title: 'Settings saved',
-        description: 'Sync settings have been updated successfully.',
         variant: 'success',
       });
     } catch (error) {
@@ -208,27 +153,19 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="general" className="opacity-0 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
+      <Tabs defaultValue="account" className="opacity-0 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
         <TabsList className="bg-secondary/50 p-1">
           <TabsTrigger value="account" className="data-[state=active]:bg-background">
             <User className="h-4 w-4 mr-2" />
             Account
           </TabsTrigger>
           <TabsTrigger value="general" className="data-[state=active]:bg-background">
-            <Sliders className="h-4 w-4 mr-2" />
-            General
-          </TabsTrigger>
-          <TabsTrigger value="ai" className="data-[state=active]:bg-background">
-            <Cpu className="h-4 w-4 mr-2" />
-            AI Settings
+            <Settings className="h-4 w-4 mr-2" />
+            Workspace
           </TabsTrigger>
           <TabsTrigger value="integrations" className="data-[state=active]:bg-background">
             <LinkIcon className="h-4 w-4 mr-2" />
             Integrations
-          </TabsTrigger>
-          <TabsTrigger value="sync" className="data-[state=active]:bg-background">
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Sync
           </TabsTrigger>
         </TabsList>
 
@@ -300,7 +237,7 @@ export default function SettingsPage() {
           </div>
         </TabsContent>
 
-        {/* General Settings */}
+        {/* Workspace Settings */}
         <TabsContent value="general" className="mt-6">
           <div className="glass-card">
             <div className="p-6 border-b border-border/50">
@@ -309,24 +246,12 @@ export default function SettingsPage() {
                   <Sparkles className="h-5 w-5 text-violet-600 dark:text-violet-400" />
                 </div>
                 <div>
-                  <h2 className="font-display text-xl font-semibold">General Settings</h2>
-                  <p className="text-sm text-muted-foreground">Basic configuration for your bot</p>
+                  <h2 className="font-display text-xl font-semibold">Workspace Settings</h2>
+                  <p className="text-sm text-muted-foreground">Configure your workspace preferences</p>
                 </div>
               </div>
             </div>
             <div className="p-6 space-y-6">
-              <div className="grid gap-3">
-                <Label htmlFor="botName" className="text-sm font-medium">Bot Name</Label>
-                <Input
-                  id="botName"
-                  value={generalSettings.botName}
-                  onChange={(e) => setGeneralSettings({ ...generalSettings, botName: e.target.value })}
-                  className="border-border/50 focus:border-violet-500/50 focus:ring-violet-500/20"
-                />
-                <p className="text-sm text-muted-foreground">
-                  The name your bot will use when responding
-                </p>
-              </div>
               <div className="grid gap-3">
                 <Label htmlFor="timezone" className="text-sm font-medium">Timezone</Label>
                 <Input
@@ -336,83 +261,26 @@ export default function SettingsPage() {
                   className="border-border/50 focus:border-violet-500/50 focus:ring-violet-500/20"
                 />
                 <p className="text-sm text-muted-foreground">
-                  Used for scheduling and timestamps
+                  Used for scheduling, analytics, and timestamps
                 </p>
+              </div>
+              <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/30 border border-border/50">
+                <div>
+                  <p className="font-medium">Weekly Digest</p>
+                  <p className="text-sm text-muted-foreground">Receive a weekly summary of bot activity</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={generalSettings.weeklyDigest}
+                    onChange={(e) => setGeneralSettings({ ...generalSettings, weeklyDigest: e.target.checked })}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-violet-300 dark:peer-focus:ring-violet-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-violet-600"></div>
+                </label>
               </div>
               <Button
                 onClick={handleSaveGeneral}
-                disabled={saving}
-                className="bg-gradient-to-r from-violet-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white"
-              >
-                <Save className="h-4 w-4 mr-2" />
-                {saving ? 'Saving...' : 'Save Changes'}
-              </Button>
-            </div>
-          </div>
-        </TabsContent>
-
-        {/* AI Settings */}
-        <TabsContent value="ai" className="mt-6">
-          <div className="glass-card">
-            <div className="p-6 border-b border-border/50">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500/20 to-indigo-500/20">
-                  <Cpu className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                </div>
-                <div>
-                  <h2 className="font-display text-xl font-semibold">AI Configuration</h2>
-                  <p className="text-sm text-muted-foreground">Customize how the AI generates responses</p>
-                </div>
-              </div>
-            </div>
-            <div className="p-6 space-y-6">
-              <div className="grid gap-3">
-                <Label htmlFor="model" className="text-sm font-medium">Model</Label>
-                <Input
-                  id="model"
-                  value={aiSettings.model}
-                  onChange={(e) => setAiSettings({ ...aiSettings, model: e.target.value })}
-                  className="border-border/50 focus:border-violet-500/50 focus:ring-violet-500/20"
-                />
-                <p className="text-sm text-muted-foreground">
-                  Gemini model to use for responses
-                </p>
-              </div>
-              <div className="grid gap-3">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="temperature" className="text-sm font-medium">Temperature</Label>
-                  <span className="text-sm font-mono bg-secondary px-2 py-1 rounded">{aiSettings.temperature}</span>
-                </div>
-                <input
-                  id="temperature"
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.1"
-                  value={aiSettings.temperature}
-                  onChange={(e) => setAiSettings({ ...aiSettings, temperature: parseFloat(e.target.value) })}
-                  className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer accent-violet-500"
-                />
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>More focused</span>
-                  <span>More creative</span>
-                </div>
-              </div>
-              <div className="grid gap-3">
-                <Label htmlFor="maxLength" className="text-sm font-medium">Max Response Length</Label>
-                <Input
-                  id="maxLength"
-                  type="number"
-                  value={aiSettings.maxResponseLength}
-                  onChange={(e) => setAiSettings({ ...aiSettings, maxResponseLength: parseInt(e.target.value) })}
-                  className="border-border/50 focus:border-violet-500/50 focus:ring-violet-500/20"
-                />
-                <p className="text-sm text-muted-foreground">
-                  Maximum characters in bot responses
-                </p>
-              </div>
-              <Button
-                onClick={handleSaveAI}
                 disabled={saving}
                 className="bg-gradient-to-r from-violet-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white"
               >
@@ -489,78 +357,32 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Slack Status */}
+          {/* Knowledge Sources Info */}
           <div className="glass-card">
             <div className="p-6 border-b border-border/50">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-500/20">
-                  <Slack className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                <div className="p-2 rounded-lg bg-gradient-to-br from-violet-500/20 to-pink-500/20">
+                  <Sparkles className="h-5 w-5 text-violet-600 dark:text-violet-400" />
                 </div>
                 <div>
-                  <h2 className="font-display text-xl font-semibold">Slack</h2>
-                  <p className="text-sm text-muted-foreground">Bot connection status</p>
+                  <h2 className="font-display text-xl font-semibold">Knowledge Sources</h2>
+                  <p className="text-sm text-muted-foreground">Configure what your bots know</p>
                 </div>
               </div>
             </div>
             <div className="p-6">
-              <div className="p-4 rounded-xl bg-secondary/50 border border-border/50">
+              <div className="p-4 rounded-xl bg-secondary/50 border border-border/50 space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  Slack credentials are configured via environment variables.
-                  Check the API server logs to verify connection status.
+                  Each bot has its own knowledge base. Manage Drive folders and website sources in the Bots page.
                 </p>
+                <a
+                  href="/bots"
+                  className="inline-flex items-center gap-2 text-sm font-medium text-violet-600 dark:text-violet-400 hover:underline"
+                >
+                  Go to Bots
+                  <ExternalLink className="h-4 w-4" />
+                </a>
               </div>
-            </div>
-          </div>
-        </TabsContent>
-
-        {/* Sync Settings */}
-        <TabsContent value="sync" className="mt-6">
-          <div className="glass-card">
-            <div className="p-6 border-b border-border/50">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-gradient-to-br from-emerald-500/20 to-teal-500/20">
-                  <RefreshCw className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-                </div>
-                <div>
-                  <h2 className="font-display text-xl font-semibold">Sync Configuration</h2>
-                  <p className="text-sm text-muted-foreground">Configure sync frequency and schedules</p>
-                </div>
-              </div>
-            </div>
-            <div className="p-6 space-y-6">
-              <div className="grid gap-3">
-                <Label htmlFor="pollInterval" className="text-sm font-medium">Drive Poll Interval (minutes)</Label>
-                <Input
-                  id="pollInterval"
-                  type="number"
-                  value={syncSettings.drivePollIntervalMs / 60000}
-                  onChange={(e) => setSyncSettings({ ...syncSettings, drivePollIntervalMs: parseInt(e.target.value) * 60000 })}
-                  className="border-border/50 focus:border-violet-500/50 focus:ring-violet-500/20"
-                />
-                <p className="text-sm text-muted-foreground">
-                  How often to check Google Drive for changes
-                </p>
-              </div>
-              <div className="grid gap-3">
-                <Label htmlFor="scrapeSchedule" className="text-sm font-medium">Website Scrape Schedule</Label>
-                <Input
-                  id="scrapeSchedule"
-                  value={syncSettings.websiteScrapeSchedule}
-                  onChange={(e) => setSyncSettings({ ...syncSettings, websiteScrapeSchedule: e.target.value })}
-                  className="border-border/50 focus:border-violet-500/50 focus:ring-violet-500/20 font-mono"
-                />
-                <p className="text-sm text-muted-foreground">
-                  Cron expression for website scraping (default: weekly on Sunday at midnight)
-                </p>
-              </div>
-              <Button
-                onClick={handleSaveSync}
-                disabled={saving}
-                className="bg-gradient-to-r from-violet-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white"
-              >
-                <Save className="h-4 w-4 mr-2" />
-                {saving ? 'Saving...' : 'Save Changes'}
-              </Button>
             </div>
           </div>
         </TabsContent>

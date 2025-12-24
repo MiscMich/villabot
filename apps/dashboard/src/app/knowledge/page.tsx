@@ -1,8 +1,20 @@
 'use client';
 
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
   RefreshCw,
   Check,
@@ -14,14 +26,29 @@ import {
   CheckCircle2,
   AlertCircle,
   Lightbulb,
+  Plus,
+  Loader2,
 } from 'lucide-react';
 
 export default function KnowledgePage() {
   const queryClient = useQueryClient();
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [newFactText, setNewFactText] = useState('');
+  const [newFactSource, setNewFactSource] = useState('');
 
   const { data: facts, isLoading } = useQuery({
     queryKey: ['learnedFacts'],
     queryFn: api.getLearnedFacts,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (data: { fact: string; source?: string }) => api.createFact(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['learnedFacts'] });
+      setIsCreateModalOpen(false);
+      setNewFactText('');
+      setNewFactSource('');
+    },
   });
 
   const verifyMutation = useMutation({
@@ -59,9 +86,18 @@ export default function KnowledgePage() {
     <div className="space-y-8">
       {/* Header */}
       <div className="opacity-0 animate-fade-in">
-        <div className="flex items-center gap-3 mb-2">
-          <Brain className="w-8 h-8 text-amber-500" />
-          <h1 className="text-4xl font-display font-bold">Knowledge Base</h1>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-3">
+            <Brain className="w-8 h-8 text-amber-500" />
+            <h1 className="text-4xl font-display font-bold">Knowledge Base</h1>
+          </div>
+          <Button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="bg-gradient-to-r from-violet-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Fact
+          </Button>
         </div>
         <p className="text-lg text-muted-foreground">
           Review and manage facts learned from user corrections
@@ -245,6 +281,91 @@ export default function KnowledgePage() {
           )}
         </div>
       </div>
+
+      {/* Create Fact Modal */}
+      <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="h-5 w-5 text-violet-500" />
+              Add New Fact
+            </DialogTitle>
+            <DialogDescription>
+              Add a fact or rule to your knowledge base. This will be used by your bot when answering questions.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (newFactText.trim()) {
+                createMutation.mutate({
+                  fact: newFactText.trim(),
+                  source: newFactSource.trim() || undefined,
+                });
+              }
+            }}
+            className="space-y-4"
+          >
+            <div className="space-y-2">
+              <Label htmlFor="fact-text">Fact or Rule *</Label>
+              <Textarea
+                id="fact-text"
+                placeholder="e.g., Our office hours are Monday-Friday, 9am-5pm EST. For urgent matters, contact support@company.com"
+                value={newFactText}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewFactText(e.target.value)}
+                rows={4}
+                className="resize-none"
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                Enter information your bot should know when answering questions.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="fact-source">Source (optional)</Label>
+              <Input
+                id="fact-source"
+                placeholder="e.g., Company Policy, HR Guidelines"
+                value={newFactSource}
+                onChange={(e) => setNewFactSource(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Where this information comes from, for reference.
+              </p>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsCreateModalOpen(false);
+                  setNewFactText('');
+                  setNewFactSource('');
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={!newFactText.trim() || createMutation.isPending}
+                className="bg-gradient-to-r from-violet-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white"
+              >
+                {createMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Adding...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Fact
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

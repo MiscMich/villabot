@@ -21,6 +21,8 @@ import {
   X,
   LogOut,
   User,
+  Users,
+  CreditCard,
 } from 'lucide-react';
 import { useState, useEffect, createContext, useContext } from 'react';
 import { useSetupStatus, getSetupProgress } from '@/hooks/useSetupStatus';
@@ -105,6 +107,18 @@ const navigation = [
     href: '/feedback',
     icon: ThumbsUp,
     description: 'Response feedback & ratings',
+  },
+  {
+    name: 'Team',
+    href: '/team',
+    icon: Users,
+    description: 'Manage team members',
+  },
+  {
+    name: 'Billing',
+    href: '/billing',
+    icon: CreditCard,
+    description: 'Subscription & usage',
   },
   {
     name: 'Settings',

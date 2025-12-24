@@ -229,8 +229,14 @@ curl -I https://cluebase.ai
 | `GOOGLE_CLIENT_SECRET` | No | Google OAuth client secret |
 | `STRIPE_SECRET_KEY` | No | Stripe API key |
 | `STRIPE_WEBHOOK_SECRET` | No | Stripe webhook secret |
-| `REDIS_URL` | No | Redis URL (defaults to redis://redis:6379) |
+| `REDIS_URL` | Recommended | Redis URL for persistent rate limiting (see note below) |
 | `LOG_LEVEL` | No | Log level (default: info) |
+
+**Note on Redis**: Without Redis, rate limits use in-memory storage which:
+- Resets when the server restarts (abuse window)
+- Doesn't sync across multiple instances (load balancing bypass)
+
+For production, we recommend running Redis. You can add a Redis service in Coolify or use a managed Redis provider.
 
 ### Dashboard Service
 
@@ -350,6 +356,7 @@ git push origin main
 - [ ] SSL certificates are active on all domains
 - [ ] Cloudflare WAF enabled (if using Cloudflare)
 - [ ] Regular database backups configured
+- [ ] Redis configured for persistent rate limiting
 
 ---
 

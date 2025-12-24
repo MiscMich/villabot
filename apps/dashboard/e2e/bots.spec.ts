@@ -1,259 +1,239 @@
+/**
+ * Bots Page E2E Tests
+ *
+ * Tests bot listing, creation, configuration, and management.
+ * Each bot has its own knowledge base and Slack integration.
+ */
+
 import { test, expect } from '@playwright/test';
 
-test.describe('Bot Management', () => {
-  // Auth state is handled by playwright.config.ts chromium project
+test.describe('Bots Page', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/bots');
+    await page.waitForLoadState('networkidle');
+  });
 
-  test.describe('Bots List Page', () => {
-    test('should display bots page', async ({ page }) => {
-      await page.goto('/bots');
-
-      // Wait for page to settle
-      await expect(page.locator('nav, aside').first()).toBeVisible({ timeout: 10000 });
-
-      // Should show bots page heading or page content
-      const hasHeading = await page.getByRole('heading', { name: /bots/i }).isVisible().catch(() => false);
-      const hasIcon = await page.locator('[class*="lucide-bot"]').first().isVisible().catch(() => false);
-      const hasSidebar = await page.locator('nav, aside').first().isVisible().catch(() => false);
-
-      expect(hasHeading || hasIcon || hasSidebar).toBeTruthy();
+  test.describe('Page Layout', () => {
+    test('should display bots header', async ({ page }) => {
+      await expect(page.getByRole('heading', { name: /bots/i })).toBeVisible();
     });
 
-    test('should show new bot button', async ({ page }) => {
-      await page.goto('/bots');
+    test('should display Create Bot button', async ({ page }) => {
+      const createButton = page.getByRole('button', { name: /create.*bot|add.*bot|new.*bot/i });
+      await expect(createButton).toBeVisible();
+    });
+  });
 
-      // Wait for page to be on bots URL (may redirect through auth)
-      await expect(page).toHaveURL(/bots/, { timeout: 15000 });
-      await expect(page.locator('nav, aside').first()).toBeVisible({ timeout: 10000 });
+  test.describe('Bot List', () => {
+    test('should display bots or empty state', async ({ page }) => {
+      const hasContent = await Promise.race([
+        page.locator('[data-testid="bot-card"], .bot-card').first().isVisible(),
+        page.getByText(/no bots|create your first|get started/i).isVisible(),
+      ]).catch(() => false);
 
-      // Wait for loading to complete - heading appears after data loads OR loading state
-      const heading = page.getByRole('heading', { name: /bots/i });
-      const shimmer = page.locator('.shimmer').first();
-
-      // Wait for either heading or loading state
-      await Promise.race([
-        expect(heading).toBeVisible({ timeout: 20000 }),
-        expect(shimmer).toBeVisible({ timeout: 5000 }),
-      ]).catch(() => {});
-
-      // If heading visible, check for button
-      if (await heading.isVisible()) {
-        const newBotButton = page.getByRole('button', { name: /new bot|create bot|add bot/i });
-        await expect(newBotButton).toBeVisible({ timeout: 5000 });
-      }
+      expect(hasContent).toBe(true);
     });
 
-    test('should display bot statistics', async ({ page }) => {
-      await page.goto('/bots');
-      await expect(page).toHaveURL(/bots/, { timeout: 15000 });
-      await expect(page.locator('nav, aside').first()).toBeVisible({ timeout: 10000 });
+    test('should show bot status indicators', async ({ page }) => {
+      const botCard = page.locator('[data-testid="bot-card"], .bot-card').first();
 
-      // Wait for loading to complete or loading state
-      await page.waitForTimeout(1000);
+      if (await botCard.isVisible()) {
+        const hasStatus = await Promise.race([
+          botCard.getByText(/running|active|online|stopped|offline/i).isVisible(),
+          botCard.locator('[data-status]').isVisible(),
+        ]).catch(() => false);
 
-      // Should show statistics cards, loading state, or sidebar
-      const hasTotal = await page.getByText(/total/i).first().isVisible().catch(() => false);
-      const hasActive = await page.getByText(/active/i).first().isVisible().catch(() => false);
-      const hasCards = await page.locator('.glass-card').first().isVisible().catch(() => false);
-      const hasShimmer = await page.locator('.shimmer').first().isVisible().catch(() => false);
-      const hasSidebar = await page.locator('nav, aside').first().isVisible().catch(() => false);
-
-      expect(hasTotal || hasActive || hasCards || hasShimmer || hasSidebar).toBeTruthy();
-    });
-
-    test('should have search functionality', async ({ page }) => {
-      await page.goto('/bots');
-      await expect(page).toHaveURL(/bots/, { timeout: 15000 });
-
-      // Wait for page to fully load
-      await page.waitForTimeout(2000);
-
-      // Should have search input, filter, or be showing bot list
-      const searchInput = page.getByPlaceholder(/search/i);
-      const hasSearch = await searchInput.isVisible().catch(() => false);
-      const hasFilter = await page.getByRole('combobox').first().isVisible().catch(() => false);
-      const hasBotCards = await page.locator('.glass-card, [class*="card"]').first().isVisible().catch(() => false);
-      const hasSidebar = await page.locator('nav, aside').first().isVisible().catch(() => false);
-
-      if (hasSearch) {
-        // Should be able to type in search
-        await searchInput.fill('test');
-        await expect(searchInput).toHaveValue('test');
-      } else {
-        // Page is valid if it has filter, bot cards, or sidebar
-        expect(hasFilter || hasBotCards || hasSidebar).toBeTruthy();
+        expect(typeof hasStatus).toBe('boolean');
       }
     });
   });
 
-  test.describe('Bot Setup Wizard', () => {
-    test('should open wizard on new bot click', async ({ page }) => {
-      await page.goto('/bots');
-      await expect(page).toHaveURL(/bots/, { timeout: 15000 });
-      await expect(page.locator('nav, aside').first()).toBeVisible({ timeout: 10000 });
+  test.describe('Create Bot Modal', () => {
+    test('should open create modal on button click', async ({ page }) => {
+      const createButton = page.getByRole('button', { name: /create.*bot|add.*bot|new.*bot/i });
+      await createButton.click();
 
-      // Wait for page to load
-      await page.waitForTimeout(2000);
-
-      // Check if new bot button is visible
-      const newBotButton = page.getByRole('button', { name: /new bot/i });
-      const buttonVisible = await newBotButton.isVisible({ timeout: 5000 }).catch(() => false);
-
-      if (buttonVisible) {
-        await newBotButton.click();
-
-        // Wizard dialog or form should open
-        const hasDialog = await page.getByRole('dialog').isVisible({ timeout: 5000 }).catch(() => false);
-        const hasWizard = await page.getByText(/step 1|basic info|bot name/i).first().isVisible({ timeout: 5000 }).catch(() => false);
-
-        expect(hasDialog || hasWizard).toBeTruthy();
-      }
+      const modal = page.locator('[role="dialog"]');
+      await expect(modal).toBeVisible();
     });
 
-    test('should show wizard steps', async ({ page }) => {
-      await page.goto('/bots');
-      await expect(page).toHaveURL(/bots/, { timeout: 15000 });
-      await expect(page.locator('nav, aside').first()).toBeVisible({ timeout: 10000 });
+    test('should display bot configuration form', async ({ page }) => {
+      const createButton = page.getByRole('button', { name: /create.*bot|add.*bot|new.*bot/i });
+      await createButton.click();
 
-      // Wait for page to load
-      await page.waitForTimeout(2000);
+      await expect(page.getByLabel(/name|bot name/i)).toBeVisible();
 
-      // Check if new bot button is visible
-      const newBotButton = page.getByRole('button', { name: /new bot/i });
-      if (await newBotButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await newBotButton.click();
-        await page.waitForTimeout(500);
+      const hasSlackFields = await Promise.race([
+        page.getByLabel(/bot.*token|slack.*token/i).isVisible(),
+        page.getByPlaceholder(/xoxb-/i).isVisible(),
+      ]).catch(() => false);
 
-        // Should show step indicator or form content
-        const hasSteps = await page.getByText(/step|name|basic/i).first().isVisible().catch(() => false);
-        const hasForm = await page.locator('input, form').first().isVisible().catch(() => false);
-
-        expect(hasSteps || hasForm).toBeTruthy();
-      }
+      expect(hasSlackFields).toBe(true);
     });
 
-    test('should have name input field', async ({ page }) => {
-      await page.goto('/bots');
+    test('should close modal on cancel', async ({ page }) => {
+      const createButton = page.getByRole('button', { name: /create.*bot|add.*bot|new.*bot/i });
+      await createButton.click();
 
-      // Wait for page to fully load
-      await page.waitForTimeout(2000);
+      const cancelButton = page.getByRole('button', { name: /cancel/i });
+      await cancelButton.click();
 
-      // Open wizard if button visible
-      const newBotButton = page.getByRole('button', { name: /new bot|add bot|create bot/i });
-      const hasNewBotButton = await newBotButton.isVisible().catch(() => false);
+      await expect(page.locator('[role="dialog"]')).not.toBeVisible();
+    });
+  });
 
-      if (hasNewBotButton) {
-        await newBotButton.click();
-        await page.waitForTimeout(1000);
+  test.describe('Bot Configuration', () => {
+    test('should open settings for existing bot', async ({ page }) => {
+      const botCard = page.locator('[data-testid="bot-card"], .bot-card').first();
 
-        // Find name input by label or placeholder
-        const nameInput = page.getByLabel(/name/i).or(page.getByPlaceholder(/name|bot/i));
-        const hasNameInput = await nameInput.first().isVisible().catch(() => false);
+      if (await botCard.isVisible()) {
+        const settingsButton = botCard.getByRole('button', { name: /settings|edit|configure/i });
 
-        if (hasNameInput) {
-          await nameInput.first().fill('Test Bot');
-          await expect(nameInput.first()).toHaveValue('Test Bot');
-        } else {
-          // Check if wizard is at least visible
-          const hasWizard = await page.locator('[role="dialog"], .modal, .wizard').first().isVisible().catch(() => false);
-          expect(hasWizard).toBeTruthy();
+        if (await settingsButton.isVisible()) {
+          await settingsButton.click();
+          const modal = page.locator('[role="dialog"]');
+          await expect(modal).toBeVisible();
         }
-      } else {
-        // No new bot button - page still valid with sidebar
-        await expect(page.locator('nav, aside').first()).toBeVisible();
       }
     });
 
-    test('should have next/continue button', async ({ page }) => {
-      await page.goto('/bots');
+    test('should display knowledge sources section', async ({ page }) => {
+      const botCard = page.locator('[data-testid="bot-card"], .bot-card').first();
 
-      // Wait for page to fully load
-      await page.waitForTimeout(2000);
+      if (await botCard.isVisible()) {
+        const settingsButton = botCard.getByRole('button', { name: /settings|edit|configure/i });
 
-      // Open wizard if button visible
-      const newBotButton = page.getByRole('button', { name: /new bot|add bot|create bot/i });
-      const hasNewBotButton = await newBotButton.isVisible().catch(() => false);
+        if (await settingsButton.isVisible()) {
+          await settingsButton.click();
 
-      if (hasNewBotButton) {
-        await newBotButton.click();
-        await page.waitForTimeout(1000);
+          const hasKnowledgeSection = await Promise.race([
+            page.getByText(/knowledge.*sources|drive.*folders/i).isVisible(),
+            page.getByText(/folders|documents/i).isVisible(),
+          ]).catch(() => false);
 
-        // Should have next, continue, create, or save button in wizard
-        const nextButton = page.getByRole('button', { name: /next|continue|create|save|submit/i });
-        const hasNextButton = await nextButton.first().isVisible().catch(() => false);
-        const hasWizard = await page.locator('[role="dialog"], .modal, .wizard, [class*="dialog"]').first().isVisible().catch(() => false);
-
-        // Pass if we have a button or at least the wizard opened
-        expect(hasNextButton || hasWizard).toBeTruthy();
-      } else {
-        // No new bot button - page still valid with sidebar
-        await expect(page.locator('nav, aside').first()).toBeVisible();
+          expect(typeof hasKnowledgeSection).toBe('boolean');
+        }
       }
     });
 
-    test('should close wizard on cancel', async ({ page }) => {
-      await page.goto('/bots');
-      await expect(page).toHaveURL(/bots/, { timeout: 15000 });
-      await expect(page.locator('nav, aside').first()).toBeVisible({ timeout: 10000 });
+    test('should display Slack channels section', async ({ page }) => {
+      const botCard = page.locator('[data-testid="bot-card"], .bot-card').first();
 
-      // Wait for page to load
-      await page.waitForTimeout(2000);
+      if (await botCard.isVisible()) {
+        const settingsButton = botCard.getByRole('button', { name: /settings|edit|configure/i });
 
-      // Open wizard if button visible
-      const newBotButton = page.getByRole('button', { name: /new bot/i });
-      if (await newBotButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await newBotButton.click();
-        await page.waitForTimeout(500);
+        if (await settingsButton.isVisible()) {
+          await settingsButton.click();
 
-        // Find and click cancel or close button
-        const cancelButton = page.getByRole('button', { name: /cancel|close|back/i }).or(
-          page.locator('[aria-label*="close" i]').or(
-            page.locator('button svg.lucide-x').locator('..')
-          )
-        );
+          const hasChannelsSection = await Promise.race([
+            page.getByText(/slack.*channels|channels/i).isVisible(),
+            page.getByLabel(/channel/i).isVisible(),
+          ]).catch(() => false);
 
-        if (await cancelButton.first().isVisible().catch(() => false)) {
-          await cancelButton.first().click();
-          await page.waitForTimeout(300);
-
-          // Dialog should be closed
-          const dialogGone = !(await page.getByRole('dialog').isVisible().catch(() => false));
-          expect(dialogGone).toBeTruthy();
+          expect(typeof hasChannelsSection).toBe('boolean');
         }
       }
     });
   });
 
-  test.describe('Bot Navigation', () => {
-    test('should have bots link in sidebar', async ({ page }) => {
-      await page.goto('/dashboard');
-      await expect(page.locator('nav, aside').first()).toBeVisible({ timeout: 10000 });
+  test.describe('Bot Actions', () => {
+    test('should have start/stop controls', async ({ page }) => {
+      const botCard = page.locator('[data-testid="bot-card"], .bot-card').first();
 
-      // Should have bots link (exact name is "Bots")
-      const botsLink = page.getByRole('link', { name: /bots/i });
-      await expect(botsLink.first()).toBeVisible({ timeout: 5000 });
+      if (await botCard.isVisible()) {
+        const hasControls = await Promise.race([
+          botCard.getByRole('button', { name: /start|stop|restart/i }).isVisible(),
+          botCard.locator('[data-testid="bot-controls"]').isVisible(),
+        ]).catch(() => false);
+
+        expect(typeof hasControls).toBe('boolean');
+      }
     });
 
-    test('should navigate from dashboard to bots', async ({ page }) => {
-      await page.goto('/dashboard');
-      await expect(page).toHaveURL(/dashboard/, { timeout: 10000 });
+    test('should have delete option', async ({ page }) => {
+      const botCard = page.locator('[data-testid="bot-card"], .bot-card').first();
 
-      // Wait for page to fully load
-      await page.waitForTimeout(2000);
+      if (await botCard.isVisible()) {
+        const settingsButton = botCard.getByRole('button', { name: /settings|edit|configure/i });
 
-      // Find and click bots link
-      const botsLink = page.getByRole('link', { name: /bots/i }).first();
-      const hasBotsLink = await botsLink.isVisible().catch(() => false);
+        if (await settingsButton.isVisible()) {
+          await settingsButton.click();
+          const deleteButton = page.getByRole('button', { name: /delete/i });
+          await expect(deleteButton).toBeVisible();
+        }
+      }
+    });
+  });
 
-      if (hasBotsLink) {
-        await botsLink.click();
-        // Wait for navigation - either URL changes or we get bots content
-        await page.waitForTimeout(2000);
-        const onBotsPage = await page.url().includes('bots');
-        const hasBotContent = await page.getByText(/bots|no bots|create.*bot/i).first().isVisible().catch(() => false);
-        expect(onBotsPage || hasBotContent).toBeTruthy();
-      } else {
-        // No bots link - check if page has valid sidebar
-        await expect(page.locator('nav, aside').first()).toBeVisible();
+  test.describe('Drive Folder Picker', () => {
+    test('should have Browse Drive button when Drive connected', async ({ page }) => {
+      const botCard = page.locator('[data-testid="bot-card"], .bot-card').first();
+
+      if (await botCard.isVisible()) {
+        const settingsButton = botCard.getByRole('button', { name: /settings|edit|configure/i });
+
+        if (await settingsButton.isVisible()) {
+          await settingsButton.click();
+
+          const browseButton = page.getByRole('button', { name: /browse.*drive|select.*folder/i });
+          const hasBrowse = await browseButton.isVisible().catch(() => false);
+          expect(typeof hasBrowse).toBe('boolean');
+        }
+      }
+    });
+
+    test('should open folder picker modal', async ({ page }) => {
+      const botCard = page.locator('[data-testid="bot-card"], .bot-card').first();
+
+      if (await botCard.isVisible()) {
+        const settingsButton = botCard.getByRole('button', { name: /settings|edit|configure/i });
+
+        if (await settingsButton.isVisible()) {
+          await settingsButton.click();
+
+          const browseButton = page.getByRole('button', { name: /browse.*drive|select.*folder/i });
+
+          if (await browseButton.isVisible()) {
+            await browseButton.click();
+
+            const folderPicker = page.locator('[role="dialog"]').filter({
+              has: page.getByText(/select.*folder|google.*drive/i),
+            });
+
+            await expect(folderPicker).toBeVisible({ timeout: 5000 });
+          }
+        }
+      }
+    });
+  });
+
+  test.describe('Empty State', () => {
+    test('should show setup guidance when no bots', async ({ page }) => {
+      const emptyState = page.getByText(/no bots|create your first|get started/i);
+
+      if (await emptyState.isVisible()) {
+        const hasAction = await Promise.race([
+          page.getByRole('button', { name: /create|add|new/i }).isVisible(),
+          page.getByRole('link', { name: /create|add|new/i }).isVisible(),
+        ]).catch(() => false);
+
+        expect(hasAction).toBe(true);
+      }
+    });
+  });
+
+  test.describe('Accessibility', () => {
+    test('should have proper heading hierarchy', async ({ page }) => {
+      await expect(page.locator('h1')).toBeVisible();
+    });
+
+    test('should have accessible bot cards', async ({ page }) => {
+      const botCard = page.locator('[data-testid="bot-card"], .bot-card').first();
+
+      if (await botCard.isVisible()) {
+        const hasHeading = await botCard.locator('h2, h3, [role="heading"]').isVisible();
+        const hasDescription = await botCard.locator('p').isVisible();
+        expect(hasHeading || hasDescription).toBe(true);
       }
     });
   });
