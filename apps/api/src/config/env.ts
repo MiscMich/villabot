@@ -32,7 +32,7 @@ const envSchema = z.object({
   GOOGLE_REDIRECT_URI: z.string().url().default('http://localhost:3000/auth/google/callback'),
   GOOGLE_DRIVE_FOLDER_ID: optionalString,
 
-  // AI - OpenAI (primary) and Gemini (legacy/optional)
+  // AI - OpenAI (required for embeddings and response generation)
   OPENAI_API_KEY: z.string().startsWith('sk-').min(1),
   GEMINI_API_KEY: optionalString, // Legacy - kept for backwards compatibility
 

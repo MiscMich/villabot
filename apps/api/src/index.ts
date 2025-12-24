@@ -222,12 +222,12 @@ async function start(): Promise<void> {
     updateIntegrationCounts({ activeSlackBots: 0 });
   }
 
-  // Check OpenAI API
+  // Check OpenAI API (required for embeddings and response generation)
   if (env.OPENAI_API_KEY) {
     updateServiceStatus('openai', true);
     logger.info('✓ OpenAI API configured');
   } else {
-    logger.info('○ OpenAI API key not configured');
+    logger.warn('✗ OpenAI API key not configured - AI features disabled');
   }
 
   // Check Stripe billing
