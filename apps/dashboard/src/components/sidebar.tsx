@@ -23,6 +23,7 @@ import {
   User,
   Users,
   CreditCard,
+  Lightbulb,
 } from 'lucide-react';
 import { useState, useEffect, createContext, useContext } from 'react';
 import { useSetupStatus, getSetupProgress } from '@/hooks/useSetupStatus';
@@ -107,6 +108,12 @@ const navigation = [
     href: '/feedback',
     icon: ThumbsUp,
     description: 'Response feedback & ratings',
+  },
+  {
+    name: 'Ideas & Bugs',
+    href: '/platform-feedback',
+    icon: Lightbulb,
+    description: 'Feature requests & bug reports',
   },
   {
     name: 'Team',

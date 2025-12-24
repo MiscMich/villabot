@@ -3,18 +3,105 @@
  * First-time configuration wizard endpoints for workspace onboarding
  */
 
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
+import { z, ZodError, ZodSchema } from 'zod';
 import { supabase } from '../services/supabase/client.js';
 import { logger } from '../utils/logger.js';
 import { createBot } from '../services/bots/index.js';
 import { authenticate } from '../middleware/auth.js';
 import { env } from '../config/env.js';
+import { setupTestRateLimiter, setupCompleteRateLimiter } from '../middleware/rateLimit.js';
 import { TIER_CONFIGS } from '@cluebase/shared';
 import { fullSync as syncGoogleDrive } from '../services/google-drive/sync.js';
 import { isDriveClientInitialized } from '../services/google-drive/client.js';
 import { scrapeWebsite } from '../services/scraper/website.js';
 
 export const setupRouter = Router();
+
+// ============================================
+// ZOD SCHEMAS FOR VALIDATION
+// ============================================
+
+const testSlackSchema = z.object({
+  botToken: z.string()
+    .min(1, 'Bot Token is required')
+    .refine(val => val.startsWith('xoxb-'), 'Bot Token should start with "xoxb-"'),
+  appToken: z.string()
+    .min(1, 'App Token is required')
+    .refine(val => val.startsWith('xapp-'), 'App Token should start with "xapp-"'),
+});
+
+const setupCompleteSchema = z.object({
+  config: z.object({
+    workspaceId: z.string().uuid().optional(),
+    workspace: z.object({
+      name: z.string().min(1, 'Workspace name is required').max(100),
+      slug: z.string().min(1, 'Workspace slug is required').max(50),
+    }),
+    slack: z.object({
+      botToken: z.string()
+        .min(1, 'Bot Token is required')
+        .refine(val => val.startsWith('xoxb-'), 'Bot Token should start with "xoxb-"'),
+      appToken: z.string()
+        .min(1, 'App Token is required')
+        .refine(val => val.startsWith('xapp-'), 'App Token should start with "xapp-"'),
+      signingSecret: z.string().max(100).optional(),
+    }),
+    googleDrive: z.object({
+      authenticated: z.boolean().optional(),
+      selectedFolders: z.array(z.object({
+        id: z.string(),
+        name: z.string(),
+      })).optional(),
+    }).optional(),
+    website: z.object({
+      url: z.string().url('Invalid URL').optional().or(z.literal('')),
+      maxPages: z.number().min(1).max(1000).optional(),
+    }).optional(),
+    bot: z.object({
+      name: z.string().min(1, 'Bot name is required').max(100),
+      slug: z.string().min(1, 'Bot slug is required').max(50),
+      botType: z.enum(['general', 'support', 'sales', 'hr', 'technical']).optional(),
+      personality: z.string().max(1000).optional(),
+      instructions: z.string().max(5000).optional(),
+    }),
+  }),
+});
+
+// ============================================
+// VALIDATION MIDDLEWARE
+// ============================================
+
+/**
+ * Generic validation middleware factory for Zod schemas
+ * SECURITY: Validates request body against schema before processing
+ */
+function validateBody<T>(schema: ZodSchema<T>) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    try {
+      req.body = schema.parse(req.body);
+      next();
+    } catch (error) {
+      if (error instanceof ZodError) {
+        logger.warn('Setup validation failed', {
+          path: req.path,
+          errors: error.errors,
+        });
+        res.status(400).json({
+          success: false,
+          error: 'Validation failed',
+          code: 'VALIDATION_ERROR',
+          details: error.errors.map(e => ({
+            field: e.path.join('.'),
+            message: e.message,
+          })),
+        });
+        return;
+      }
+      next(error);
+    }
+  };
+}
 
 const SETUP_STATUS_KEY = 'setup_status';
 const SETUP_CONFIG_KEY = 'setup_config';
@@ -32,23 +119,55 @@ interface SetupStatus {
 
 /**
  * Get setup status - check if initial setup is complete for a workspace
- * Supports both authenticated (workspace context) and unauthenticated (query param) modes
+ * SECURITY: Requires authentication to query specific workspace status
+ * Unauthenticated requests only get generic "not completed" status
  */
 setupRouter.get('/status', async (req, res) => {
   try {
-    // Try to get workspaceId from auth context first, fall back to query param
     let workspaceId: string | undefined;
+    const requestedWorkspaceId = req.query.workspaceId as string | undefined;
 
     // Check for workspace from auth middleware (if applied upstream)
     if (req.workspace?.id) {
       workspaceId = req.workspace.id;
-    } else {
-      // Fall back to query param for unauthenticated setup check
-      workspaceId = req.query.workspaceId as string | undefined;
+    }
+
+    // SECURITY: If a workspaceId is requested via query param, verify ownership
+    if (requestedWorkspaceId && !workspaceId) {
+      // Try to authenticate using Authorization header
+      const authHeader = req.headers.authorization;
+      if (authHeader?.startsWith('Bearer ')) {
+        const token = authHeader.slice(7);
+        const { data: { user } } = await supabase.auth.getUser(token);
+
+        if (user) {
+          // Verify user is a member of the requested workspace
+          const { data: membership } = await supabase
+            .from('workspace_members')
+            .select('workspace_id')
+            .eq('user_id', user.id)
+            .eq('workspace_id', requestedWorkspaceId)
+            .eq('is_active', true)
+            .single();
+
+          if (membership) {
+            workspaceId = requestedWorkspaceId;
+          } else {
+            // User is authenticated but not a member of requested workspace
+            // SECURITY: Don't reveal workspace existence - return generic status
+            logger.warn('Setup status: unauthorized workspace access attempt', {
+              userId: user.id,
+              requestedWorkspaceId,
+            });
+          }
+        }
+      }
+      // If no valid auth or not a member, workspaceId remains undefined
     }
 
     if (!workspaceId) {
-      // Return default status for new users without workspace
+      // Return default status for unauthenticated users or users without workspace access
+      // SECURITY: Don't reveal whether workspace exists or not
       return res.json({
         completed: false,
         completedAt: null,
@@ -62,9 +181,10 @@ setupRouter.get('/status', async (req, res) => {
     }
 
     // Check if workspace has any bots configured (indicates setup is complete)
+    // SECURITY: Only query with 'id' column, don't expose token status
     const { data: bots, error: botsError } = await supabase
       .from('bots')
-      .select('id, slack_bot_token')
+      .select('id')
       .eq('workspace_id', workspaceId)
       .limit(1);
 
@@ -79,8 +199,16 @@ setupRouter.get('/status', async (req, res) => {
       .eq('bots.workspace_id', workspaceId)
       .limit(1);
 
+    // Check if any bot has Slack configured (separate query to avoid token exposure)
+    const { data: slackConfigured } = await supabase
+      .from('bots')
+      .select('id')
+      .eq('workspace_id', workspaceId)
+      .not('slack_bot_token', 'is', null)
+      .limit(1);
+
     const hasBot = Boolean(bots && bots.length > 0);
-    const hasSlack = Boolean(hasBot && bots?.[0]?.slack_bot_token);
+    const hasSlack = Boolean(slackConfigured && slackConfigured.length > 0);
     const hasGoogleDrive = Boolean(driveFolders && driveFolders.length > 0);
 
     // Setup is complete if there's at least one bot configured
@@ -113,32 +241,13 @@ setupRouter.get('/status', async (req, res) => {
 
 /**
  * Test Slack credentials
+ * SECURITY: Rate limited to 10 tests per minute per IP, validated with Zod
  */
-setupRouter.post('/test-slack', async (req, res) => {
+setupRouter.post('/test-slack', setupTestRateLimiter, validateBody(testSlackSchema), async (req, res) => {
   try {
-    const { botToken, appToken } = req.body;
-
-    if (!botToken || !appToken) {
-      return res.status(400).json({
-        success: false,
-        error: 'Bot Token and App Token are required',
-      });
-    }
-
-    // Validate token formats
-    if (!botToken.startsWith('xoxb-')) {
-      return res.status(400).json({
-        success: false,
-        error: 'Bot Token should start with "xoxb-"',
-      });
-    }
-
-    if (!appToken.startsWith('xapp-')) {
-      return res.status(400).json({
-        success: false,
-        error: 'App Token should start with "xapp-"',
-      });
-    }
+    // Body is validated by Zod middleware (token format already verified)
+    // appToken is validated by Zod but not needed for auth.test API call
+    const { botToken } = req.body;
 
     // Test the bot token by calling Slack's auth.test API directly
     const authResponse = await fetch('https://slack.com/api/auth.test', {
@@ -195,8 +304,9 @@ setupRouter.get('/google-auth-url', async (_req, res) => {
 /**
  * Save setup configuration and complete setup
  * SaaS Edition: Creates workspace, configures Slack/Drive, and creates first bot
+ * SECURITY: Rate limited to 3 completions per minute per IP (resource-intensive), validated with Zod
  */
-setupRouter.post('/complete', authenticate, async (req, res) => {
+setupRouter.post('/complete', setupCompleteRateLimiter, authenticate, validateBody(setupCompleteSchema), async (req, res) => {
   try {
     const userId = req.user?.id;
 
@@ -207,24 +317,9 @@ setupRouter.post('/complete', authenticate, async (req, res) => {
       });
     }
 
+    // Body is validated by Zod middleware
     const { config } = req.body;
-
-    if (!config) {
-      return res.status(400).json({
-        success: false,
-        error: 'Configuration is required',
-      });
-    }
-
     const { workspaceId: providedWorkspaceId, workspace, slack, googleDrive, website, bot } = config;
-
-    // Validate workspace configuration
-    if (!workspace?.name || !workspace?.slug) {
-      return res.status(400).json({
-        success: false,
-        error: 'Workspace name and slug are required',
-      });
-    }
 
     // Get or create workspace
     let workspaceId = providedWorkspaceId;
@@ -312,21 +407,7 @@ setupRouter.post('/complete', authenticate, async (req, res) => {
       }
     }
 
-    // Validate Slack configuration
-    if (!slack?.botToken || !slack?.appToken) {
-      return res.status(400).json({
-        success: false,
-        error: 'Slack configuration is incomplete',
-      });
-    }
-
-    // Validate bot configuration
-    if (!bot?.name || !bot?.slug) {
-      return res.status(400).json({
-        success: false,
-        error: 'Bot configuration is incomplete',
-      });
-    }
+    // Note: Slack and bot configuration validated by Zod middleware
 
     // Save setup configuration to database (for reference)
     const configToSave = {
@@ -485,13 +566,23 @@ setupRouter.post('/complete', authenticate, async (req, res) => {
 
 /**
  * Reset setup status (for development/testing)
+ * SECURITY: Requires authentication and workspace membership verification
  */
-setupRouter.delete('/reset', async (req, res) => {
+setupRouter.delete('/reset', authenticate, async (req, res) => {
   try {
+    // SECURITY: Block in production regardless of authentication
     if (env.NODE_ENV === 'production') {
       return res.status(403).json({
         success: false,
         error: 'Setup reset is not allowed in production',
+      });
+    }
+
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required',
       });
     }
 
@@ -504,13 +595,30 @@ setupRouter.delete('/reset', async (req, res) => {
       });
     }
 
+    // SECURITY: Verify user is an owner of the workspace
+    const { data: membership } = await supabase
+      .from('workspace_members')
+      .select('role')
+      .eq('user_id', userId)
+      .eq('workspace_id', workspaceId)
+      .eq('is_active', true)
+      .single();
+
+    if (!membership || membership.role !== 'owner') {
+      logger.warn('Setup reset: unauthorized attempt', { userId, workspaceId });
+      return res.status(403).json({
+        success: false,
+        error: 'Only workspace owners can reset setup',
+      });
+    }
+
     await supabase
       .from('bot_config')
       .delete()
       .eq('workspace_id', workspaceId)
       .in('key', [SETUP_STATUS_KEY, SETUP_CONFIG_KEY]);
 
-    logger.info('Setup status reset', { workspaceId });
+    logger.info('Setup status reset', { workspaceId, userId });
 
     res.json({
       success: true,

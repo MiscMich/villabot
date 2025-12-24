@@ -299,6 +299,60 @@ const RATE_LIMIT_CONFIGS = {
 } as const;
 
 // ============================================
+// IP-BASED RATE LIMIT CONFIGS (for unauthenticated endpoints)
+// ============================================
+
+interface IpRateLimitConfig {
+  windowMs: number;
+  maxRequests: number;
+  keyPrefix: string;
+}
+
+const IP_RATE_LIMIT_CONFIGS = {
+  // Login attempts - strict to prevent brute force
+  authLogin: {
+    windowMs: 60 * 1000, // 1 minute
+    maxRequests: 5,      // 5 attempts per minute
+    keyPrefix: 'rl:auth-login',
+  } as IpRateLimitConfig,
+
+  // Signup attempts - prevent spam account creation
+  authSignup: {
+    windowMs: 60 * 1000, // 1 minute
+    maxRequests: 3,      // 3 signups per minute
+    keyPrefix: 'rl:auth-signup',
+  } as IpRateLimitConfig,
+
+  // Password reset requests - prevent email bombing
+  authForgotPassword: {
+    windowMs: 60 * 1000, // 1 minute
+    maxRequests: 3,      // 3 requests per minute
+    keyPrefix: 'rl:auth-forgot',
+  } as IpRateLimitConfig,
+
+  // Token refresh - moderate limit
+  authRefresh: {
+    windowMs: 60 * 1000, // 1 minute
+    maxRequests: 20,     // 20 refreshes per minute
+    keyPrefix: 'rl:auth-refresh',
+  } as IpRateLimitConfig,
+
+  // Setup operations - moderate limit
+  setupTest: {
+    windowMs: 60 * 1000, // 1 minute
+    maxRequests: 10,     // 10 test requests per minute
+    keyPrefix: 'rl:setup-test',
+  } as IpRateLimitConfig,
+
+  // Setup complete - very strict
+  setupComplete: {
+    windowMs: 60 * 1000, // 1 minute
+    maxRequests: 3,      // 3 completions per minute (creates workspaces)
+    keyPrefix: 'rl:setup-complete',
+  } as IpRateLimitConfig,
+} as const;
+
+// ============================================
 // MIDDLEWARE FUNCTIONS
 // ============================================
 
@@ -410,6 +464,122 @@ export const documentSyncRateLimiter = createRateLimiter(RATE_LIMIT_CONFIGS.docu
  * Limit: 100 requests per minute per workspace
  */
 export const generalApiRateLimiter = createRateLimiter(RATE_LIMIT_CONFIGS.generalApi);
+
+// ============================================
+// IP-BASED RATE LIMITERS (for auth endpoints)
+// ============================================
+
+/**
+ * Extract client IP from request
+ * Handles proxied requests (X-Forwarded-For) and direct connections
+ */
+function getClientIp(req: Request): string {
+  // Check X-Forwarded-For header (from load balancers/proxies)
+  const forwardedFor = req.headers['x-forwarded-for'];
+  if (forwardedFor) {
+    // Take the first IP in the chain (original client)
+    const headerValue = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor;
+    if (headerValue) {
+      const ips = headerValue.split(',');
+      const clientIp = ips[0]?.trim();
+      if (clientIp) return clientIp;
+    }
+  }
+
+  // Check X-Real-IP header (some proxies use this)
+  const realIp = req.headers['x-real-ip'];
+  if (realIp) {
+    return Array.isArray(realIp) ? realIp[0] || 'unknown' : realIp;
+  }
+
+  // Fall back to socket remote address
+  return req.socket.remoteAddress || 'unknown';
+}
+
+/**
+ * Create an IP-based rate limiter for unauthenticated endpoints
+ * Used for auth routes where there's no workspace context
+ */
+export function createIpRateLimiter(config: IpRateLimitConfig) {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const clientIp = getClientIp(req);
+
+      // Generate rate limit key using IP
+      const key = `${config.keyPrefix}:${clientIp}`;
+
+      // Increment and check rate limit
+      const info = await incrementRateLimit(key, config.windowMs);
+      info.limit = config.maxRequests;
+      info.remaining = info.limit - info.current;
+
+      // Set headers
+      setRateLimitHeaders(res, info);
+
+      // Check if limit exceeded
+      if (info.current > info.limit) {
+        const retryAfter = Math.ceil((info.resetAt.getTime() - Date.now()) / 1000);
+
+        logger.warn('IP rate limit exceeded', {
+          clientIp,
+          endpoint: req.path,
+          limit: info.limit,
+          current: info.current,
+          keyPrefix: config.keyPrefix,
+        });
+
+        res.status(429).json({
+          error: 'Too many requests. Please try again later.',
+          code: 'RATE_LIMIT_EXCEEDED',
+          retryAfter,
+        });
+        return;
+      }
+
+      next();
+    } catch (error) {
+      logger.error('IP rate limit check error', { error });
+      // On error, allow request to proceed (fail open)
+      next();
+    }
+  };
+}
+
+/**
+ * Rate limiter for login attempts
+ * Limit: 5 attempts per minute per IP (prevents brute force)
+ */
+export const authLoginRateLimiter = createIpRateLimiter(IP_RATE_LIMIT_CONFIGS.authLogin);
+
+/**
+ * Rate limiter for signup attempts
+ * Limit: 3 signups per minute per IP (prevents spam accounts)
+ */
+export const authSignupRateLimiter = createIpRateLimiter(IP_RATE_LIMIT_CONFIGS.authSignup);
+
+/**
+ * Rate limiter for password reset requests
+ * Limit: 3 requests per minute per IP (prevents email bombing)
+ */
+export const authForgotPasswordRateLimiter = createIpRateLimiter(IP_RATE_LIMIT_CONFIGS.authForgotPassword);
+
+/**
+ * Rate limiter for token refresh
+ * Limit: 20 refreshes per minute per IP
+ */
+export const authRefreshRateLimiter = createIpRateLimiter(IP_RATE_LIMIT_CONFIGS.authRefresh);
+
+/**
+ * Rate limiter for setup test operations (Slack test, etc.)
+ * Limit: 10 tests per minute per IP
+ */
+export const setupTestRateLimiter = createIpRateLimiter(IP_RATE_LIMIT_CONFIGS.setupTest);
+
+/**
+ * Rate limiter for setup complete (creates workspaces)
+ * Limit: 3 completions per minute per IP
+ */
+export const setupCompleteRateLimiter = createIpRateLimiter(IP_RATE_LIMIT_CONFIGS.setupComplete);
 
 /**
  * Query rate limiter - based on tier monthly limits

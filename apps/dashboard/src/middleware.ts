@@ -122,15 +122,21 @@ export async function middleware(request: NextRequest) {
 
 /**
  * Check if this is an E2E test (bypass setup checks for testing)
+ * SECURITY: Only allow in non-production environments to prevent bypass attacks
  */
 function isE2ETestMode(request: NextRequest): boolean {
-  // Check for E2E bypass cookie
+  // CRITICAL: Never allow E2E bypass in production
+  if (process.env.NODE_ENV === 'production') {
+    return false;
+  }
+
+  // Check for E2E bypass cookie (development/test only)
   const bypassCookie = request.cookies.get('e2e_bypass_setup');
   if (bypassCookie?.value === 'true') {
     return true;
   }
 
-  // Check for URL parameter
+  // Check for URL parameter (development/test only)
   const e2eParam = request.nextUrl.searchParams.get('e2e_test');
   return e2eParam === 'true';
 }

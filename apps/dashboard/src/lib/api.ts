@@ -952,4 +952,149 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ isAdmin }),
     }),
+
+  // Platform Feedback (Feature Requests, Bug Reports, etc.)
+  getPlatformFeedback: (filters?: {
+    type?: string;
+    status?: string;
+    priority?: string;
+    category?: string;
+    search?: string;
+    sort_by?: string;
+    sort_order?: 'asc' | 'desc';
+    page?: number;
+    limit?: number;
+  }) => {
+    const params = new URLSearchParams();
+    if (filters?.type) params.append('type', filters.type);
+    if (filters?.status) params.append('status', filters.status);
+    if (filters?.priority) params.append('priority', filters.priority);
+    if (filters?.category) params.append('category', filters.category);
+    if (filters?.search) params.append('search', filters.search);
+    if (filters?.sort_by) params.append('sort_by', filters.sort_by);
+    if (filters?.sort_order) params.append('sort_order', filters.sort_order);
+    if (filters?.page) params.append('page', String(filters.page));
+    if (filters?.limit) params.append('limit', String(filters.limit));
+    return fetchApi<{
+      data: Array<{
+        id: string;
+        type: string;
+        title: string;
+        description: string;
+        category: string | null;
+        tags: string[];
+        status: string;
+        priority: string;
+        admin_response: string | null;
+        upvotes: number;
+        has_voted: boolean;
+        created_at: string;
+        updated_at: string;
+        user?: { email: string; full_name: string | null };
+      }>;
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+    }>(`/api/platform-feedback?${params.toString()}`);
+  },
+
+  getPlatformFeedbackById: (id: string) => fetchApi<{
+    id: string;
+    type: string;
+    title: string;
+    description: string;
+    category: string | null;
+    tags: string[];
+    status: string;
+    priority: string;
+    admin_response: string | null;
+    responded_by: string | null;
+    responded_at: string | null;
+    upvotes: number;
+    has_voted: boolean;
+    browser_info: Record<string, unknown> | null;
+    page_url: string | null;
+    created_at: string;
+    updated_at: string;
+    user?: { email: string; full_name: string | null };
+  }>(`/api/platform-feedback/${id}`),
+
+  createPlatformFeedback: (data: {
+    type: string;
+    title: string;
+    description: string;
+    category?: string;
+    tags?: string[];
+    browser_info?: Record<string, unknown>;
+    page_url?: string;
+  }) => fetchApi<{
+    id: string;
+    type: string;
+    title: string;
+    status: string;
+  }>('/api/platform-feedback', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+
+  updatePlatformFeedback: (id: string, data: {
+    title?: string;
+    description?: string;
+    category?: string;
+    tags?: string[];
+  }) => fetchApi(`/api/platform-feedback/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  }),
+
+  deletePlatformFeedback: (id: string) =>
+    fetchApi(`/api/platform-feedback/${id}`, { method: 'DELETE' }),
+
+  votePlatformFeedback: (id: string) =>
+    fetchApi<{ upvotes: number; has_voted: boolean }>(`/api/platform-feedback/${id}/vote`, {
+      method: 'POST',
+    }),
+
+  unvotePlatformFeedback: (id: string) =>
+    fetchApi<{ upvotes: number; has_voted: boolean }>(`/api/platform-feedback/${id}/vote`, {
+      method: 'DELETE',
+    }),
+
+  getPlatformFeedbackStats: () => fetchApi<{
+    total: number;
+    byType: Record<string, number>;
+    byStatus: Record<string, number>;
+    byPriority: Record<string, number>;
+    byCategory: Record<string, number>;
+    recentCount: number;
+    averageResponseTime: number | null;
+  }>('/api/platform-feedback/stats/summary'),
+
+  // Admin methods for platform feedback
+  adminUpdatePlatformFeedback: (id: string, data: {
+    status?: string;
+    priority?: string;
+    admin_response?: string;
+    category?: string;
+    tags?: string[];
+  }) => fetchApi(`/api/platform-feedback/${id}/admin`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  }),
+
+  getPlatformFeedbackNotes: (id: string) => fetchApi<{
+    notes: Array<{
+      id: string;
+      note: string;
+      created_at: string;
+      admin?: { email: string; full_name: string | null };
+    }>;
+  }>(`/api/platform-feedback/${id}/notes`),
+
+  addPlatformFeedbackNote: (id: string, note: string) =>
+    fetchApi<{ id: string; note: string; created_at: string }>(`/api/platform-feedback/${id}/notes`, {
+      method: 'POST',
+      body: JSON.stringify({ note }),
+    }),
 };

@@ -22,8 +22,35 @@ import {
 import { TIER_CONFIGS } from '@cluebase/shared';
 import type { SubscriptionTier } from '@cluebase/shared';
 import type Stripe from 'stripe';
+import { env } from '../config/env.js';
 
 const router = Router();
+
+/**
+ * SECURITY: Validate redirect URLs to prevent open redirect attacks
+ * Only allows URLs from the configured APP_URL domain
+ */
+function isValidRedirectUrl(url: string): boolean {
+  if (!url) return false;
+
+  try {
+    const redirectUrl = new URL(url);
+    const appUrl = new URL(env.APP_URL);
+
+    // Must match the app's hostname
+    // Also allow localhost for development
+    const allowedHosts = [
+      appUrl.hostname,
+      'localhost',
+      '127.0.0.1',
+    ];
+
+    return allowedHosts.includes(redirectUrl.hostname);
+  } catch {
+    // Invalid URL format
+    return false;
+  }
+}
 
 /**
  * Helper to get period end from subscription
@@ -145,6 +172,31 @@ router.post(
         cancelUrl: string;
       };
 
+      // SECURITY: Validate redirect URLs to prevent open redirect attacks
+      if (!successUrl || !isValidRedirectUrl(successUrl)) {
+        logger.warn('Invalid successUrl in checkout request', {
+          workspaceId: req.workspace!.id,
+          successUrl,
+        });
+        res.status(400).json({
+          error: 'Invalid success URL. Must be from the application domain.',
+          code: 'INVALID_REDIRECT_URL',
+        });
+        return;
+      }
+
+      if (!cancelUrl || !isValidRedirectUrl(cancelUrl)) {
+        logger.warn('Invalid cancelUrl in checkout request', {
+          workspaceId: req.workspace!.id,
+          cancelUrl,
+        });
+        res.status(400).json({
+          error: 'Invalid cancel URL. Must be from the application domain.',
+          code: 'INVALID_REDIRECT_URL',
+        });
+        return;
+      }
+
       // Validate tier
       if (!tier || !['starter', 'pro', 'business'].includes(tier)) {
         res.status(400).json({
@@ -211,6 +263,19 @@ router.post(
       }
 
       const { returnUrl } = req.body as { returnUrl: string };
+
+      // SECURITY: Validate redirect URL to prevent open redirect attacks
+      if (!returnUrl || !isValidRedirectUrl(returnUrl)) {
+        logger.warn('Invalid returnUrl in portal request', {
+          workspaceId: req.workspace!.id,
+          returnUrl,
+        });
+        res.status(400).json({
+          error: 'Invalid return URL. Must be from the application domain.',
+          code: 'INVALID_REDIRECT_URL',
+        });
+        return;
+      }
 
       if (!req.workspace!.stripe_customer_id) {
         res.status(400).json({

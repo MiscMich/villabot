@@ -6,6 +6,7 @@ export * from './config.js';
 export * from './conversations.js';
 export * from './documents.js';
 export * from './feedback.js';
+export * from './platform-feedback.js';
 export * from './slack.js';
 export * from './subscriptions.js';
 export * from './workspaces.js';

@@ -16,6 +16,7 @@ import conversationsRouter from './routes/conversations.js';
 import { botsRouter } from './routes/bots.js';
 import { driveRouter } from './routes/drive.js';
 import { feedbackRouter } from './routes/feedback.js';
+import { platformFeedbackRouter } from './routes/platform-feedback.js';
 import { setupRouter } from './routes/setup.js';
 import billingRouter from './routes/billing.js';
 import webhooksRouter from './routes/webhooks.js';
@@ -35,7 +36,32 @@ const app = express();
 app.use('/api/webhooks/stripe', express.raw({ type: 'application/json' }));
 
 // Standard middleware for all other routes
-app.use(cors());
+// SECURITY: Restrict CORS to known origins (dashboard + local dev)
+const allowedOrigins = [
+  env.APP_URL,
+  'http://localhost:3001', // Local dashboard development
+  'http://localhost:3000', // Local API development (for Swagger/testing)
+];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (server-to-server, curl, etc.)
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      logger.warn('CORS blocked request from unknown origin', { origin });
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Workspace-Id'],
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -76,6 +102,7 @@ app.use('/api/conversations', conversationsRouter);
 app.use('/api/bots', botsRouter);
 app.use('/api/drive', driveRouter);
 app.use('/api/feedback', feedbackRouter);
+app.use('/api/platform-feedback', platformFeedbackRouter);
 // Setup router doesn't use resolveWorkspace (used during initial setup before workspace exists)
 app.use('/api/setup', setupRouter);
 // Billing routes handle their own auth per-route (some need workspace, some don't)
@@ -108,6 +135,7 @@ app.get('/', (_req, res) => {
       bots: '/api/bots',
       drive: '/api/drive',
       feedback: '/api/feedback',
+      platformFeedback: '/api/platform-feedback',
       setup: '/api/setup',
       // Billing
       billing: '/api/billing',

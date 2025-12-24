@@ -12,11 +12,153 @@ import { supabase } from '../supabase/client.js';
 import { chunkDocument } from '../rag/chunking.js';
 import { generateEmbeddings } from '../rag/embeddings.js';
 import crypto from 'crypto';
+import dns from 'dns/promises';
+import net from 'net';
 
 // Configuration defaults
 const DEFAULT_MAX_PAGES = 500;
 const DEFAULT_RATE_LIMIT_MS = 1000; // 1 second between requests
 const DEFAULT_PAGE_TIMEOUT_MS = 30000;
+
+// =============================================================================
+// SECURITY: SSRF Protection
+// =============================================================================
+
+/**
+ * Check if an IP address is in a private/internal range
+ * Blocks: localhost, private ranges, link-local, cloud metadata
+ */
+function isPrivateIP(ip: string): boolean {
+  // Handle IPv4
+  if (net.isIPv4(ip)) {
+    const parts = ip.split('.').map(Number);
+
+    // Validate we have 4 octets
+    if (parts.length !== 4) return false;
+    const [octet0, octet1] = parts as [number, number, number, number];
+
+    // Localhost
+    if (octet0 === 127) return true;
+
+    // Private ranges (RFC 1918)
+    if (octet0 === 10) return true;                                    // 10.0.0.0/8
+    if (octet0 === 172 && octet1 >= 16 && octet1 <= 31) return true;   // 172.16.0.0/12
+    if (octet0 === 192 && octet1 === 168) return true;                 // 192.168.0.0/16
+
+    // Link-local (including AWS metadata)
+    if (octet0 === 169 && octet1 === 254) return true;                 // 169.254.0.0/16
+
+    // Loopback
+    if (octet0 === 0) return true;                                     // 0.0.0.0/8
+
+    // Broadcast
+    if (ip === '255.255.255.255') return true;
+
+    return false;
+  }
+
+  // Handle IPv6
+  if (net.isIPv6(ip)) {
+    const normalized = ip.toLowerCase();
+
+    // Localhost
+    if (normalized === '::1' || normalized === '0:0:0:0:0:0:0:1') return true;
+
+    // Link-local
+    if (normalized.startsWith('fe80:')) return true;
+
+    // Unique local (fc00::/7)
+    if (normalized.startsWith('fc') || normalized.startsWith('fd')) return true;
+
+    // IPv4-mapped IPv6 addresses
+    if (normalized.startsWith('::ffff:')) {
+      const ipv4Part = normalized.substring(7);
+      return isPrivateIP(ipv4Part);
+    }
+
+    return false;
+  }
+
+  return false;
+}
+
+/**
+ * Blocked hostnames (cloud metadata, internal services)
+ */
+const BLOCKED_HOSTNAMES = [
+  'localhost',
+  'metadata.google.internal',
+  'metadata.google.com',
+  'metadata',
+  'instance-data',
+  '169.254.169.254',  // AWS/GCP/Azure metadata endpoint
+  '169.254.170.2',    // AWS ECS metadata
+  'fd00:ec2::254',    // AWS IPv6 metadata
+];
+
+/**
+ * SECURITY: Validate URL is safe to scrape (prevents SSRF attacks)
+ * Checks:
+ * 1. Valid URL format
+ * 2. HTTPS only (in production)
+ * 3. No private/internal IPs
+ * 4. No cloud metadata endpoints
+ * 5. DNS resolution doesn't point to private IPs
+ */
+async function isUrlSafeToScrape(url: string): Promise<{ safe: boolean; reason?: string }> {
+  try {
+    const parsed = new URL(url);
+
+    // Only allow http/https
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return { safe: false, reason: `Disallowed protocol: ${parsed.protocol}` };
+    }
+
+    // In production, prefer HTTPS
+    if (env.NODE_ENV === 'production' && parsed.protocol !== 'https:') {
+      logger.warn('Non-HTTPS URL in production', { url });
+      // Don't block, just warn - some sites still use HTTP
+    }
+
+    // Check for blocked hostnames
+    const hostname = parsed.hostname.toLowerCase();
+    if (BLOCKED_HOSTNAMES.includes(hostname)) {
+      return { safe: false, reason: `Blocked hostname: ${hostname}` };
+    }
+
+    // Check if hostname is an IP address
+    if (net.isIP(hostname)) {
+      if (isPrivateIP(hostname)) {
+        return { safe: false, reason: `Private IP address: ${hostname}` };
+      }
+    } else {
+      // Resolve hostname and check all IPs
+      try {
+        const addresses = await dns.resolve4(hostname).catch(() => []);
+        const addresses6 = await dns.resolve6(hostname).catch(() => []);
+        const allAddresses = [...addresses, ...addresses6];
+
+        for (const ip of allAddresses) {
+          if (isPrivateIP(ip)) {
+            return {
+              safe: false,
+              reason: `Hostname ${hostname} resolves to private IP: ${ip}`,
+            };
+          }
+        }
+      } catch {
+        // DNS resolution failed - hostname might not exist
+        return { safe: false, reason: `DNS resolution failed for: ${hostname}` };
+      }
+    }
+
+    return { safe: true };
+  } catch (error) {
+    return { safe: false, reason: `Invalid URL: ${error instanceof Error ? error.message : 'Unknown'}` };
+  }
+}
+
+// =============================================================================
 
 interface ScrapedPage {
   url: string;
@@ -57,6 +199,21 @@ export async function scrapeWebsite(options: ScrapeOptions): Promise<{
   if (!websiteUrl) {
     logger.warn('No website URL configured, skipping scrape', { workspaceId });
     return { pagesScraped: 0, chunksCreated: 0, errors: ['No website URL configured'] };
+  }
+
+  // SECURITY: Validate URL is safe to scrape (SSRF protection)
+  const urlSafety = await isUrlSafeToScrape(websiteUrl);
+  if (!urlSafety.safe) {
+    logger.error('SSRF protection: Blocked unsafe URL', {
+      workspaceId,
+      url: websiteUrl,
+      reason: urlSafety.reason,
+    });
+    return {
+      pagesScraped: 0,
+      chunksCreated: 0,
+      errors: [`Security: URL blocked - ${urlSafety.reason}`],
+    };
   }
 
   const {
@@ -154,6 +311,16 @@ export async function scrapeWebsite(options: ScrapeOptions): Promise<{
 
       // Check URL against filters
       if (!shouldScrapeUrl(currentUrl, websiteUrl, includePatterns, excludePatterns, disallowedPaths)) {
+        continue;
+      }
+
+      // SECURITY: SSRF check for each URL (in case of malicious sitemap entries)
+      const pageSafety = await isUrlSafeToScrape(currentUrl);
+      if (!pageSafety.safe) {
+        logger.warn('SSRF protection: Blocked URL in scrape queue', {
+          url: currentUrl,
+          reason: pageSafety.reason,
+        });
         continue;
       }
 

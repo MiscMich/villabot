@@ -3,7 +3,8 @@
  * CRUD operations for bots, folders, and channels
  */
 
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
+import { z, ZodError, ZodSchema } from 'zod';
 import { logger } from '../utils/logger.js';
 import { supabase } from '../services/supabase/client.js';
 import { botManager } from '../services/slack/manager.js';
@@ -19,6 +20,108 @@ import { getBotTypeConfig } from '@cluebase/shared';
 
 export const botsRouter = Router();
 
+// ============================================
+// ZOD SCHEMAS FOR VALIDATION
+// ============================================
+
+const botSlugSchema = z.string()
+  .min(1, 'Slug is required')
+  .max(50, 'Slug too long')
+  .regex(/^[a-z0-9-]+$/, 'Slug must be lowercase letters, numbers, and hyphens only');
+
+const createBotSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(100, 'Name too long'),
+  slug: botSlugSchema,
+  bot_type: z.enum(['general', 'support', 'sales', 'hr', 'technical']).optional(),
+  description: z.string().max(1000, 'Description too long').optional(),
+  personality: z.string().max(100, 'Personality too long').optional(),
+  systemInstructions: z.string().max(5000, 'Instructions too long').optional(),
+  slackBotToken: z.string()
+    .refine(val => !val || val.startsWith('xoxb-'), 'Bot Token should start with "xoxb-"')
+    .optional()
+    .nullable(),
+  slackAppToken: z.string()
+    .refine(val => !val || val.startsWith('xapp-'), 'App Token should start with "xapp-"')
+    .optional()
+    .nullable(),
+  slackSigningSecret: z.string().max(100).optional().nullable(),
+});
+
+const updateBotSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  bot_type: z.enum(['general', 'support', 'sales', 'hr', 'technical']).optional(),
+  description: z.string().max(1000).optional(),
+  personality: z.string().max(100).optional(),
+  systemInstructions: z.string().max(5000).optional(),
+  status: z.enum(['active', 'inactive', 'error']).optional(),
+  slackBotToken: z.string()
+    .refine(val => !val || val.startsWith('xoxb-'), 'Bot Token should start with "xoxb-"')
+    .optional()
+    .nullable(),
+  slackAppToken: z.string()
+    .refine(val => !val || val.startsWith('xapp-'), 'App Token should start with "xapp-"')
+    .optional()
+    .nullable(),
+  slackSigningSecret: z.string().max(100).optional().nullable(),
+});
+
+const addFolderSchema = z.object({
+  driveFolderId: z.string().min(1, 'Drive folder ID is required'),
+  folderName: z.string().min(1, 'Folder name is required').max(255, 'Folder name too long'),
+  category: z.enum(['company_knowledge', 'internal_sops', 'marketing', 'sales', 'support', 'hr', 'technical', 'shared']).optional(),
+});
+
+// ============================================
+// VALIDATION MIDDLEWARE
+// ============================================
+
+/**
+ * Generic validation middleware factory for Zod schemas
+ * SECURITY: Validates request body against schema before processing
+ */
+function validateBody<T>(schema: ZodSchema<T>) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    try {
+      req.body = schema.parse(req.body);
+      next();
+    } catch (error) {
+      if (error instanceof ZodError) {
+        logger.warn('Bot validation failed', {
+          path: req.path,
+          errors: error.errors,
+        });
+        res.status(400).json({
+          error: 'Validation failed',
+          code: 'VALIDATION_ERROR',
+          details: error.errors.map(e => ({
+            field: e.path.join('.'),
+            message: e.message,
+          })),
+        });
+        return;
+      }
+      next(error);
+    }
+  };
+}
+
+// SECURITY: Define safe bot columns to exclude sensitive Slack tokens from API responses
+// Slack tokens should NEVER be returned to the client - they're only used server-side
+const BOT_SAFE_COLUMNS = `
+  id,
+  workspace_id,
+  name,
+  slug,
+  bot_type,
+  description,
+  personality,
+  system_instructions,
+  status,
+  is_default,
+  created_at,
+  updated_at
+`;
+
 // Apply authentication, workspace resolution, and rate limiting to all routes
 // Order matters: authenticate first, then resolveWorkspace, then rate limiter
 botsRouter.use(authenticate, resolveWorkspace, generalApiRateLimiter);
@@ -29,18 +132,37 @@ botsRouter.use(authenticate, resolveWorkspace, generalApiRateLimiter);
 
 /**
  * List all bots for the workspace
+ * SECURITY: Returns safe columns only - no Slack tokens exposed
  */
 botsRouter.get('/', async (req, res) => {
   try {
+    // Use explicit column list to avoid exposing sensitive tokens
     const { data: bots, error } = await supabase
       .from('bots')
-      .select('*')
+      .select(BOT_SAFE_COLUMNS)
       .eq('workspace_id', req.workspace!.id)
       .order('created_at', { ascending: true });
 
     if (error) throw error;
 
-    res.json({ bots: bots ?? [], total: bots?.length ?? 0 });
+    // Check token presence status separately (for UI to show connection status)
+    const { data: tokenStatus } = await supabase
+      .from('bots')
+      .select('id, slack_bot_token, slack_app_token, slack_signing_secret')
+      .eq('workspace_id', req.workspace!.id);
+
+    // Merge token presence flags into response
+    const botsWithStatus = (bots ?? []).map(bot => {
+      const status = tokenStatus?.find(t => t.id === bot.id);
+      return {
+        ...bot,
+        has_slack_bot_token: !!status?.slack_bot_token,
+        has_slack_app_token: !!status?.slack_app_token,
+        has_slack_signing_secret: !!status?.slack_signing_secret,
+      };
+    });
+
+    res.json({ bots: botsWithStatus, total: botsWithStatus.length });
   } catch (error) {
     logger.error('Failed to list bots', { error, workspaceId: req.workspace!.id });
     res.status(500).json({ error: 'Failed to list bots' });
@@ -49,12 +171,13 @@ botsRouter.get('/', async (req, res) => {
 
 /**
  * Get a single bot by ID
+ * SECURITY: Returns safe columns only - no Slack tokens exposed
  */
 botsRouter.get('/:id', async (req, res) => {
   try {
     const { data: bot, error } = await supabase
       .from('bots')
-      .select('*')
+      .select(BOT_SAFE_COLUMNS)
       .eq('id', req.params.id)
       .eq('workspace_id', req.workspace!.id)
       .single();
@@ -66,7 +189,22 @@ botsRouter.get('/:id', async (req, res) => {
       throw error;
     }
 
-    res.json({ bot });
+    // Check token presence separately
+    const { data: tokenStatus } = await supabase
+      .from('bots')
+      .select('slack_bot_token, slack_app_token, slack_signing_secret')
+      .eq('id', req.params.id)
+      .eq('workspace_id', req.workspace!.id)
+      .single();
+
+    res.json({
+      bot: {
+        ...bot,
+        has_slack_bot_token: !!tokenStatus?.slack_bot_token,
+        has_slack_app_token: !!tokenStatus?.slack_app_token,
+        has_slack_signing_secret: !!tokenStatus?.slack_signing_secret,
+      }
+    });
   } catch (error) {
     logger.error('Failed to get bot', { error, id: req.params.id, workspaceId: req.workspace!.id });
     res.status(500).json({ error: 'Failed to get bot' });
@@ -75,12 +213,13 @@ botsRouter.get('/:id', async (req, res) => {
 
 /**
  * Get a bot by slug
+ * SECURITY: Returns safe columns only - no Slack tokens exposed
  */
 botsRouter.get('/slug/:slug', async (req, res) => {
   try {
     const { data: bot, error } = await supabase
       .from('bots')
-      .select('*')
+      .select(BOT_SAFE_COLUMNS)
       .eq('slug', req.params.slug)
       .eq('workspace_id', req.workspace!.id)
       .single();
@@ -92,7 +231,22 @@ botsRouter.get('/slug/:slug', async (req, res) => {
       throw error;
     }
 
-    res.json({ bot });
+    // Check token presence separately
+    const { data: tokenStatus } = await supabase
+      .from('bots')
+      .select('slack_bot_token, slack_app_token, slack_signing_secret')
+      .eq('slug', req.params.slug)
+      .eq('workspace_id', req.workspace!.id)
+      .single();
+
+    res.json({
+      bot: {
+        ...bot,
+        has_slack_bot_token: !!tokenStatus?.slack_bot_token,
+        has_slack_app_token: !!tokenStatus?.slack_app_token,
+        has_slack_signing_secret: !!tokenStatus?.slack_signing_secret,
+      }
+    });
   } catch (error) {
     logger.error('Failed to get bot by slug', { error, slug: req.params.slug, workspaceId: req.workspace!.id });
     res.status(500).json({ error: 'Failed to get bot' });
@@ -101,21 +255,13 @@ botsRouter.get('/slug/:slug', async (req, res) => {
 
 /**
  * Create a new bot
+ * SECURITY: Validated with Zod schema
  */
-botsRouter.post('/', requireWorkspaceAdmin, checkUsageLimit('bots'), async (req, res) => {
+botsRouter.post('/', requireWorkspaceAdmin, checkUsageLimit('bots'), validateBody(createBotSchema), async (req, res) => {
   try {
+    // Body is validated by Zod middleware
     const input: BotCreateInput = req.body;
     const workspaceId = req.workspace!.id;
-
-    // Validate required fields
-    if (!input.name || !input.slug) {
-      return res.status(400).json({ error: 'name and slug are required' });
-    }
-
-    // Validate slug format
-    if (!/^[a-z0-9-]+$/.test(input.slug)) {
-      return res.status(400).json({ error: 'slug must be lowercase letters, numbers, and hyphens only' });
-    }
 
     // Check if slug already exists in this workspace
     const { data: existing } = await supabase
@@ -150,6 +296,7 @@ botsRouter.post('/', requireWorkspaceAdmin, checkUsageLimit('bots'), async (req,
     const typeConfig = getBotTypeConfig(botType);
 
     // Create the bot with auto-generated description and system instructions from bot type
+    // SECURITY: Use safe columns in response to avoid exposing tokens
     const { data: bot, error } = await supabase
       .from('bots')
       .insert({
@@ -166,7 +313,7 @@ botsRouter.post('/', requireWorkspaceAdmin, checkUsageLimit('bots'), async (req,
         status: 'active',
         is_default: false,
       })
-      .select()
+      .select(BOT_SAFE_COLUMNS)
       .single();
 
     if (error) {
@@ -181,7 +328,15 @@ botsRouter.post('/', requireWorkspaceAdmin, checkUsageLimit('bots'), async (req,
     }
 
     logger.info('Bot created', { botId: bot.id, workspaceId });
-    res.status(201).json({ bot });
+    // Include token presence flags (we know what we just saved)
+    res.status(201).json({
+      bot: {
+        ...bot,
+        has_slack_bot_token: !!input.slackBotToken,
+        has_slack_app_token: !!input.slackAppToken,
+        has_slack_signing_secret: !!input.slackSigningSecret,
+      }
+    });
   } catch (error) {
     logger.error('Failed to create bot', { error, workspaceId: req.workspace!.id });
     res.status(500).json({ error: 'Failed to create bot' });
@@ -190,9 +345,11 @@ botsRouter.post('/', requireWorkspaceAdmin, checkUsageLimit('bots'), async (req,
 
 /**
  * Update a bot
+ * SECURITY: Validated with Zod schema
  */
-botsRouter.patch('/:id', requireWorkspaceAdmin, async (req, res) => {
+botsRouter.patch('/:id', requireWorkspaceAdmin, validateBody(updateBotSchema), async (req, res) => {
   try {
+    // Body is validated by Zod middleware
     const input: BotUpdateInput = req.body;
     const workspaceId = req.workspace!.id;
     const botId = req.params.id;
@@ -239,12 +396,13 @@ botsRouter.patch('/:id', requireWorkspaceAdmin, async (req, res) => {
     if (input.slackAppToken !== undefined) updateData.slack_app_token = input.slackAppToken;
     if (input.slackSigningSecret !== undefined) updateData.slack_signing_secret = input.slackSigningSecret;
 
+    // SECURITY: Use safe columns in response to avoid exposing tokens
     const { data: bot, error } = await supabase
       .from('bots')
       .update(updateData)
       .eq('id', botId)
       .eq('workspace_id', workspaceId)
-      .select()
+      .select(BOT_SAFE_COLUMNS)
       .single();
 
     if (error) {
@@ -259,7 +417,23 @@ botsRouter.patch('/:id', requireWorkspaceAdmin, async (req, res) => {
     }
 
     logger.info('Bot updated', { botId, workspaceId });
-    res.json({ bot });
+
+    // Get current token status for response
+    const { data: tokenStatus } = await supabase
+      .from('bots')
+      .select('slack_bot_token, slack_app_token, slack_signing_secret')
+      .eq('id', botId)
+      .eq('workspace_id', workspaceId)
+      .single();
+
+    res.json({
+      bot: {
+        ...bot,
+        has_slack_bot_token: !!tokenStatus?.slack_bot_token,
+        has_slack_app_token: !!tokenStatus?.slack_app_token,
+        has_slack_signing_secret: !!tokenStatus?.slack_signing_secret,
+      }
+    });
   } catch (error) {
     logger.error('Failed to update bot', { error, id: req.params.id, workspaceId: req.workspace!.id });
     res.status(500).json({ error: 'Failed to update bot' });
@@ -339,15 +513,13 @@ botsRouter.get('/:id/folders', async (req, res) => {
 
 /**
  * Add a folder to a bot
+ * SECURITY: Validated with Zod schema
  */
-botsRouter.post('/:id/folders', requireWorkspaceAdmin, async (req, res) => {
+botsRouter.post('/:id/folders', requireWorkspaceAdmin, validateBody(addFolderSchema), async (req, res) => {
   try {
+    // Body is validated by Zod middleware
     const { driveFolderId, folderName, category } = req.body;
     const workspaceId = req.workspace!.id;
-
-    if (!driveFolderId || !folderName) {
-      return res.status(400).json({ error: 'driveFolderId and folderName are required' });
-    }
 
     // Verify bot belongs to workspace
     const { data: bot } = await supabase
@@ -654,6 +826,7 @@ botsRouter.get('/:id/slack-channels', requireWorkspaceAdmin, async (req, res) =>
 
 /**
  * Activate a bot - updates status AND starts it in the BotManager
+ * SECURITY: Uses safe columns to avoid exposing tokens
  */
 botsRouter.post('/:id/activate', requireWorkspaceAdmin, async (req, res) => {
   try {
@@ -665,13 +838,20 @@ botsRouter.post('/:id/activate', requireWorkspaceAdmin, async (req, res) => {
       .update({ status: 'active', updated_at: new Date().toISOString() })
       .eq('id', botId)
       .eq('workspace_id', workspaceId)
-      .select()
+      .select(BOT_SAFE_COLUMNS)
       .single();
 
     if (error) throw error;
 
     // Start the bot in the manager
     const started = await botManager.startBot(botId);
+
+    // Get token status for response
+    const { data: tokenStatus } = await supabase
+      .from('bots')
+      .select('slack_bot_token, slack_app_token, slack_signing_secret')
+      .eq('id', botId)
+      .single();
 
     logger.info('Bot activated', {
       id: botId,
@@ -680,7 +860,12 @@ botsRouter.post('/:id/activate', requireWorkspaceAdmin, async (req, res) => {
     });
 
     res.json({
-      bot,
+      bot: {
+        ...bot,
+        has_slack_bot_token: !!tokenStatus?.slack_bot_token,
+        has_slack_app_token: !!tokenStatus?.slack_app_token,
+        has_slack_signing_secret: !!tokenStatus?.slack_signing_secret,
+      },
       started,
       message: started
         ? 'Bot activated and started successfully'
@@ -694,6 +879,7 @@ botsRouter.post('/:id/activate', requireWorkspaceAdmin, async (req, res) => {
 
 /**
  * Deactivate a bot - updates status AND stops it in the BotManager
+ * SECURITY: Uses safe columns to avoid exposing tokens
  */
 botsRouter.post('/:id/deactivate', requireWorkspaceAdmin, async (req, res) => {
   try {
@@ -708,10 +894,17 @@ botsRouter.post('/:id/deactivate', requireWorkspaceAdmin, async (req, res) => {
       .update({ status: 'inactive', updated_at: new Date().toISOString() })
       .eq('id', botId)
       .eq('workspace_id', workspaceId)
-      .select()
+      .select(BOT_SAFE_COLUMNS)
       .single();
 
     if (error) throw error;
+
+    // Get token status for response
+    const { data: tokenStatus } = await supabase
+      .from('bots')
+      .select('slack_bot_token, slack_app_token, slack_signing_secret')
+      .eq('id', botId)
+      .single();
 
     logger.info('Bot deactivated', {
       id: botId,
@@ -720,7 +913,12 @@ botsRouter.post('/:id/deactivate', requireWorkspaceAdmin, async (req, res) => {
     });
 
     res.json({
-      bot,
+      bot: {
+        ...bot,
+        has_slack_bot_token: !!tokenStatus?.slack_bot_token,
+        has_slack_app_token: !!tokenStatus?.slack_app_token,
+        has_slack_signing_secret: !!tokenStatus?.slack_signing_secret,
+      },
       stopped,
       message: 'Bot deactivated successfully',
     });

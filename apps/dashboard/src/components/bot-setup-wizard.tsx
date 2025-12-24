@@ -90,6 +90,92 @@ const BOT_TYPE_OPTIONS: BotTypeOption[] = [
   },
 ];
 
+// Error code to user-friendly message mapping
+interface ApiError {
+  message: string;
+  code?: string;
+}
+
+function parseApiError(error: unknown): { message: string; code?: string; isRecoverable: boolean } {
+  // Default error state
+  const defaultError = {
+    message: 'An unexpected error occurred. Please try again.',
+    code: undefined,
+    isRecoverable: true,
+  };
+
+  if (!error) return defaultError;
+
+  // Handle Error objects with potential API response
+  if (error instanceof Error) {
+    // Try to parse JSON from the error message (some APIs include it)
+    try {
+      const parsed = JSON.parse(error.message) as ApiError;
+      return getErrorDetails(parsed.code, parsed.message);
+    } catch {
+      // Not JSON, use the message directly
+      return getErrorDetails(undefined, error.message);
+    }
+  }
+
+  // Handle plain objects (direct API responses)
+  if (typeof error === 'object' && error !== null) {
+    const apiError = error as ApiError;
+    return getErrorDetails(apiError.code, apiError.message);
+  }
+
+  return defaultError;
+}
+
+function getErrorDetails(code?: string, message?: string): { message: string; code?: string; isRecoverable: boolean } {
+  // Map known error codes to user-friendly messages
+  switch (code) {
+    case 'DUPLICATE_BOT_TOKEN':
+      return {
+        message: 'This Slack bot token is already registered to another workspace. Each Slack app can only be used by one workspace. Please create a new Slack app for this workspace.',
+        code,
+        isRecoverable: true,
+      };
+    case 'INVALID_SLACK_TOKEN':
+      return {
+        message: 'The Slack token format is invalid. Bot tokens should start with "xoxb-" and app tokens with "xapp-".',
+        code,
+        isRecoverable: true,
+      };
+    case 'BOT_LIMIT_REACHED':
+      return {
+        message: 'You have reached the maximum number of bots for your subscription tier. Please upgrade to add more bots.',
+        code,
+        isRecoverable: false,
+      };
+    case 'UNAUTHORIZED':
+      return {
+        message: 'Your session has expired. Please refresh the page and try again.',
+        code,
+        isRecoverable: false,
+      };
+    case 'NETWORK_ERROR':
+      return {
+        message: 'Unable to connect to the server. Please check your internet connection and try again.',
+        code,
+        isRecoverable: true,
+      };
+    case 'VALIDATION_ERROR':
+      return {
+        message: message || 'Please check your input and try again.',
+        code,
+        isRecoverable: true,
+      };
+    default:
+      // Use the API message if provided, otherwise generic message
+      return {
+        message: message || 'An unexpected error occurred. Please try again.',
+        code,
+        isRecoverable: true,
+      };
+  }
+}
+
 const COLOR_CLASSES: Record<string, { bg: string; border: string; text: string }> = {
   blue: { bg: 'bg-blue-500/10', border: 'border-blue-500/50', text: 'text-blue-600 dark:text-blue-400' },
   pink: { bg: 'bg-pink-500/10', border: 'border-pink-500/50', text: 'text-pink-600 dark:text-pink-400' },
@@ -502,6 +588,20 @@ export function BotSetupWizard({ isOpen, onClose }: BotSetupWizardProps) {
                 <span>Connect Slack</span>
               </div>
 
+              {/* Workspace-specific Slack App notice */}
+              <div className="p-4 rounded-lg bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800">
+                <div className="flex items-start gap-3">
+                  <Slack className="w-5 h-5 text-purple-600 dark:text-purple-400 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm text-purple-700 dark:text-purple-300">
+                    <p className="font-medium">Your Own Slack App Required</p>
+                    <p className="mt-1">
+                      Each workspace creates their own Slack app. Your bot credentials are private to your
+                      workspace and give you full control. Slack tokens cannot be shared between workspaces.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
                 <div className="flex items-start gap-3">
                   <AlertTriangle className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
@@ -860,15 +960,41 @@ export function BotSetupWizard({ isOpen, onClose }: BotSetupWizardProps) {
                 </div>
               </div>
 
-              {/* Error Message */}
-              {error && (
-                <div className="flex items-center gap-2 p-3 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-sm">
-                    {error instanceof Error ? error.message : 'An error occurred'}
-                  </span>
-                </div>
-              )}
+              {/* Error Message - Comprehensive handling */}
+              {error && (() => {
+                const errorDetails = parseApiError(error);
+                return (
+                  <div className="p-4 rounded-lg bg-red-100 dark:bg-red-900/30 border border-red-200 dark:border-red-800">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-red-700 dark:text-red-300">
+                          {errorDetails.code === 'DUPLICATE_BOT_TOKEN' ? 'Slack Token Already In Use' : 'Unable to Create Bot'}
+                        </p>
+                        <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+                          {errorDetails.message}
+                        </p>
+                        {errorDetails.code === 'DUPLICATE_BOT_TOKEN' && (
+                          <a
+                            href="https://api.slack.com/apps"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 mt-2 text-sm text-red-700 dark:text-red-300 underline hover:no-underline"
+                          >
+                            <Slack className="w-3 h-3" />
+                            Create a new Slack app
+                          </a>
+                        )}
+                        {!errorDetails.isRecoverable && (
+                          <p className="text-xs text-red-500 dark:text-red-500 mt-2">
+                            Please refresh the page or contact support if the issue persists.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>

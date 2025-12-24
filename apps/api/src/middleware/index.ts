@@ -30,3 +30,6 @@ export {
   documentSyncRateLimiter,
   isPlatformAdmin,
 } from './rateLimit.js';
+
+// Request validation
+export { validateBody, validateQuery, validateParams } from './validation.js';

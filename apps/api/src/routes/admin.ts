@@ -8,6 +8,20 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { authenticate } from '../middleware/auth.js';
 import { supabase } from '../services/supabase/client.js';
 import { logger } from '../utils/logger.js';
+
+/**
+ * SECURITY: Sanitize search input for PostgREST filter queries
+ * Escapes special characters that could break filter syntax
+ */
+function sanitizeSearchInput(input: string): string {
+  // Remove/escape characters that could affect PostgREST filter parsing
+  // PostgREST special characters: , ( ) . : ; " '
+  return input
+    .replace(/[,().:;"'\\]/g, '') // Remove special characters
+    .replace(/\s+/g, ' ')          // Normalize whitespace
+    .trim()
+    .substring(0, 100);            // Limit length to prevent DoS
+}
 import type {
   PlatformStats,
   AdminWorkspaceDetails,
@@ -190,8 +204,10 @@ router.get(
       let query = supabase.from('admin_workspace_details').select('*', { count: 'exact' });
 
       // Apply filters
+      // SECURITY: Sanitize search input to prevent PostgREST filter injection
       if (filters.search) {
-        query = query.or(`name.ilike.%${filters.search}%,owner_email.ilike.%${filters.search}%,slug.ilike.%${filters.search}%`);
+        const sanitizedSearch = sanitizeSearchInput(filters.search);
+        query = query.or(`name.ilike.%${sanitizedSearch}%,owner_email.ilike.%${sanitizedSearch}%,slug.ilike.%${sanitizedSearch}%`);
       }
       if (filters.tier) {
         query = query.eq('tier', filters.tier);
@@ -559,8 +575,10 @@ router.get(
         // Fallback: Query user_profiles and auth.users separately
         let profileQuery = supabase.from('user_profiles').select('*', { count: 'exact' });
 
+        // SECURITY: Sanitize search input for PostgREST filter
         if (search) {
-          profileQuery = profileQuery.ilike('full_name', `%${search}%`);
+          const sanitizedSearch = sanitizeSearchInput(search);
+          profileQuery = profileQuery.ilike('full_name', `%${sanitizedSearch}%`);
         }
         if (isAdmin !== undefined) {
           profileQuery = profileQuery.eq('is_platform_admin', isAdmin);

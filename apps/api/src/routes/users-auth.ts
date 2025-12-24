@@ -3,11 +3,18 @@
  * Handles signup, signin, password reset, and token refresh
  */
 
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
+import { z, ZodError, ZodSchema } from 'zod';
 import { supabase } from '../services/supabase/client.js';
 import { logger } from '../utils/logger.js';
 import { authenticate } from '../middleware/auth.js';
 import { env } from '../config/env.js';
+import {
+  authLoginRateLimiter,
+  authSignupRateLimiter,
+  authForgotPasswordRateLimiter,
+  authRefreshRateLimiter,
+} from '../middleware/rateLimit.js';
 import { TIER_CONFIGS } from '@cluebase/shared';
 import type {
   SignUpRequest,
@@ -23,20 +30,100 @@ import type {
 
 export const usersAuthRouter = Router();
 
+// ============================================
+// ZOD SCHEMAS FOR VALIDATION
+// ============================================
+
+const signUpSchema = z.object({
+  email: z.string().email('Invalid email format').max(255, 'Email too long'),
+  password: z.string()
+    .min(8, 'Password must be at least 8 characters')
+    .max(128, 'Password too long'),
+  full_name: z.string().max(255, 'Name too long').optional(),
+  workspace_name: z.string().max(100, 'Workspace name too long').optional(),
+  invite_token: z.string().uuid('Invalid invite token').optional(),
+});
+
+const signInSchema = z.object({
+  email: z.string().email('Invalid email format'),
+  password: z.string().min(1, 'Password is required'),
+});
+
+const forgotPasswordSchema = z.object({
+  email: z.string().email('Invalid email format'),
+});
+
+const resetPasswordSchema = z.object({
+  // Note: token comes from Authorization header, not body
+  password: z.string()
+    .min(8, 'Password must be at least 8 characters')
+    .max(128, 'Password too long'),
+});
+
+const updatePasswordSchema = z.object({
+  current_password: z.string().min(1, 'Current password is required'),
+  new_password: z.string()
+    .min(8, 'Password must be at least 8 characters')
+    .max(128, 'Password too long'),
+});
+
+const refreshTokenSchema = z.object({
+  refresh_token: z.string().min(1, 'Refresh token is required'),
+});
+
+const updateProfileSchema = z.object({
+  full_name: z.string().max(255, 'Name too long').optional(),
+  avatar_url: z.string().url('Invalid URL').max(500, 'URL too long').optional().nullable(),
+  preferences: z.object({
+    theme: z.enum(['light', 'dark', 'system']).optional(),
+    notifications: z.boolean().optional(),
+  }).optional(),
+  default_workspace_id: z.string().uuid('Invalid workspace ID').optional().nullable(),
+});
+
+// ============================================
+// VALIDATION MIDDLEWARE
+// ============================================
+
+/**
+ * Generic validation middleware factory for Zod schemas
+ * SECURITY: Validates request body against schema before processing
+ */
+function validateBody<T>(schema: ZodSchema<T>) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    try {
+      req.body = schema.parse(req.body);
+      next();
+    } catch (error) {
+      if (error instanceof ZodError) {
+        logger.warn('Validation failed', {
+          path: req.path,
+          errors: error.errors,
+        });
+        res.status(400).json({
+          error: 'Validation failed',
+          code: 'VALIDATION_ERROR',
+          details: error.errors.map(e => ({
+            field: e.path.join('.'),
+            message: e.message,
+          })),
+        });
+        return;
+      }
+      next(error);
+    }
+  };
+}
+
 /**
  * Sign up a new user
  * Optionally creates a workspace or joins via invite
+ * SECURITY: Rate limited to 3 signups per minute per IP, validated with Zod
  */
-usersAuthRouter.post('/signup', async (req, res) => {
+usersAuthRouter.post('/signup', authSignupRateLimiter, validateBody(signUpSchema), async (req, res) => {
   try {
+    // Body is validated by Zod middleware
     const { email, password, full_name, workspace_name, invite_token } = req.body as SignUpRequest;
-
-    if (!email || !password) {
-      return res.status(400).json({
-        error: 'Email and password are required',
-        code: 'MISSING_CREDENTIALS',
-      });
-    }
 
     // Create user in Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -227,17 +314,12 @@ usersAuthRouter.post('/signup', async (req, res) => {
 
 /**
  * Sign in existing user
+ * SECURITY: Rate limited to 5 attempts per minute per IP (brute force protection), validated with Zod
  */
-usersAuthRouter.post('/signin', async (req, res) => {
+usersAuthRouter.post('/signin', authLoginRateLimiter, validateBody(signInSchema), async (req, res) => {
   try {
+    // Body is validated by Zod middleware
     const { email, password } = req.body as SignInRequest;
-
-    if (!email || !password) {
-      return res.status(400).json({
-        error: 'Email and password are required',
-        code: 'MISSING_CREDENTIALS',
-      });
-    }
 
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email,
@@ -314,17 +396,12 @@ usersAuthRouter.post('/signin', async (req, res) => {
 
 /**
  * Forgot password - send reset email
+ * SECURITY: Rate limited to 3 requests per minute per IP (email bombing protection), validated with Zod
  */
-usersAuthRouter.post('/forgot-password', async (req, res) => {
+usersAuthRouter.post('/forgot-password', authForgotPasswordRateLimiter, validateBody(forgotPasswordSchema), async (req, res) => {
   try {
+    // Body is validated by Zod middleware
     const { email } = req.body as ForgotPasswordRequest;
-
-    if (!email) {
-      return res.status(400).json({
-        error: 'Email is required',
-        code: 'MISSING_EMAIL',
-      });
-    }
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${env.APP_URL}/auth/reset-password`,
@@ -349,18 +426,13 @@ usersAuthRouter.post('/forgot-password', async (req, res) => {
 
 /**
  * Reset password with token
+ * SECURITY: Password validated with Zod schema
  */
-usersAuthRouter.post('/reset-password', async (req, res) => {
+usersAuthRouter.post('/reset-password', validateBody(resetPasswordSchema), async (req, res) => {
   try {
+    // Password is validated by Zod middleware
     const { password } = req.body as ResetPasswordRequest;
     const token = req.headers.authorization?.replace('Bearer ', '');
-
-    if (!password) {
-      return res.status(400).json({
-        error: 'New password is required',
-        code: 'MISSING_PASSWORD',
-      });
-    }
 
     if (!token) {
       return res.status(401).json({
@@ -403,17 +475,12 @@ usersAuthRouter.post('/reset-password', async (req, res) => {
 
 /**
  * Update password (authenticated)
+ * SECURITY: Validated with Zod schema
  */
-usersAuthRouter.post('/update-password', authenticate, async (req, res) => {
+usersAuthRouter.post('/update-password', authenticate, validateBody(updatePasswordSchema), async (req, res) => {
   try {
+    // Body is validated by Zod middleware
     const { current_password, new_password } = req.body as UpdatePasswordRequest;
-
-    if (!current_password || !new_password) {
-      return res.status(400).json({
-        error: 'Current and new password are required',
-        code: 'MISSING_PASSWORDS',
-      });
-    }
 
     // Verify current password by attempting sign in
     const { error: verifyError } = await supabase.auth.signInWithPassword({
@@ -487,9 +554,11 @@ usersAuthRouter.get('/me', authenticate, async (req, res) => {
 
 /**
  * Update user profile
+ * SECURITY: Validated with Zod schema
  */
-usersAuthRouter.patch('/me', authenticate, async (req, res) => {
+usersAuthRouter.patch('/me', authenticate, validateBody(updateProfileSchema), async (req, res) => {
   try {
+    // Body is validated by Zod middleware
     const updates = req.body as UpdateProfileRequest;
 
     const { data: profile, error } = await supabase
@@ -525,17 +594,12 @@ usersAuthRouter.patch('/me', authenticate, async (req, res) => {
 
 /**
  * Refresh token
+ * SECURITY: Rate limited to 20 refreshes per minute per IP, validated with Zod
  */
-usersAuthRouter.post('/refresh', async (req, res) => {
+usersAuthRouter.post('/refresh', authRefreshRateLimiter, validateBody(refreshTokenSchema), async (req, res) => {
   try {
+    // Body is validated by Zod middleware
     const { refresh_token } = req.body;
-
-    if (!refresh_token) {
-      return res.status(400).json({
-        error: 'Refresh token is required',
-        code: 'MISSING_REFRESH_TOKEN',
-      });
-    }
 
     const { data, error } = await supabase.auth.refreshSession({
       refresh_token,
