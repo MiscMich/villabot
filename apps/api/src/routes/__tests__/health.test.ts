@@ -31,7 +31,7 @@ vi.mock('../../utils/cache.js', () => ({
 
 vi.mock('../../config/env.js', () => ({
   env: {
-    GEMINI_API_KEY: 'test-api-key',
+    OPENAI_API_KEY: 'test-api-key',
   },
 }));
 
@@ -80,9 +80,9 @@ describe('Health Routes', () => {
 
   describe('updateServiceStatus', () => {
     it('should update platform service status', () => {
-      // Only platform services: supabase, gemini
+      // Only platform services: supabase, openai
       updateServiceStatus('supabase', true);
-      updateServiceStatus('gemini', false);
+      updateServiceStatus('openai', false);
       // Function should not throw
       expect(true).toBe(true);
     });
@@ -101,9 +101,9 @@ describe('Health Routes', () => {
     it('should return healthy status when all platform services are connected', async () => {
       vi.mocked(testSupabaseConnection).mockResolvedValue(true);
 
-      // Set platform services as healthy (only supabase and gemini now)
+      // Set platform services as healthy (only supabase and openai now)
       updateServiceStatus('supabase', true);
-      updateServiceStatus('gemini', true);
+      updateServiceStatus('openai', true);
 
       const handler = getHandler('/');
       expect(handler).toBeDefined();
@@ -115,7 +115,7 @@ describe('Health Routes', () => {
           status: 'healthy',
           services: expect.objectContaining({
             supabase: 'connected',
-            gemini: 'connected',
+            openai: 'connected',
           }),
           // Integrations are informational only
           integrations: expect.objectContaining({
@@ -129,9 +129,9 @@ describe('Health Routes', () => {
     it('should return degraded status when some platform services are disconnected', async () => {
       vi.mocked(testSupabaseConnection).mockResolvedValue(true);
 
-      // Only supabase healthy, gemini disconnected
+      // Only supabase healthy, openai disconnected
       updateServiceStatus('supabase', true);
-      updateServiceStatus('gemini', false);
+      updateServiceStatus('openai', false);
 
       const handler = getHandler('/');
       expect(handler).toBeDefined();
@@ -150,7 +150,7 @@ describe('Health Routes', () => {
 
       // Set all platform services as unhealthy
       updateServiceStatus('supabase', false);
-      updateServiceStatus('gemini', false);
+      updateServiceStatus('openai', false);
 
       const handler = getHandler('/');
       expect(handler).toBeDefined();
@@ -191,7 +191,7 @@ describe('Health Routes', () => {
 
       // Platform services healthy
       updateServiceStatus('supabase', true);
-      updateServiceStatus('gemini', true);
+      updateServiceStatus('openai', true);
 
       // Even with zero workspace integrations, platform should be healthy
       updateIntegrationCounts({ activeSlackBots: 0, workspacesWithGoogleDrive: 0 });

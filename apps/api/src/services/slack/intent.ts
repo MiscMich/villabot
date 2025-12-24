@@ -3,14 +3,15 @@
  * Tiered classification to minimize API costs
  */
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import OpenAI from 'openai';
 import { env } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
-import { QUESTION_HEURISTICS } from '@cluebase/shared';
+import { QUESTION_HEURISTICS, MODEL_CONFIG } from '@cluebase/shared';
 
-// Initialize Gemini for classification
-const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+// Initialize OpenAI for classification
+const openai = new OpenAI({
+  apiKey: env.OPENAI_API_KEY,
+});
 
 export type IntentType =
   | 'question'      // User asking a question the bot should answer
@@ -177,34 +178,69 @@ function matchKeywords(message: string): IntentResult {
 
 /**
  * Tier 3: AI classification for ambiguous cases
+ * Uses JSON output for structured response with confidence scoring
  */
 async function classifyWithAI(message: string): Promise<IntentResult> {
   try {
-    const prompt = `Classify the following message from a workplace Slack channel.
+    const result = await openai.chat.completions.create({
+      model: MODEL_CONFIG.intent,
+      messages: [
+        {
+          role: 'system',
+          content: `Classify workplace Slack messages. Output JSON only:
+{"intent": "question|greeting|ignore", "confidence": 0.0-1.0}
 
-Message: "${message}"
+Intent definitions:
+- question: User asking about company procedures, policies, documentation, or operations
+- greeting: Casual greeting, thanks, or social chat
+- ignore: Team conversation not directed at a knowledge bot
 
-Is this:
-1. A QUESTION about company procedures, policies, documentation, or operations that a knowledge bot should answer
-2. A GREETING or casual chat
-3. Regular CONVERSATION between team members (not directed at a bot)
+Confidence guidelines:
+- 0.9-1.0: Very clear intent
+- 0.7-0.9: Likely this intent
+- 0.5-0.7: Uncertain, best guess`,
+        },
+        {
+          role: 'user',
+          content: `Classify: "${message}"`,
+        },
+      ],
+      max_completion_tokens: MODEL_CONFIG.intentMaxTokens,
+    });
 
-Reply with ONLY one word: QUESTION, GREETING, or IGNORE`;
+    const responseText = result.choices[0]?.message?.content?.trim() ?? '';
 
-    const result = await model.generateContent(prompt);
-    const response = result.response.text().trim().toUpperCase();
+    // Parse JSON response
+    let intent: IntentType = 'ignore';
+    let confidence = 0.5;
 
-    const intentMap: Record<string, IntentType> = {
-      'QUESTION': 'question',
-      'GREETING': 'greeting',
-      'IGNORE': 'ignore',
-    };
-
-    const intent = intentMap[response] ?? 'ignore';
+    try {
+      const parsed = JSON.parse(responseText);
+      const intentMap: Record<string, IntentType> = {
+        'question': 'question',
+        'greeting': 'greeting',
+        'ignore': 'ignore',
+      };
+      intent = intentMap[parsed.intent?.toLowerCase()] ?? 'ignore';
+      confidence = typeof parsed.confidence === 'number'
+        ? Math.max(0, Math.min(1, parsed.confidence))
+        : 0.7;
+    } catch {
+      // Fallback: try to parse as single word (backwards compatibility)
+      const word = responseText.toUpperCase();
+      if (word.includes('QUESTION')) {
+        intent = 'question';
+        confidence = 0.7;
+      } else if (word.includes('GREETING')) {
+        intent = 'greeting';
+        confidence = 0.7;
+      }
+      logger.debug('AI classification returned non-JSON, using fallback parsing', { responseText });
+    }
 
     return {
       intent,
-      confidence: 0.85,
+      confidence,
       shouldRespond: intent === 'question',
     };
   } catch (error) {

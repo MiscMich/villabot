@@ -27,15 +27,23 @@ function getCurrentWorkspaceId(): string | null {
 
 /**
  * Hook to check if initial setup is complete
- * Uses current workspace context to check setup status
+ *
+ * @param workspaceId - Optional workspace ID to check. If provided, uses this instead of localStorage.
+ *                      Pass null to disable the query (useful when workspace is still loading).
  */
-export function useSetupStatus() {
+export function useSetupStatus(workspaceId?: string | null) {
+  // If workspaceId is explicitly null, disable the query (workspace still loading)
+  const isEnabled = workspaceId !== null;
+
+  // Determine which workspace ID to use
+  const effectiveWorkspaceId = workspaceId ?? getCurrentWorkspaceId();
+
   return useQuery<SetupStatus>({
-    queryKey: ['setup-status'],
+    queryKey: ['setup-status', effectiveWorkspaceId],
     queryFn: () => {
-      const workspaceId = getCurrentWorkspaceId();
-      return api.getSetupStatus(workspaceId ?? undefined);
+      return api.getSetupStatus(effectiveWorkspaceId ?? undefined);
     },
+    enabled: isEnabled,
     staleTime: 60 * 1000, // 1 minute
     retry: 1,
     refetchOnWindowFocus: false,

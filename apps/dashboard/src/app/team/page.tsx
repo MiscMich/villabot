@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/lib/api';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -41,7 +40,7 @@ const roleDescriptions: Record<WorkspaceMemberRole, string> = {
 const roleIcons: Record<WorkspaceMemberRole, React.ReactNode> = {
   owner: <Crown className="h-4 w-4 text-amber-500" />,
   admin: <Shield className="h-4 w-4 text-blue-500" />,
-  member: <Users className="h-4 w-4 text-slate-400" />,
+  member: <Users className="h-4 w-4 text-white/40" />,
 };
 
 interface TeamMember {
@@ -189,25 +188,34 @@ export default function TeamPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
+      <div className="space-y-8">
+        <div className="space-y-2">
+          <div className="h-10 w-48 bg-muted rounded-lg shimmer" />
+          <div className="h-5 w-64 bg-muted rounded-lg shimmer" />
+        </div>
+        <div className="h-64 bg-muted rounded-xl shimmer" />
+        <div className="h-48 bg-muted rounded-xl shimmer" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex items-center justify-between opacity-0 animate-fade-in">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">Team Management</h1>
-          <p className="text-slate-400">
+          <div className="flex items-center gap-3 mb-2">
+            <Users className="w-8 h-8 text-amber-500" />
+            <h1 className="text-4xl font-display font-bold">Team Management</h1>
+          </div>
+          <p className="text-lg text-muted-foreground">
             Manage your workspace members and invitations
           </p>
         </div>
         {canManageTeam && !showInviteForm && (
           <Button
             onClick={() => setShowInviteForm(true)}
-            className="bg-amber-500 hover:bg-amber-600 text-slate-900"
+            className="bg-gradient-to-r from-violet-600 to-pink-600 hover:from-violet-500 hover:to-pink-500 text-white font-medium shadow-glow-purple"
           >
             <UserPlus className="mr-2 h-4 w-4" />
             Invite Member
@@ -237,28 +245,30 @@ export default function TeamPage() {
 
       {/* Invite Form */}
       {showInviteForm && (
-        <Card className="bg-slate-800/50 border-slate-700">
-          <CardHeader>
+        <div className="premium-card opacity-0 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
+          <div className="p-6 border-b border-border/50">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-slate-100">Invite Team Member</CardTitle>
+              <div>
+                <h2 className="font-display text-xl font-semibold">Invite Team Member</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Send an invitation to join {workspace?.name}
+                </p>
+              </div>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowInviteForm(false)}
-                className="text-slate-400 hover:text-slate-100"
+                className="text-muted-foreground hover:text-foreground"
               >
                 <X className="h-4 w-4" />
               </Button>
             </div>
-            <CardDescription className="text-slate-400">
-              Send an invitation to join {workspace?.name}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+          </div>
+          <div className="p-6">
             <form onSubmit={handleInvite} className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="text-slate-300">
+                  <Label htmlFor="email" className="text-foreground">
                     Email address
                   </Label>
                   <Input
@@ -268,11 +278,11 @@ export default function TeamPage() {
                     value={inviteEmail}
                     onChange={(e) => setInviteEmail(e.target.value)}
                     required
-                    className="bg-slate-900/50 border-slate-600 text-slate-100 placeholder:text-slate-500"
+                    className="bg-white/5 border-white/10 text-foreground placeholder:text-muted-foreground"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-slate-300">Role</Label>
+                  <Label className="text-foreground">Role</Label>
                   <div className="flex gap-2">
                     <Button
                       type="button"
@@ -281,8 +291,8 @@ export default function TeamPage() {
                       onClick={() => setInviteRole('member')}
                       className={
                         inviteRole === 'member'
-                          ? 'bg-slate-600 text-slate-100'
-                          : 'border-slate-600 text-slate-300'
+                          ? 'bg-white/10 text-foreground'
+                          : 'border-white/10 text-muted-foreground hover:text-foreground'
                       }
                     >
                       <Users className="mr-1 h-3 w-3" />
@@ -295,8 +305,8 @@ export default function TeamPage() {
                       onClick={() => setInviteRole('admin')}
                       className={
                         inviteRole === 'admin'
-                          ? 'bg-blue-600 text-slate-100'
-                          : 'border-slate-600 text-slate-300'
+                          ? 'bg-blue-600 text-white'
+                          : 'border-white/10 text-muted-foreground hover:text-foreground'
                       }
                     >
                       <Shield className="mr-1 h-3 w-3" />
@@ -310,8 +320,8 @@ export default function TeamPage() {
                         onClick={() => setInviteRole('owner')}
                         className={
                           inviteRole === 'owner'
-                            ? 'bg-amber-600 text-slate-100'
-                            : 'border-slate-600 text-slate-300'
+                            ? 'bg-amber-600 text-white'
+                            : 'border-white/10 text-muted-foreground hover:text-foreground'
                         }
                       >
                         <Crown className="mr-1 h-3 w-3" />
@@ -319,7 +329,7 @@ export default function TeamPage() {
                       </Button>
                     )}
                   </div>
-                  <p className="text-xs text-slate-500">{roleDescriptions[inviteRole]}</p>
+                  <p className="text-xs text-muted-foreground">{roleDescriptions[inviteRole]}</p>
                 </div>
               </div>
               <div className="flex justify-end gap-2">
@@ -327,14 +337,14 @@ export default function TeamPage() {
                   type="button"
                   variant="outline"
                   onClick={() => setShowInviteForm(false)}
-                  className="border-slate-600 text-slate-300"
+                  className="border-white/10 text-muted-foreground hover:text-foreground"
                 >
                   Cancel
                 </Button>
                 <Button
                   type="submit"
                   disabled={isInviting}
-                  className="bg-amber-500 hover:bg-amber-600 text-slate-900"
+                  className="bg-gradient-to-r from-violet-600 to-pink-600 hover:from-violet-500 hover:to-pink-500 text-white font-medium shadow-glow-purple"
                 >
                   {isInviting ? (
                     <>
@@ -350,25 +360,30 @@ export default function TeamPage() {
                 </Button>
               </div>
             </form>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* Pending Invites */}
       {canManageTeam && invites.length > 0 && (
-        <Card className="bg-slate-800/50 border-slate-700">
-          <CardHeader>
-            <CardTitle className="text-slate-100 flex items-center gap-2">
-              <Clock className="h-5 w-5 text-amber-500" />
-              Pending Invitations ({invites.length})
-            </CardTitle>
-            <CardDescription className="text-slate-400">
-              Invitations awaiting acceptance
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+        <div className="premium-card opacity-0 animate-fade-in-up" style={{ animationDelay: '150ms' }}>
+          <div className="p-6 border-b border-border/50">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/30">
+                <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div>
+                <h2 className="font-display text-xl font-semibold">Pending Invitations</h2>
+                <p className="text-sm text-muted-foreground">Invitations awaiting acceptance</p>
+              </div>
+              <span className="ml-auto text-sm font-medium px-3 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                {invites.length} pending
+              </span>
+            </div>
+          </div>
+          <div className="p-6">
             <div className="space-y-3">
-              {invites.map((invite) => {
+              {invites.map((invite, index) => {
                 const expiresAt = new Date(invite.expires_at);
                 const daysUntilExpiry = Math.ceil(
                   (expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
@@ -378,27 +393,28 @@ export default function TeamPage() {
                 return (
                   <div
                     key={invite.id}
-                    className="flex items-center justify-between p-4 bg-slate-900/50 rounded-lg border border-slate-700/50"
+                    className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/5 opacity-0 animate-fade-in"
+                    style={{ animationDelay: `${200 + index * 50}ms` }}
                   >
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 rounded-full bg-amber-500/20 flex items-center justify-center">
                         <Mail className="h-5 w-5 text-amber-500" />
                       </div>
                       <div>
-                        <p className="font-medium text-slate-100">{invite.email}</p>
-                        <div className="flex items-center gap-2 text-sm text-slate-400">
+                        <p className="font-medium text-foreground">{invite.email}</p>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <Badge
                             variant="outline"
                             className={`${
                               invite.role === 'admin'
                                 ? 'border-blue-500 text-blue-400'
-                                : 'border-slate-500 text-slate-400'
+                                : 'border-white/20 text-muted-foreground'
                             }`}
                           >
                             {roleIcons[invite.role]}
                             <span className="ml-1">{roleLabels[invite.role]}</span>
                           </Badge>
-                          <span className="text-slate-500">•</span>
+                          <span className="text-white/20">•</span>
                           <span className={isExpiringSoon ? 'text-amber-400' : ''}>
                             Expires in {daysUntilExpiry} day{daysUntilExpiry !== 1 ? 's' : ''}
                           </span>
@@ -410,7 +426,7 @@ export default function TeamPage() {
                       size="sm"
                       onClick={() => handleRevokeInvite(invite.id)}
                       disabled={revokingInvite === invite.id}
-                      className="text-slate-400 hover:text-red-400 hover:bg-red-500/10"
+                      className="text-muted-foreground hover:text-red-400 hover:bg-red-500/10"
                     >
                       {revokingInvite === invite.id ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -422,24 +438,29 @@ export default function TeamPage() {
                 );
               })}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* Team Members */}
-      <Card className="bg-slate-800/50 border-slate-700">
-        <CardHeader>
-          <CardTitle className="text-slate-100 flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            Team Members ({members.length})
-          </CardTitle>
-          <CardDescription className="text-slate-400">
-            People with access to this workspace
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <div className="premium-card opacity-0 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
+        <div className="p-6 border-b border-border/50">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
+              <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div>
+              <h2 className="font-display text-xl font-semibold">Team Members</h2>
+              <p className="text-sm text-muted-foreground">People with access to this workspace</p>
+            </div>
+            <span className="ml-auto text-sm font-medium px-3 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+              {members.length} members
+            </span>
+          </div>
+        </div>
+        <div className="p-6">
           <div className="space-y-3">
-            {members.map((member) => {
+            {members.map((member, index) => {
               const isCurrentUser = member.user_id === user?.id;
               const canManageMember = canManageTeam && !isCurrentUser && member.role !== 'owner';
               const canChangeRole = isOwner && !isCurrentUser;
@@ -447,22 +468,23 @@ export default function TeamPage() {
               return (
                 <div
                   key={member.id}
-                  className="flex items-center justify-between p-4 bg-slate-900/50 rounded-lg"
+                  className="flex items-center justify-between p-4 bg-white/5 rounded-lg opacity-0 animate-fade-in"
+                  style={{ animationDelay: `${250 + index * 50}ms` }}
                 >
                   <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-slate-700 flex items-center justify-center">
-                      <span className="text-lg font-medium text-slate-300">
+                    <div className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center">
+                      <span className="text-lg font-medium text-foreground">
                         {member.user?.full_name?.charAt(0) ?? member.user?.email?.charAt(0) ?? '?'}
                       </span>
                     </div>
                     <div>
-                      <p className="font-medium text-slate-100">
+                      <p className="font-medium text-foreground">
                         {member.user?.full_name ?? 'Unknown User'}
                         {isCurrentUser && (
-                          <span className="ml-2 text-xs text-slate-400">(you)</span>
+                          <span className="ml-2 text-xs text-muted-foreground">(you)</span>
                         )}
                       </p>
-                      <p className="text-sm text-slate-400">
+                      <p className="text-sm text-muted-foreground">
                         {member.user?.email ?? 'No email'}
                       </p>
                     </div>
@@ -483,8 +505,8 @@ export default function TeamPage() {
                                   ? 'bg-amber-500/20 text-amber-400'
                                   : role === 'admin'
                                   ? 'bg-blue-500/20 text-blue-400'
-                                  : 'bg-slate-500/20 text-slate-300'
-                                : 'text-slate-500 hover:text-slate-300'
+                                  : 'bg-white/10 text-foreground'
+                                : 'text-muted-foreground hover:text-foreground'
                             }`}
                           >
                             {roleIcons[role]}
@@ -500,7 +522,7 @@ export default function TeamPage() {
                             ? 'border-amber-500 text-amber-400'
                             : member.role === 'admin'
                             ? 'border-blue-500 text-blue-400'
-                            : 'border-slate-500 text-slate-400'
+                            : 'border-white/20 text-muted-foreground'
                         }`}
                       >
                         {roleIcons[member.role]}
@@ -514,7 +536,7 @@ export default function TeamPage() {
                         size="sm"
                         onClick={() => handleRemoveMember(member.id)}
                         disabled={removingMember === member.id}
-                        className="text-slate-400 hover:text-red-400 hover:bg-red-500/10"
+                        className="text-muted-foreground hover:text-red-400 hover:bg-red-500/10"
                       >
                         {removingMember === member.id ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -529,40 +551,45 @@ export default function TeamPage() {
             })}
 
             {members.length === 0 && (
-              <div className="text-center py-8 text-slate-400">
-                <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                <p>No team members yet</p>
-                <p className="text-sm">Invite your first team member to get started</p>
+              <div className="text-center py-12">
+                <div className="p-4 rounded-full bg-muted mx-auto w-fit mb-4">
+                  <Users className="h-8 w-8 text-muted-foreground" />
+                </div>
+                <p className="text-lg font-medium mb-1">No team members yet</p>
+                <p className="text-sm text-muted-foreground">Invite your first team member to get started</p>
               </div>
             )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Role Descriptions */}
-      <Card className="bg-slate-800/50 border-slate-700">
-        <CardHeader>
-          <CardTitle className="text-slate-100 flex items-center gap-2">
-            <Settings className="h-5 w-5" />
-            Role Permissions
-          </CardTitle>
-          <CardDescription className="text-slate-400">
-            Understanding workspace roles and their capabilities
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <div className="premium-card opacity-0 animate-fade-in-up" style={{ animationDelay: '300ms' }}>
+        <div className="p-6 border-b border-border/50">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30">
+              <Settings className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+            </div>
+            <div>
+              <h2 className="font-display text-xl font-semibold">Role Permissions</h2>
+              <p className="text-sm text-muted-foreground">Understanding workspace roles and their capabilities</p>
+            </div>
+          </div>
+        </div>
+        <div className="p-6">
           <div className="grid gap-4 md:grid-cols-3">
-            {(['owner', 'admin', 'member'] as const).map((role) => (
+            {(['owner', 'admin', 'member'] as const).map((role, index) => (
               <div
                 key={role}
-                className="p-4 bg-slate-900/50 rounded-lg border border-slate-700"
+                className="p-4 bg-white/5 rounded-lg border border-white/5 opacity-0 animate-fade-in"
+                style={{ animationDelay: `${350 + index * 50}ms` }}
               >
                 <div className="flex items-center gap-2 mb-2">
                   {roleIcons[role]}
-                  <h3 className="font-medium text-slate-100">{roleLabels[role]}</h3>
+                  <h3 className="font-medium text-foreground">{roleLabels[role]}</h3>
                 </div>
-                <p className="text-sm text-slate-400">{roleDescriptions[role]}</p>
-                <ul className="mt-3 space-y-1 text-sm text-slate-300">
+                <p className="text-sm text-muted-foreground">{roleDescriptions[role]}</p>
+                <ul className="mt-3 space-y-1 text-sm text-foreground">
                   {role === 'owner' && (
                     <>
                       <li className="flex items-center gap-2">
@@ -607,8 +634,8 @@ export default function TeamPage() {
               </div>
             ))}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

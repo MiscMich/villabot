@@ -261,9 +261,14 @@ export class BotInstance {
     this.app.message(async ({ message, say, client: _client }: { message: any; say: any; client: any }) => {
       if (message.subtype || !('text' in message) || !message.text) return;
       if (message.user === this.botUserId) return;
-      if (this.botUserId && message.text.includes(`<@${this.botUserId}>`)) return;
 
-      const messageText = message.text;
+      // Check if message contains a mention of this bot
+      const isMention = this.botUserId && message.text.includes(`<@${this.botUserId}>`);
+
+      // Strip bot mention from text if present
+      const messageText = isMention
+        ? message.text.replace(/<@[A-Z0-9]+>/g, '').trim()
+        : message.text;
       const channelId = message.channel;
       const userId = message.user;
       const threadTs = message.thread_ts ?? message.ts;
@@ -271,15 +276,27 @@ export class BotInstance {
 
       // Check if this bot should handle this channel
       if (!this.handlesChannel(channelId)) {
+        // If this is a mention, log that we're ignoring it (for debugging)
+        if (isMention) {
+          logger.debug(`Bot ${this.name} ignoring mention in unassigned channel ${channelId}`);
+        }
         return;
       }
 
       try {
+        // Check if bot has previously responded in this thread (needed for follow-ups)
         const previousBotMessage = isThreadReply
           ? await hasBotRespondedInThread(threadTs)
           : false;
 
-        const intent = await detectIntent(messageText, isThreadReply, previousBotMessage);
+        // If this is a direct mention, always respond (like app_mention handler)
+        let intent;
+        if (isMention) {
+          logger.info(`Bot ${this.name} mentioned in message`, { user: userId, channel: channelId });
+          intent = { intent: 'question' as const, confidence: 1.0, shouldRespond: true };
+        } else {
+          intent = await detectIntent(messageText, isThreadReply, previousBotMessage);
+        }
 
         if (!intent.shouldRespond) return;
 
@@ -295,12 +312,14 @@ export class BotInstance {
 
         await supabase.from('analytics').insert({
           workspace_id: this.workspaceId,
-          event_type: 'message_received',
+          event_type: isMention ? 'mention_received' : 'message_received',
           event_data: {
             channel_id: channelId,
             intent: intent.intent,
             bot_id: this.id,
+            bot_name: this.name,
             is_thread: isThreadReply,
+            triggered_by: isMention ? 'mention_via_message' : 'message',
           },
         });
 
@@ -393,18 +412,19 @@ export class BotInstance {
             confidence: response.confidence,
             source_count: response.sources.length,
             slack_message_ts: sentMessage?.ts,
+            triggered_by: isMention ? 'mention_via_message' : 'message',
           },
         });
       } catch (error) {
         const err = error as Error;
         if (err instanceof TimeoutError) {
-          await errorTracker.trackTimeout('messageHandler', RESPONSE_TIMEOUT_MS, { userId, messageText });
+          await errorTracker.trackTimeout('messageHandler', RESPONSE_TIMEOUT_MS, { userId, messageText, isMention });
           await say({
             text: "⏱️ My response is taking too long. Please try again or simplify your question.",
             thread_ts: threadTs,
           });
         } else {
-          await errorTracker.track(err, 'slack', 'high', { userId, messageText, handler: 'message', botId: this.id });
+          await errorTracker.track(err, 'slack', 'high', { userId, messageText, handler: isMention ? 'mention' : 'message', botId: this.id });
           await say({
             text: "I'm having trouble processing your request right now. Please try again in a moment.",
             thread_ts: threadTs,

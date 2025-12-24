@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   TrendingUp,
@@ -13,23 +14,77 @@ import {
   Zap,
   Clock,
   Users,
+  XCircle,
+  RefreshCw,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 export default function AnalyticsPage() {
-  const { data: overview, isLoading: overviewLoading } = useQuery({
-    queryKey: ['overview'],
+  // Wait for workspace context before making API calls
+  const { workspace, isLoading: isWorkspaceLoading } = useWorkspace();
+
+  const {
+    data: overview,
+    isLoading: isOverviewLoading,
+    isError: overviewError,
+    error: overviewErrorData,
+    refetch: refetchOverview,
+  } = useQuery({
+    queryKey: ['overview', workspace?.id],
     queryFn: api.getOverview,
+    enabled: !!workspace?.id,
   });
 
   const { data: activity } = useQuery({
-    queryKey: ['activity'],
+    queryKey: ['activity', workspace?.id],
     queryFn: () => api.getActivity(14),
+    enabled: !!workspace?.id,
   });
 
   const { data: events } = useQuery({
-    queryKey: ['events'],
+    queryKey: ['events', workspace?.id],
     queryFn: () => api.getEvents(50),
+    enabled: !!workspace?.id,
   });
+
+  // Combined loading state
+  const overviewLoading = isWorkspaceLoading || isOverviewLoading;
+
+  if (overviewError) {
+    return (
+      <div className="space-y-8">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <BarChart3 className="w-8 h-8 text-amber-500" />
+            <h1 className="text-4xl font-display font-bold">Analytics</h1>
+          </div>
+          <p className="text-lg text-muted-foreground">
+            Monitor bot performance and user engagement
+          </p>
+        </div>
+        <div className="premium-card p-8 text-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="p-4 rounded-full bg-red-500/10 border border-red-500/20">
+              <XCircle className="w-8 h-8 text-red-400" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-xl font-semibold">Failed to load analytics</h2>
+              <p className="text-muted-foreground max-w-md">
+                {overviewErrorData instanceof Error ? overviewErrorData.message : 'An error occurred while loading analytics. Please try again.'}
+              </p>
+            </div>
+            <Button
+              onClick={() => refetchOverview()}
+              className="mt-4"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Try Again
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (overviewLoading) {
     return (

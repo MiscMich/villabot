@@ -18,7 +18,6 @@
   "dependencies": {
     "@cluebase/shared": "workspace:*",
     "@google/generative-ai": "^0.21.0",
-    "ioredis": "^5.4.1",
     "@slack/bolt": "^3.22.0",
     "@slack/web-api": "^7.13.0",
     "@supabase/supabase-js": "^2.47.10",
@@ -27,6 +26,7 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "googleapis": "^144.0.0",
+    "ioredis": "^5.4.1",
     "langchain": "^0.3.11",
     "mammoth": "^1.8.0",
     "node-cron": "^3.0.3",
@@ -45,6 +45,7 @@
     "@types/node-cron": "^3.0.11",
     "@types/pdf-parse": "^1.1.4",
     "eslint": "^9.0.0",
+    "openai": "^6.15.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.0.0",

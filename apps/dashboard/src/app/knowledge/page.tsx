@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -28,6 +29,7 @@ import {
   Lightbulb,
   Plus,
   Loader2,
+  XCircle,
 } from 'lucide-react';
 
 export default function KnowledgePage() {
@@ -36,10 +38,23 @@ export default function KnowledgePage() {
   const [newFactText, setNewFactText] = useState('');
   const [newFactSource, setNewFactSource] = useState('');
 
-  const { data: facts, isLoading } = useQuery({
-    queryKey: ['learnedFacts'],
+  // Wait for workspace context before making API calls
+  const { workspace, isLoading: isWorkspaceLoading } = useWorkspace();
+
+  const {
+    data: facts,
+    isLoading: isFactsLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ['learnedFacts', workspace?.id],
     queryFn: api.getLearnedFacts,
+    enabled: !!workspace?.id,
   });
+
+  // Combined loading state
+  const isLoading = isWorkspaceLoading || isFactsLoading;
 
   const createMutation = useMutation({
     mutationFn: (data: { fact: string; source?: string }) => api.createFact(data),
@@ -65,6 +80,42 @@ export default function KnowledgePage() {
       queryClient.invalidateQueries({ queryKey: ['learnedFacts'] });
     },
   });
+
+  if (isError) {
+    return (
+      <div className="space-y-8">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <Brain className="w-8 h-8 text-amber-500" />
+            <h1 className="text-4xl font-display font-bold">Knowledge Base</h1>
+          </div>
+          <p className="text-lg text-muted-foreground">
+            Review and manage facts learned from user corrections
+          </p>
+        </div>
+        <div className="premium-card p-8 text-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="p-4 rounded-full bg-red-500/10 border border-red-500/20">
+              <XCircle className="w-8 h-8 text-red-400" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-xl font-semibold">Failed to load knowledge base</h2>
+              <p className="text-muted-foreground max-w-md">
+                {error instanceof Error ? error.message : 'An error occurred while loading facts. Please try again.'}
+              </p>
+            </div>
+            <Button
+              onClick={() => refetch()}
+              className="mt-4"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Try Again
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

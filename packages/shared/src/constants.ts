@@ -3,6 +3,10 @@
  */
 
 import type { SubscriptionTier } from './types/workspaces.js';
+import type { BotType } from './types/bots.js';
+
+// Re-export BotType for convenience when importing with BOT_TYPE_CONFIGS
+export type { BotType } from './types/bots.js';
 
 // ============================================
 // SUBSCRIPTION TIERS
@@ -138,24 +142,33 @@ export function tierSupportsFeature(
 
 // Chunking configuration
 export const CHUNK_CONFIG = {
-  chunkSize: 512,
-  chunkOverlap: 50,
+  chunkSize: 1200,      // Larger chunks for better context preservation
+  chunkOverlap: 100,    // More overlap for continuity between chunks
   separators: ['\n\n', '\n', '. ', ' ', ''],
 } as const;
 
-// Embedding configuration
+// Embedding configuration (OpenAI text-embedding-3-small)
 export const EMBEDDING_CONFIG = {
-  model: 'text-embedding-004',
-  dimensions: 768,
+  model: 'text-embedding-3-small',
+  dimensions: 768,  // Reduced from 1536 for compatibility with existing vectors
   batchSize: 100,
 } as const;
 
-// RAG configuration
+// RAG configuration (2025 best practices)
 export const RAG_CONFIG = {
-  topK: 15,              // Increased from 5 to return more relevant chunks
-  vectorWeight: 0.5,
-  keywordWeight: 0.5,
-  minSimilarity: 0.2,    // Lowered from 0.3 to include more potential matches
+  topK: 15,              // Return more relevant chunks for context
+  vectorWeight: 0.7,     // Prioritize semantic similarity (captures meaning)
+  keywordWeight: 0.3,    // Support keyword matching (exact terms, acronyms)
+  minSimilarity: 0.35,   // Increased threshold for higher precision
+} as const;
+
+// AI Model Configuration (OpenAI GPT-5 Nano)
+export const MODEL_CONFIG = {
+  chat: 'gpt-5-nano',
+  intent: 'gpt-5-nano',
+  embedding: 'text-embedding-3-small',
+  maxCompletionTokens: 4000,
+  intentMaxTokens: 50,   // Supports JSON output for intent classification
 } as const;
 
 // Rate limiting
@@ -192,3 +205,120 @@ export const SUPPORTED_FILE_TYPES = {
   'text/plain': 'txt',
   'text/html': 'html',
 } as const;
+
+// ============================================
+// BOT TYPE CONFIGURATION
+// ============================================
+
+export interface BotTypeConfig {
+  label: string;
+  description: string;
+  systemInstructions: string;
+  icon: string; // Lucide icon name
+  color: string; // Tailwind color class
+  documentCategory: 'operations' | 'marketing' | 'sales' | 'hr' | 'technical' | 'shared';
+}
+
+export const BOT_TYPE_CONFIGS: Record<BotType, BotTypeConfig> = {
+  operations: {
+    label: 'Operations',
+    description: 'Handles day-to-day operational questions, SOPs, procedures, and workflow inquiries.',
+    systemInstructions: `You are an Operations Assistant for this company. Your role is to help team members with:
+- Standard Operating Procedures (SOPs) and workflows
+- Day-to-day operational questions and processes
+- Policy clarifications and procedural guidance
+- Task coordination and process optimization
+
+Be precise and actionable in your responses. When referencing procedures, cite the specific document and section. If a process has multiple steps, present them clearly numbered. Always prioritize accuracy - if you're unsure about a specific procedure, say so and suggest who might know.`,
+    icon: 'Settings',
+    color: 'blue',
+    documentCategory: 'operations',
+  },
+  marketing: {
+    label: 'Marketing',
+    description: 'Assists with brand guidelines, campaign information, marketing materials, and creative assets.',
+    systemInstructions: `You are a Marketing Assistant for this company. Your role is to help team members with:
+- Brand guidelines and messaging consistency
+- Campaign information and marketing strategies
+- Content guidelines and creative direction
+- Marketing materials and asset locations
+
+Maintain brand voice in your responses. When discussing campaigns or initiatives, provide context about goals and target audiences. Help team members find the right assets and ensure brand consistency. Be creative but always aligned with established brand guidelines.`,
+    icon: 'Megaphone',
+    color: 'pink',
+    documentCategory: 'marketing',
+  },
+  sales: {
+    label: 'Sales',
+    description: 'Supports sales processes, product information, pricing, and customer-facing materials.',
+    systemInstructions: `You are a Sales Assistant for this company. Your role is to help team members with:
+- Product information and feature details
+- Pricing structures and discount policies
+- Sales processes and pipeline stages
+- Customer objection handling and competitive positioning
+- Contract terms and proposal templates
+
+Be confident and clear in your responses. Help sales team members quickly find the information they need to close deals. When discussing pricing or terms, be precise about policies. Provide competitive insights when relevant but focus on our strengths.`,
+    icon: 'TrendingUp',
+    color: 'green',
+    documentCategory: 'sales',
+  },
+  hr: {
+    label: 'HR & People',
+    description: 'Answers questions about policies, benefits, onboarding, and employee resources.',
+    systemInstructions: `You are an HR & People Assistant for this company. Your role is to help team members with:
+- Company policies and employee handbook questions
+- Benefits information and enrollment procedures
+- Onboarding processes and new hire resources
+- Time off policies and leave procedures
+- Performance review processes
+
+Be warm, approachable, and confidential in your responses. Employee matters require sensitivity. When discussing policies, be clear about requirements while being supportive. Always direct employees to HR for sensitive personal matters or situations requiring human judgment.`,
+    icon: 'Users',
+    color: 'purple',
+    documentCategory: 'hr',
+  },
+  technical: {
+    label: 'Technical',
+    description: 'Provides technical documentation, API references, development guidelines, and system information.',
+    systemInstructions: `You are a Technical Assistant for this company. Your role is to help team members with:
+- Technical documentation and system architecture
+- API references and integration guides
+- Development standards and coding guidelines
+- Troubleshooting and debugging assistance
+- Infrastructure and deployment procedures
+
+Be precise and technical in your responses. Use code examples when helpful. Reference specific documentation sections. For complex issues, break down solutions step by step. If something requires elevated access or could impact production systems, make that clear.`,
+    icon: 'Code',
+    color: 'orange',
+    documentCategory: 'technical',
+  },
+  general: {
+    label: 'General',
+    description: 'A versatile assistant that can help with any company knowledge and cross-functional questions.',
+    systemInstructions: `You are a Knowledge Assistant for this company. Your role is to help team members find information across all company resources and answer general questions about:
+- Company policies and procedures
+- Cross-functional processes
+- General company knowledge
+- Finding the right resources or people
+
+Be helpful and thorough in your responses. When questions span multiple departments, provide a comprehensive answer drawing from all relevant sources. If a question is better suited for a specialized team, point them in the right direction.`,
+    icon: 'Bot',
+    color: 'violet',
+    documentCategory: 'shared',
+  },
+} as const;
+
+// Helper to get bot type config
+export function getBotTypeConfig(botType: BotType): BotTypeConfig {
+  return BOT_TYPE_CONFIGS[botType] || BOT_TYPE_CONFIGS.general;
+}
+
+// Get document categories for a bot type (always includes shared)
+export function getBotTypeCategories(botType: BotType): string[] {
+  const config = getBotTypeConfig(botType);
+  if (config.documentCategory === 'shared') {
+    return ['shared'];
+  }
+  return ['shared', config.documentCategory];
+}

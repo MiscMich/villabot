@@ -7,7 +7,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Brain, Loader2, AlertCircle } from 'lucide-react';
 
 function SignInForm() {
@@ -43,120 +42,120 @@ function SignInForm() {
   };
 
   return (
-    <Card className="w-full max-w-md bg-slate-800/50 border-slate-700 backdrop-blur-sm">
-      <CardHeader className="space-y-1 text-center">
+    <div className="w-full max-w-md glass-card p-8">
+      <div className="space-y-1 text-center mb-6">
         <div className="flex items-center justify-center gap-2 mb-4">
-          <div className="p-2 bg-amber-500/10 rounded-lg">
-            <Brain className="h-8 w-8 text-amber-500" />
+          <div className="p-3 rounded-xl bg-gradient-to-br from-violet-600 to-pink-600 shadow-glow-purple">
+            <Brain className="h-8 w-8 text-white" />
           </div>
         </div>
-        <CardTitle className="text-2xl font-bold text-slate-100">
+        <h1 className="text-2xl font-bold text-white">
           Welcome back
-        </CardTitle>
-        <CardDescription className="text-slate-400">
+        </h1>
+        <p className="text-white/60">
           Sign in to your workspace
-        </CardDescription>
-      </CardHeader>
+        </p>
+      </div>
 
-      <form onSubmit={handleSubmit}>
-        <CardContent className="space-y-4">
-          {error && (
-            <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              {error}
-            </div>
-          )}
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {error && (
+          <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            {error}
+          </div>
+        )}
 
-          <div className="space-y-2">
-            <Label htmlFor="email" className="text-slate-300">
-              Email
+        <div className="space-y-2">
+          <Label htmlFor="email" className="text-white/80">
+            Email
+          </Label>
+          <Input
+            id="email"
+            type="email"
+            placeholder="you@company.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            className="bg-white/5 border-white/10 text-white placeholder:text-white/40 focus:border-violet-500 focus:ring-violet-500/20"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="password" className="text-white/80">
+              Password
             </Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="you@company.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="bg-slate-900/50 border-slate-600 text-slate-100 placeholder:text-slate-500 focus:border-amber-500 focus:ring-amber-500/20"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="password" className="text-slate-300">
-                Password
-              </Label>
-              <Link
-                href="/auth/forgot-password"
-                className="text-sm text-amber-500 hover:text-amber-400 transition-colors"
-              >
-                Forgot password?
-              </Link>
-            </div>
-            <Input
-              id="password"
-              type="password"
-              placeholder="Enter your password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="bg-slate-900/50 border-slate-600 text-slate-100 placeholder:text-slate-500 focus:border-amber-500 focus:ring-amber-500/20"
-            />
-          </div>
-        </CardContent>
-
-        <CardFooter className="flex flex-col gap-4">
-          <Button
-            type="submit"
-            className="w-full bg-amber-500 hover:bg-amber-600 text-slate-900 font-medium"
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Signing in...
-              </>
-            ) : (
-              'Sign in'
-            )}
-          </Button>
-
-          <p className="text-sm text-slate-400 text-center">
-            Don&apos;t have an account?{' '}
             <Link
-              href="/auth/signup"
-              className="text-amber-500 hover:text-amber-400 font-medium transition-colors"
+              href="/auth/forgot-password"
+              className="text-sm text-violet-400 hover:text-violet-300 transition-colors"
             >
-              Sign up
+              Forgot password?
             </Link>
-          </p>
-        </CardFooter>
+          </div>
+          <Input
+            id="password"
+            type="password"
+            placeholder="Enter your password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            className="bg-white/5 border-white/10 text-white placeholder:text-white/40 focus:border-violet-500 focus:ring-violet-500/20"
+          />
+        </div>
+
+        <Button
+          type="submit"
+          className="w-full bg-gradient-to-r from-violet-600 to-pink-600 hover:from-violet-500 hover:to-pink-500 text-white font-medium shadow-glow-purple"
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Signing in...
+            </>
+          ) : (
+            'Sign in'
+          )}
+        </Button>
+
+        <p className="text-sm text-white/60 text-center">
+          Don&apos;t have an account?{' '}
+          <Link
+            href="/auth/signup"
+            className="text-violet-400 hover:text-violet-300 font-medium transition-colors"
+          >
+            Sign up
+          </Link>
+        </p>
       </form>
-    </Card>
+    </div>
   );
 }
 
 function SignInLoading() {
   return (
-    <Card className="w-full max-w-md bg-slate-800/50 border-slate-700 backdrop-blur-sm">
-      <CardHeader className="space-y-1 text-center">
+    <div className="w-full max-w-md glass-card p-8">
+      <div className="space-y-1 text-center">
         <div className="flex items-center justify-center gap-2 mb-4">
-          <div className="p-2 bg-amber-500/10 rounded-lg">
-            <Loader2 className="h-8 w-8 text-amber-500 animate-spin" />
+          <div className="p-3 rounded-xl bg-gradient-to-br from-violet-600 to-pink-600 shadow-glow-purple">
+            <Loader2 className="h-8 w-8 text-white animate-spin" />
           </div>
         </div>
-        <CardTitle className="text-2xl font-bold text-slate-100">
+        <h1 className="text-2xl font-bold text-white">
           Loading...
-        </CardTitle>
-      </CardHeader>
-    </Card>
+        </h1>
+      </div>
+    </div>
   );
 }
 
 export default function SignInPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
+    <div className="min-h-screen flex items-center justify-center p-4 relative">
+      {/* Background */}
+      <div className="mesh-gradient" />
+      <div className="grid-pattern fixed inset-0" />
+
       <Suspense fallback={<SignInLoading />}>
         <SignInForm />
       </Suspense>

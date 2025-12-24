@@ -16,6 +16,12 @@ export type DocumentCategory =
   | 'technical'
   | 'custom';
 
+/**
+ * Bot type determines the bot's personality, system instructions, and focus area.
+ * All bots can search all documents in the workspace - bot_type only affects behavior.
+ */
+export type BotType = 'operations' | 'marketing' | 'sales' | 'hr' | 'technical' | 'general';
+
 export type BotStatus = 'active' | 'inactive' | 'configuring';
 
 export interface Bot {
@@ -25,6 +31,9 @@ export interface Bot {
   slug: string;
   description: string | null;
   avatarUrl: string | null;
+
+  // Bot type - determines personality and system instructions
+  botType: BotType;
 
   // Slack Configuration
   slackBotToken: string | null;
@@ -38,7 +47,7 @@ export interface Bot {
   temperature: number;
   maxResponseLength: number;
 
-  // Knowledge Configuration
+  // Knowledge Configuration (deprecated - all bots search all documents)
   includeSharedKnowledge: boolean;
   categories: DocumentCategory[];
 
@@ -55,12 +64,13 @@ export interface BotCreateInput {
   workspaceId: string;  // Required for tenant isolation
   name: string;
   slug: string;
-  description?: string;
+  botType?: BotType;  // Defaults to 'general' - description/instructions auto-generated
+  description?: string;  // Auto-generated from botType if not provided
   avatarUrl?: string;
   slackBotToken?: string;
   slackAppToken?: string;
   slackSigningSecret?: string;
-  systemInstructions?: string;
+  systemInstructions?: string;  // Auto-generated from botType if not provided
   personality?: string;
   temperature?: number;
   maxResponseLength?: number;
@@ -70,6 +80,7 @@ export interface BotCreateInput {
 
 export interface BotUpdateInput {
   name?: string;
+  botType?: BotType;  // Changing botType updates description/instructions
   description?: string;
   avatarUrl?: string;
   slackBotToken?: string;

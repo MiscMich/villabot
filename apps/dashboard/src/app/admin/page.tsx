@@ -14,6 +14,8 @@ import {
   Plus,
   Loader2,
   Shield,
+  XCircle,
+  RefreshCw,
 } from 'lucide-react';
 import { CreateInternalModal } from '@/components/admin/create-internal-modal';
 import Link from 'next/link';
@@ -22,7 +24,13 @@ import { cn } from '@/lib/utils';
 export default function AdminDashboardPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-  const { data: statsData, isLoading } = useQuery({
+  const {
+    data: statsData,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ['admin-stats'],
     queryFn: api.getAdminStats,
   });
@@ -38,6 +46,42 @@ export default function AdminDashboardPage() {
   });
 
   const stats = statsData?.stats;
+
+  if (isError) {
+    return (
+      <div className="space-y-8">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <Shield className="w-8 h-8 text-purple-500" />
+            <h1 className="text-4xl font-display font-bold">Platform Overview</h1>
+          </div>
+          <p className="text-lg text-muted-foreground">
+            Cluebase AI platform administration and monitoring
+          </p>
+        </div>
+        <div className="glass-card p-8 text-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="p-4 rounded-full bg-red-500/10 border border-red-500/20">
+              <XCircle className="w-8 h-8 text-red-400" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-xl font-semibold">Failed to load admin dashboard</h2>
+              <p className="text-muted-foreground max-w-md">
+                {error instanceof Error ? error.message : 'An error occurred while loading the admin dashboard. Please try again.'}
+              </p>
+            </div>
+            <Button
+              onClick={() => refetch()}
+              className="mt-4"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Try Again
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -212,7 +256,7 @@ export default function AdminDashboardPage() {
             </CardDescription>
           </div>
           <Link href="/admin/workspaces">
-            <Button variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-slate-100">
+            <Button variant="outline" className="border-white/10 text-white/80 hover:bg-white/5 hover:text-white">
               View All
             </Button>
           </Link>

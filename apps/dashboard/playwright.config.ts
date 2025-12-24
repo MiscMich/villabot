@@ -7,8 +7,13 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './e2e',
 
-  /* Run tests in files in parallel */
-  fullyParallel: true,
+  /* Global setup/teardown for database fixtures */
+  globalSetup: './e2e/setup/global.setup.ts',
+  globalTeardown: './e2e/setup/global.teardown.ts',
+
+  /* Run tests sequentially for database consistency */
+  /* Each suite resets the database, parallel execution would cause conflicts */
+  fullyParallel: false,
 
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
@@ -42,7 +47,7 @@ export default defineConfig({
     /* Setup project - handles authentication state */
     {
       name: 'setup',
-      testMatch: /.*\.setup\.ts/,
+      testMatch: '**/setup/*.setup.ts',
     },
 
     /* Authenticated tests - bots, billing, documents, settings, dashboard */

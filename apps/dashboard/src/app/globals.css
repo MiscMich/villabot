@@ -189,6 +189,11 @@
     border: 1px solid rgba(255, 255, 255, 0.05);
   }
 
+  /* Premium Card - Alias for glass-card (maintains backward compatibility) */
+  .premium-card {
+    @apply glass-card;
+  }
+
   .glass-card-elevated {
     @apply glass-card;
     background: rgba(255, 255, 255, 0.05);

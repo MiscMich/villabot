@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { motion, useInView } from 'framer-motion';
 import { api } from '@/lib/api';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import {
   FileText,
   MessageSquare,
@@ -220,6 +221,43 @@ function LoadingSkeleton() {
   );
 }
 
+// Error State Component
+function ErrorState({ error, onRetry }: { error: Error | null; onRetry: () => void }) {
+  return (
+    <div className="space-y-8">
+      <div className="flex items-center gap-3 mb-2">
+        <div className="p-2.5 rounded-xl bg-gradient-to-br from-violet-600 to-pink-600 shadow-glow-purple">
+          <Sparkles className="w-6 h-6 text-white" />
+        </div>
+        <h1 className="text-4xl font-bold text-white">
+          Dash<span className="bg-gradient-to-r from-violet-400 to-pink-400 bg-clip-text text-transparent">board</span>
+        </h1>
+      </div>
+
+      <GlassCard padding="lg" className="text-center">
+        <div className="flex flex-col items-center gap-4 py-8">
+          <div className="p-4 rounded-full bg-red-500/10 border border-red-500/20">
+            <XCircle className="w-8 h-8 text-red-400" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-semibold text-white">Failed to load dashboard</h2>
+            <p className="text-white/60 max-w-md">
+              {error?.message || 'An error occurred while loading dashboard data. Please try again.'}
+            </p>
+          </div>
+          <button
+            onClick={onRetry}
+            className="mt-4 px-6 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-pink-600 text-white font-medium hover:opacity-90 transition-opacity flex items-center gap-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Try Again
+          </button>
+        </div>
+      </GlassCard>
+    </div>
+  );
+}
+
 // Quick Action Button
 function QuickActionButton({
   onClick,
@@ -274,9 +312,20 @@ export default function OverviewPage() {
     text: string;
   } | null>(null);
 
-  const { data: overview, isLoading: overviewLoading } = useQuery({
-    queryKey: ['overview'],
+  // Wait for workspace context to be ready before making API calls
+  const { workspace, isLoading: isWorkspaceLoading } = useWorkspace();
+
+  const {
+    data: overview,
+    isLoading: overviewLoading,
+    isError: overviewError,
+    error: overviewErrorData,
+    refetch: refetchOverview,
+  } = useQuery({
+    queryKey: ['overview', workspace?.id],
     queryFn: api.getOverview,
+    // Don't run until workspace is available
+    enabled: !!workspace?.id,
   });
 
   const { data: health } = useQuery({
@@ -286,8 +335,10 @@ export default function OverviewPage() {
   });
 
   const { data: syncStatus } = useQuery({
-    queryKey: ['syncStatus'],
+    queryKey: ['syncStatus', workspace?.id],
     queryFn: api.getSyncStatus,
+    // Don't run until workspace is available
+    enabled: !!workspace?.id,
   });
 
   const syncMutation = useMutation({
@@ -324,7 +375,17 @@ export default function OverviewPage() {
     router.push('/conversations');
   };
 
-  if (overviewLoading) {
+  if (overviewError) {
+    return (
+      <ErrorState
+        error={overviewErrorData instanceof Error ? overviewErrorData : null}
+        onRetry={() => refetchOverview()}
+      />
+    );
+  }
+
+  // Show loading while workspace is loading or data is being fetched
+  if (isWorkspaceLoading || overviewLoading) {
     return <LoadingSkeleton />;
   }
 

@@ -1,9 +1,9 @@
 /**
  * AI Response generation service
- * Uses Gemini with RAG context
+ * Uses OpenAI GPT-5 Nano with RAG context
  */
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import OpenAI from 'openai';
 import { env } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
 import { hybridSearch, SearchResult } from '../rag/search.js';
@@ -11,13 +11,15 @@ import { supabase } from '../supabase/client.js';
 import { responseCache, generateCacheKey } from '../../utils/cache.js';
 import { withTimeout, withRetry } from '../../utils/timeout.js';
 import { errorTracker } from '../../utils/error-tracker.js';
+import { MODEL_CONFIG } from '@cluebase/shared';
 
 // Response generation timeout (25 seconds)
 const RESPONSE_TIMEOUT_MS = 25000;
 
-// Initialize Gemini
-const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+// Initialize OpenAI
+const openai = new OpenAI({
+  apiKey: env.OPENAI_API_KEY,
+});
 
 // Patterns that indicate user wants a document inventory
 const LIST_DOCS_PATTERNS = [
@@ -64,11 +66,21 @@ const SYSTEM_PROMPT = `You are TeamBrain, the AI assistant for your organization
 • > for warnings, important callouts, or tips
 • Line breaks between sections for readability
 
+*Context Quality Guidance:*
+You will receive context in <document> tags. Assess the relevance:
+- HIGH quality: Multiple relevant documents → Answer confidently with citations
+- MEDIUM quality: Partial relevance → Answer what you can, acknowledge limitations
+- LOW quality: Few/irrelevant docs → Say "I don't have clear documentation on this" and suggest escalation
+- NO context: Zero relevant results → Be honest: "I couldn't find anything in our documentation about this"
+
 *How to Answer:*
 - If context contains the answer → Give a direct, helpful response with source citation
 - If context is partially relevant → Answer what you can, acknowledge gaps
 - If context doesn't help → Say: "I don't have that in my documentation. You might want to check with the relevant team or I can escalate this."
 - For follow-up questions → Reference the previous context and build on it
+
+*Citation Format:*
+Always cite sources as: "According to *[Document Name]*..." or "In the *[Document Name]* document..."
 
 *Tone:* Friendly, professional, like a knowledgeable coworker who wants to help you succeed.`;
 
@@ -189,29 +201,33 @@ export async function generateResponse(
     // Build conversation for the model
     const messages = buildMessages(question, context, history, botOptions.systemInstructions);
 
-    // Generate response with timeout and retry
+    // Generate response with timeout and retry using OpenAI
     const result = await withRetry(
       async () => {
         return withTimeout(
-          model.generateContent({
-            contents: messages,
-            generationConfig: {
-              temperature: 0.3,
-              maxOutputTokens: 4000,
-            },
+          openai.chat.completions.create({
+            model: MODEL_CONFIG.chat,
+            messages,
+            max_completion_tokens: MODEL_CONFIG.maxCompletionTokens,
           }),
           RESPONSE_TIMEOUT_MS,
-          'generateContent'
+          'chatCompletion'
         );
       },
       { maxRetries: 2, initialDelayMs: 1000 }
     );
 
-    const response = result.response.text().trim();
+    const response = result.choices[0]?.message?.content?.trim() ?? '';
 
-    // Calculate confidence based on search results
+    // Calculate calibrated confidence based on search results
+    // Weighted: top result (50%) + average (30%) + document diversity (20%)
     const avgSimilarity = searchResults.reduce((acc, r) => acc + r.similarity, 0) / searchResults.length;
-    const confidence = Math.min(avgSimilarity + 0.2, 1);
+    const topSimilarity = searchResults[0]?.similarity ?? 0;
+    const uniqueDocs = new Set(searchResults.map(r => r.documentTitle)).size;
+    const confidence = Math.min(
+      (topSimilarity * 0.5) + (avgSimilarity * 0.3) + (Math.min(uniqueDocs / 5, 1) * 0.2),
+      1
+    );
 
     const generatedResponse: GeneratedResponse = {
       content: response,
@@ -236,7 +252,7 @@ export async function generateResponse(
     logger.error('Failed to generate response', { error: err.message });
 
     // Track the error
-    await errorTracker.track(err, 'gemini', 'high', { question, operation: 'generateResponse' });
+    await errorTracker.track(err, 'openai', 'high', { question, operation: 'generateResponse' });
 
     // Try to provide a graceful fallback response
     return generateFallbackResponse(question, err, botOptions.workspaceId);
@@ -328,8 +344,12 @@ Please:
 Keep the response friendly and concise.`;
 
   try {
-    const result = await model.generateContent(prompt);
-    const response = result.response.text().trim();
+    const result = await openai.chat.completions.create({
+      model: MODEL_CONFIG.chat,
+      messages: [{ role: 'user', content: prompt }],
+      max_completion_tokens: 1000,
+    });
+    const response = result.choices[0]?.message?.content?.trim() ?? '';
 
     // Store the learned fact with workspace context
     const { supabase } = await import('../supabase/client.js');
@@ -358,14 +378,17 @@ Keep the response friendly and concise.`;
 
 /**
  * Format search results as context for the LLM
+ * Uses XML tags for clear semantic boundaries
  */
 function formatContext(results: SearchResult[]): string {
   return results
-    .map((result, index) => {
-      return `[Document ${index + 1}: ${result.documentTitle}]
-${result.content}`;
+    .map((result) => {
+      const source = result.sourceUrl || 'internal';
+      return `<document title="${result.documentTitle}" source="${source}">
+${result.content}
+</document>`;
     })
-    .join('\n\n---\n\n');
+    .join('\n\n');
 }
 
 /**
@@ -383,45 +406,43 @@ function extractSources(results: SearchResult[]): string[] {
 }
 
 /**
- * Build message history for the model
+ * Build message history for OpenAI Chat Completions API
  */
 function buildMessages(
   question: string,
   context: string,
   history: Array<{ role: 'user' | 'assistant'; content: string }>,
   customInstructions?: string
-): Array<{ role: string; parts: Array<{ text: string }> }> {
-  const messages: Array<{ role: string; parts: Array<{ text: string }> }> = [];
+): Array<{ role: 'system' | 'user' | 'assistant'; content: string }> {
+  const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [];
 
   // Use custom system instructions if provided, otherwise use default
   const systemPrompt = customInstructions
     ? `${SYSTEM_PROMPT}\n\n*Additional Instructions:*\n${customInstructions}`
     : SYSTEM_PROMPT;
 
-  // System prompt as first user message (Gemini doesn't have system role)
+  // OpenAI supports system role natively
   messages.push({
-    role: 'user',
-    parts: [{ text: systemPrompt }],
-  });
-  messages.push({
-    role: 'model',
-    parts: [{ text: 'Understood. I will answer questions based on the provided context and follow the guidelines.' }],
+    role: 'system',
+    content: systemPrompt,
   });
 
   // Add conversation history
   for (const msg of history.slice(-6)) { // Last 3 turns
     messages.push({
-      role: msg.role === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.content }],
+      role: msg.role,
+      content: msg.content,
     });
   }
 
-  // Add current question with context
+  // Add current question with context using XML structure
   messages.push({
     role: 'user',
-    parts: [{
-      text: `Context from company documentation:\n${context}\n\nUser Question: ${question}`
-    }],
+    content: `<context>
+${context}
+</context>
+
+<question>${question}</question>`,
   });
 
   return messages;

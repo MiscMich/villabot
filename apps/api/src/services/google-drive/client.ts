@@ -104,12 +104,45 @@ export function isDriveClientInitialized(): boolean {
 }
 
 /**
- * List all files in the configured folder
+ * Recursively get all subfolder IDs under a parent folder
  */
-export async function listFilesInFolder(folderId?: string): Promise<DriveFile[]> {
-  const drive = getDriveClient();
-  const targetFolderId = folderId ?? env.GOOGLE_DRIVE_FOLDER_ID;
+async function getSubfolderIds(parentFolderId: string, maxDepth: number = 10): Promise<string[]> {
+  if (maxDepth <= 0) return [];
 
+  const drive = getDriveClient();
+  const subfolderIds: string[] = [];
+  let pageToken: string | undefined;
+
+  do {
+    const response = await drive.files.list({
+      q: `'${parentFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: 'nextPageToken, files(id, name)',
+      pageSize: 100,
+      pageToken,
+    });
+
+    if (response.data.files) {
+      for (const folder of response.data.files) {
+        if (folder.id) {
+          subfolderIds.push(folder.id);
+          // Recursively get subfolders
+          const nestedIds = await getSubfolderIds(folder.id, maxDepth - 1);
+          subfolderIds.push(...nestedIds);
+        }
+      }
+    }
+
+    pageToken = response.data.nextPageToken ?? undefined;
+  } while (pageToken);
+
+  return subfolderIds;
+}
+
+/**
+ * List files in a single folder (non-recursive helper)
+ */
+async function listFilesInSingleFolder(folderId: string): Promise<DriveFile[]> {
+  const drive = getDriveClient();
   const files: DriveFile[] = [];
   let pageToken: string | undefined;
 
@@ -118,7 +151,7 @@ export async function listFilesInFolder(folderId?: string): Promise<DriveFile[]>
 
   do {
     const response = await drive.files.list({
-      q: `'${targetFolderId}' in parents and trashed=false and (${mimeTypeQuery})`,
+      q: `'${folderId}' in parents and trashed=false and (${mimeTypeQuery})`,
       fields: 'nextPageToken, files(id, name, mimeType, modifiedTime, webViewLink, size)',
       pageSize: 100,
       pageToken,
@@ -147,8 +180,35 @@ export async function listFilesInFolder(folderId?: string): Promise<DriveFile[]>
     pageToken = response.data.nextPageToken ?? undefined;
   } while (pageToken);
 
-  logger.info(`Found ${files.length} files in folder`);
   return files;
+}
+
+/**
+ * List all files in the configured folder and all subfolders recursively
+ */
+export async function listFilesInFolder(folderId?: string): Promise<DriveFile[]> {
+  const targetFolderId = folderId ?? env.GOOGLE_DRIVE_FOLDER_ID;
+
+  if (!targetFolderId) {
+    throw new Error('No folder ID provided and GOOGLE_DRIVE_FOLDER_ID not configured');
+  }
+
+  // Get all folder IDs to scan (parent + all subfolders)
+  const allFolderIds: string[] = [targetFolderId];
+  const subfolderIds = await getSubfolderIds(targetFolderId);
+  allFolderIds.push(...subfolderIds);
+
+  logger.info(`Scanning ${allFolderIds.length} folders (1 parent + ${subfolderIds.length} subfolders)`);
+
+  // Collect files from all folders
+  const allFiles: DriveFile[] = [];
+  for (const fId of allFolderIds) {
+    const files = await listFilesInSingleFolder(fId);
+    allFiles.push(...files);
+  }
+
+  logger.info(`Found ${allFiles.length} files across all folders`);
+  return allFiles;
 }
 
 /**

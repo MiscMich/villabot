@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import {
   MessageSquare,
   User,
@@ -15,7 +16,10 @@ import {
   ExternalLink,
   AlertCircle,
   CheckCircle,
+  XCircle,
+  RefreshCw,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface Message {
   id: string;
@@ -245,15 +249,65 @@ export default function ConversationsPage() {
   const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const { data: conversationsData, isLoading: conversationsLoading } = useQuery({
-    queryKey: ['conversations', page],
+  // Wait for workspace context before making API calls
+  const { workspace, isLoading: isWorkspaceLoading } = useWorkspace();
+
+  const {
+    data: conversationsData,
+    isLoading: isConversationsLoading,
+    isError: conversationsError,
+    error: conversationsErrorData,
+    refetch: refetchConversations,
+  } = useQuery({
+    queryKey: ['conversations', page, workspace?.id],
     queryFn: () => api.getConversations(page, 20),
+    enabled: !!workspace?.id,
   });
 
   const { data: statsData } = useQuery({
-    queryKey: ['conversationStats'],
+    queryKey: ['conversationStats', workspace?.id],
     queryFn: api.getConversationStats,
+    enabled: !!workspace?.id,
   });
+
+  // Combined loading state
+  const conversationsLoading = isWorkspaceLoading || isConversationsLoading;
+
+  if (conversationsError) {
+    return (
+      <div className="space-y-8">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <MessageSquare className="w-8 h-8 text-amber-500" />
+            <h1 className="text-4xl font-display font-bold">Conversations</h1>
+          </div>
+          <p className="text-lg text-muted-foreground">
+            Browse and review bot interactions with your team
+          </p>
+        </div>
+        <div className="premium-card p-8 text-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="p-4 rounded-full bg-red-500/10 border border-red-500/20">
+              <XCircle className="w-8 h-8 text-red-400" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-xl font-semibold">Failed to load conversations</h2>
+              <p className="text-muted-foreground max-w-md">
+                {conversationsErrorData instanceof Error ? conversationsErrorData.message : 'An error occurred while loading conversations. Please try again.'}
+              </p>
+            </div>
+            <Button
+              onClick={() => refetchConversations()}
+              className="mt-4"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Try Again
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (conversationsLoading) {
     return <LoadingSkeleton />;

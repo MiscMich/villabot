@@ -17,10 +17,7 @@ import {
   AlertCircle,
   Sparkles,
   Hash,
-  FileText,
-  MessageSquare,
   Key,
-  FolderOpen,
   Folder,
   FolderPlus,
   Trash2,
@@ -28,20 +25,81 @@ import {
   AlertTriangle,
   Plus,
   Slack,
+  Settings,
+  Megaphone,
+  TrendingUp,
+  Users,
+  Code,
+  Lock,
+  Search,
+  RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type DocumentCategory = 'shared' | 'operations' | 'marketing' | 'sales' | 'hr' | 'technical' | 'custom';
+// Bot type configuration matching shared/constants.ts
+type BotType = 'operations' | 'marketing' | 'sales' | 'hr' | 'technical' | 'general';
 
-const CATEGORY_OPTIONS: { value: DocumentCategory; label: string; description: string }[] = [
-  { value: 'shared', label: 'Shared', description: 'Company-wide knowledge available to all' },
-  { value: 'operations', label: 'Operations', description: 'SOPs and operational procedures' },
-  { value: 'marketing', label: 'Marketing', description: 'Marketing materials and campaigns' },
-  { value: 'sales', label: 'Sales', description: 'Sales collateral and playbooks' },
-  { value: 'hr', label: 'HR', description: 'Human resources policies and docs' },
-  { value: 'technical', label: 'Technical', description: 'Technical documentation and guides' },
-  { value: 'custom', label: 'Custom', description: 'Uncategorized documents' },
+interface BotTypeOption {
+  value: BotType;
+  label: string;
+  description: string;
+  icon: React.ReactNode;
+  color: string;
+}
+
+const BOT_TYPE_OPTIONS: BotTypeOption[] = [
+  {
+    value: 'operations',
+    label: 'Operations',
+    description: 'SOPs, procedures, and workflow inquiries',
+    icon: <Settings className="w-5 h-5" />,
+    color: 'blue',
+  },
+  {
+    value: 'marketing',
+    label: 'Marketing',
+    description: 'Brand guidelines and campaign info',
+    icon: <Megaphone className="w-5 h-5" />,
+    color: 'pink',
+  },
+  {
+    value: 'sales',
+    label: 'Sales',
+    description: 'Product info, pricing, and sales materials',
+    icon: <TrendingUp className="w-5 h-5" />,
+    color: 'green',
+  },
+  {
+    value: 'hr',
+    label: 'HR & People',
+    description: 'Policies, benefits, and employee resources',
+    icon: <Users className="w-5 h-5" />,
+    color: 'purple',
+  },
+  {
+    value: 'technical',
+    label: 'Technical',
+    description: 'Documentation, APIs, and dev guidelines',
+    icon: <Code className="w-5 h-5" />,
+    color: 'orange',
+  },
+  {
+    value: 'general',
+    label: 'General',
+    description: 'Cross-functional company knowledge',
+    icon: <Bot className="w-5 h-5" />,
+    color: 'violet',
+  },
 ];
+
+const COLOR_CLASSES: Record<string, { bg: string; border: string; text: string }> = {
+  blue: { bg: 'bg-blue-500/10', border: 'border-blue-500/50', text: 'text-blue-600 dark:text-blue-400' },
+  pink: { bg: 'bg-pink-500/10', border: 'border-pink-500/50', text: 'text-pink-600 dark:text-pink-400' },
+  green: { bg: 'bg-green-500/10', border: 'border-green-500/50', text: 'text-green-600 dark:text-green-400' },
+  purple: { bg: 'bg-purple-500/10', border: 'border-purple-500/50', text: 'text-purple-600 dark:text-purple-400' },
+  orange: { bg: 'bg-orange-500/10', border: 'border-orange-500/50', text: 'text-orange-600 dark:text-orange-400' },
+  violet: { bg: 'bg-violet-500/10', border: 'border-violet-500/50', text: 'text-violet-600 dark:text-violet-400' },
+};
 
 interface BotFormModalProps {
   isOpen: boolean;
@@ -50,9 +108,7 @@ interface BotFormModalProps {
     id: string;
     name: string;
     slug: string;
-    description: string | null;
-    system_prompt: string | null;
-    categories?: DocumentCategory[];
+    bot_type?: BotType;
   } | null;
 }
 
@@ -60,12 +116,9 @@ export function BotFormModal({ isOpen, onClose, editBot }: BotFormModalProps) {
   const queryClient = useQueryClient();
   const isEditing = !!editBot;
 
-  // Form state
+  // Form state - simplified
   const [name, setName] = useState('');
-  const [slug, setSlug] = useState('');
-  const [description, setDescription] = useState('');
-  const [systemPrompt, setSystemPrompt] = useState('');
-  const [categories, setCategories] = useState<DocumentCategory[]>(['shared']);
+  const [botType, setBotType] = useState<BotType>('general');
   const [slackBotToken, setSlackBotToken] = useState('');
   const [slackAppToken, setSlackAppToken] = useState('');
   const [slackSigningSecret, setSlackSigningSecret] = useState('');
@@ -74,7 +127,6 @@ export function BotFormModal({ isOpen, onClose, editBot }: BotFormModalProps) {
   const [showBotToken, setShowBotToken] = useState(false);
   const [showAppToken, setShowAppToken] = useState(false);
   const [showSigningSecret, setShowSigningSecret] = useState(false);
-  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
 
   // Fetch Drive connection status
@@ -112,8 +164,8 @@ export function BotFormModal({ isOpen, onClose, editBot }: BotFormModalProps) {
   });
 
   // Channel state
-  const [newChannelId, setNewChannelId] = useState('');
-  const [newChannelName, setNewChannelName] = useState('');
+  const [channelSearch, setChannelSearch] = useState('');
+  const [showChannelPicker, setShowChannelPicker] = useState(false);
 
   // Fetch existing channels for the bot
   const { data: botChannels, refetch: refetchChannels } = useQuery({
@@ -123,14 +175,21 @@ export function BotFormModal({ isOpen, onClose, editBot }: BotFormModalProps) {
     staleTime: 1000 * 60 * 2,
   });
 
+  // Fetch available Slack channels from Slack API
+  const { data: slackChannels, isLoading: isLoadingSlackChannels, refetch: refetchSlackChannels } = useQuery({
+    queryKey: ['slack-channels', editBot?.id],
+    queryFn: () => api.getSlackChannels(editBot!.id),
+    enabled: isOpen && isEditing && !!editBot?.id && showChannelPicker,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+
   // Add channel mutation
   const addChannelMutation = useMutation({
     mutationFn: ({ botId, data }: { botId: string; data: { slackChannelId: string; channelName?: string } }) =>
       api.addBotChannel(botId, data),
     onSuccess: () => {
       refetchChannels();
-      setNewChannelId('');
-      setNewChannelName('');
+      refetchSlackChannels();
     },
   });
 
@@ -140,47 +199,63 @@ export function BotFormModal({ isOpen, onClose, editBot }: BotFormModalProps) {
       api.removeBotChannel(botId, channelId),
     onSuccess: () => {
       refetchChannels();
+      refetchSlackChannels();
     },
   });
+
+  // Toggle channel assignment
+  const handleToggleChannel = async (channelId: string, channelName: string, isCurrentlyAssigned: boolean) => {
+    if (!editBot) return;
+
+    if (isCurrentlyAssigned) {
+      // Find the assignment ID from botChannels
+      const assignment = botChannels?.channels.find(c => c.slack_channel_id === channelId);
+      if (assignment) {
+        removeChannelMutation.mutate({ botId: editBot.id, channelId: assignment.id });
+      }
+    } else {
+      addChannelMutation.mutate({
+        botId: editBot.id,
+        data: { slackChannelId: channelId, channelName },
+      });
+    }
+  };
+
+  // Filter channels by search
+  const filteredSlackChannels = slackChannels?.channels.filter(channel =>
+    channel.name.toLowerCase().includes(channelSearch.toLowerCase())
+  ) ?? [];
 
   // Reset form when modal opens/closes or editBot changes
   useEffect(() => {
     if (isOpen) {
       if (editBot) {
         setName(editBot.name);
-        setSlug(editBot.slug);
-        setDescription(editBot.description ?? '');
-        setSystemPrompt(editBot.system_prompt ?? '');
-        setCategories(editBot.categories ?? ['shared']);
-        setSlugManuallyEdited(true);
+        setBotType(editBot.bot_type ?? 'general');
         // Don't populate tokens for security - they're stored encrypted
         setSlackBotToken('');
         setSlackAppToken('');
         setSlackSigningSecret('');
       } else {
         setName('');
-        setSlug('');
-        setDescription('');
-        setSystemPrompt('');
-        setCategories(['shared']);
+        setBotType('general');
         setSlackBotToken('');
         setSlackAppToken('');
         setSlackSigningSecret('');
-        setSlugManuallyEdited(false);
       }
+      // Reset channel picker state
+      setChannelSearch('');
+      setShowChannelPicker(false);
     }
   }, [isOpen, editBot]);
 
-  // Auto-generate slug from name
-  useEffect(() => {
-    if (!slugManuallyEdited && name) {
-      const generatedSlug = name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '');
-      setSlug(generatedSlug);
-    }
-  }, [name, slugManuallyEdited]);
+  // Generate slug from name
+  const generateSlug = (botName: string): string => {
+    return botName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+  };
 
   const createMutation = useMutation({
     mutationFn: api.createBot,
@@ -207,31 +282,19 @@ export function BotFormModal({ isOpen, onClose, editBot }: BotFormModalProps) {
         id: editBot.id,
         data: {
           name,
-          description: description || undefined,
-          system_prompt: systemPrompt || undefined,
-          categories: categories.length > 0 ? categories : undefined,
+          bot_type: botType,
         },
       });
     } else {
       createMutation.mutate({
         name,
-        slug,
-        description: description || undefined,
-        system_prompt: systemPrompt || undefined,
-        categories: categories.length > 0 ? categories : undefined,
+        slug: generateSlug(name),
+        bot_type: botType,
         slack_bot_token: slackBotToken || undefined,
         slack_app_token: slackAppToken || undefined,
         slack_signing_secret: slackSigningSecret || undefined,
       });
     }
-  };
-
-  const toggleCategory = (category: DocumentCategory) => {
-    setCategories(prev =>
-      prev.includes(category)
-        ? prev.filter(c => c !== category)
-        : [...prev, category]
-    );
   };
 
   // Handle folder selection from picker
@@ -255,19 +318,7 @@ export function BotFormModal({ isOpen, onClose, editBot }: BotFormModalProps) {
     await removeFolderMutation.mutateAsync({ botId: editBot.id, folderId });
   };
 
-  // Handle adding a channel
-  const handleAddChannel = async () => {
-    if (!editBot?.id || !newChannelId.trim()) return;
-    await addChannelMutation.mutateAsync({
-      botId: editBot.id,
-      data: {
-        slackChannelId: newChannelId.trim(),
-        channelName: newChannelName.trim() || undefined,
-      },
-    });
-  };
-
-  // Handle channel removal
+  // Handle channel removal from assigned list
   const handleRemoveChannel = async (channelId: string) => {
     if (!editBot?.id) return;
     await removeChannelMutation.mutateAsync({ botId: editBot.id, channelId });
@@ -314,126 +365,78 @@ export function BotFormModal({ isOpen, onClose, editBot }: BotFormModalProps) {
         {/* Form */}
         <form onSubmit={handleSubmit}>
           <div className="p-6 space-y-6 max-h-[calc(100vh-300px)] overflow-y-auto">
-            {/* Basic Info Section */}
+            {/* Bot Name Section */}
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                 <Sparkles className="w-4 h-4" />
-                <span>Basic Information</span>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Bot Name *</Label>
-                  <div className="relative">
-                    <Bot className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      id="name"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="Marketing Bot"
-                      className="pl-10"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="slug">Slug *</Label>
-                  <div className="relative">
-                    <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      id="slug"
-                      value={slug}
-                      onChange={(e) => {
-                        setSlug(e.target.value);
-                        setSlugManuallyEdited(true);
-                      }}
-                      placeholder="marketing-bot"
-                      className="pl-10 font-mono"
-                      required
-                      disabled={isEditing}
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Used in URLs and API calls. Auto-generated from name.
-                  </p>
-                </div>
+                <span>Bot Identity</span>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
+                <Label htmlFor="name">Bot Name *</Label>
                 <div className="relative">
-                  <FileText className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
-                  <textarea
-                    id="description"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="A helpful bot for marketing team questions..."
-                    className="w-full min-h-[80px] pl-10 pr-4 py-2 rounded-lg border border-border/50 bg-secondary/50 focus:bg-background focus:border-violet-500/50 focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all resize-none"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="systemPrompt">System Instructions</Label>
-                <div className="relative">
-                  <MessageSquare className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
-                  <textarea
-                    id="systemPrompt"
-                    value={systemPrompt}
-                    onChange={(e) => setSystemPrompt(e.target.value)}
-                    placeholder="You are a helpful marketing assistant. Focus on..."
-                    className="w-full min-h-[120px] pl-10 pr-4 py-2 rounded-lg border border-border/50 bg-secondary/50 focus:bg-background focus:border-violet-500/50 focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all resize-none font-mono text-sm"
+                  <Bot className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Operations Bot"
+                    className="pl-10"
+                    required
                   />
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Custom personality and behavior instructions for this bot.
+                  Give your bot a descriptive name that reflects its purpose.
                 </p>
               </div>
             </div>
 
-            {/* Document Categories Section */}
+            {/* Bot Type Section */}
             <div className="space-y-4 pt-4 border-t border-border/50">
               <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                <FolderOpen className="w-4 h-4" />
-                <span>Document Access</span>
+                <Settings className="w-4 h-4" />
+                <span>Bot Type</span>
               </div>
               <p className="text-xs text-muted-foreground">
-                Select which document categories this bot can search. At least one category is recommended.
+                Select the department this bot serves. The bot will automatically access shared company knowledge plus documents relevant to its type.
               </p>
 
               <div className="grid gap-2 md:grid-cols-2">
-                {CATEGORY_OPTIONS.map((option) => {
-                  const isSelected = categories.includes(option.value);
+                {BOT_TYPE_OPTIONS.map((option) => {
+                  const isSelected = botType === option.value;
+                  const colors = COLOR_CLASSES[option.color];
                   return (
                     <button
                       key={option.value}
                       type="button"
-                      onClick={() => toggleCategory(option.value)}
+                      onClick={() => setBotType(option.value)}
                       className={cn(
                         'flex items-start gap-3 p-3 rounded-lg border text-left transition-all',
                         isSelected
-                          ? 'border-violet-500/50 bg-violet-500/10 ring-1 ring-violet-500/30'
+                          ? `${colors.border} ${colors.bg} ring-1 ring-${option.color}-500/30`
                           : 'border-border/50 bg-secondary/30 hover:bg-secondary/50 hover:border-border'
                       )}
                     >
                       <div
                         className={cn(
-                          'w-5 h-5 rounded flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors',
+                          'w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors',
                           isSelected
-                            ? 'bg-violet-500 text-white'
-                            : 'bg-secondary border border-border'
+                            ? `${colors.bg} ${colors.text}`
+                            : 'bg-secondary text-muted-foreground'
                         )}
                       >
-                        {isSelected && <Check className="w-3 h-3" />}
+                        {option.icon}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className={cn(
-                          'text-sm font-medium',
-                          isSelected ? 'text-violet-700 dark:text-violet-300' : ''
-                        )}>
-                          {option.label}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className={cn(
+                            'text-sm font-medium',
+                            isSelected ? colors.text : ''
+                          )}>
+                            {option.label}
+                          </p>
+                          {isSelected && <Check className="w-4 h-4 text-current" />}
+                        </div>
                         <p className="text-xs text-muted-foreground truncate">
                           {option.description}
                         </p>
@@ -442,11 +445,6 @@ export function BotFormModal({ isOpen, onClose, editBot }: BotFormModalProps) {
                   );
                 })}
               </div>
-              {categories.length === 0 && (
-                <p className="text-xs text-amber-600 dark:text-amber-400">
-                  No categories selected. Bot will have limited document access.
-                </p>
-              )}
             </div>
 
             {/* Knowledge Sources Section - Only when editing */}
@@ -470,6 +468,10 @@ export function BotFormModal({ isOpen, onClose, editBot }: BotFormModalProps) {
                     </Button>
                   )}
                 </div>
+
+                <p className="text-xs text-muted-foreground">
+                  Add Google Drive folders containing documents for this bot to search.
+                </p>
 
                 {!driveStatus?.connected && (
                   <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
@@ -533,49 +535,110 @@ export function BotFormModal({ isOpen, onClose, editBot }: BotFormModalProps) {
             {/* Slack Channels Section - Only when editing */}
             {isEditing && (
               <div className="space-y-4 pt-4 border-t border-border/50">
-                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                  <Slack className="w-4 h-4" />
-                  <span>Slack Channels</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                    <Slack className="w-4 h-4" />
+                    <span>Slack Channels</span>
+                    {(botChannels?.channels ?? []).length > 0 && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400">
+                        {botChannels?.channels.length} assigned
+                      </span>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowChannelPicker(!showChannelPicker)}
+                    className="text-xs"
+                  >
+                    {showChannelPicker ? 'Hide Picker' : 'Add Channels'}
+                    <Plus className="w-3 h-3 ml-1" />
+                  </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Configure which Slack channels this bot should listen to. Leave empty to respond in all channels where it&apos;s mentioned.
                 </p>
 
-                {/* Add Channel Form */}
-                <div className="flex gap-2">
-                  <div className="flex-1">
-                    <Input
-                      value={newChannelId}
-                      onChange={(e) => setNewChannelId(e.target.value)}
-                      placeholder="Channel ID (e.g., C01ABC123)"
-                      className="font-mono text-sm"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <Input
-                      value={newChannelName}
-                      onChange={(e) => setNewChannelName(e.target.value)}
-                      placeholder="Channel name (optional)"
-                    />
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={handleAddChannel}
-                    disabled={!newChannelId.trim() || addChannelMutation.isPending}
-                  >
-                    {addChannelMutation.isPending ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Plus className="w-4 h-4" />
-                    )}
-                  </Button>
-                </div>
+                {/* Channel Picker */}
+                {showChannelPicker && (
+                  <div className="space-y-3 p-4 rounded-lg bg-secondary/30 border border-border/50">
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <Input
+                          value={channelSearch}
+                          onChange={(e) => setChannelSearch(e.target.value)}
+                          placeholder="Search channels..."
+                          className="pl-9"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => refetchSlackChannels()}
+                        disabled={isLoadingSlackChannels}
+                      >
+                        <RefreshCw className={cn("w-4 h-4", isLoadingSlackChannels && "animate-spin")} />
+                      </Button>
+                    </div>
 
-                {/* Channel list */}
+                    {isLoadingSlackChannels ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="w-6 h-6 animate-spin text-violet-500" />
+                        <span className="ml-2 text-sm text-muted-foreground">Loading channels from Slack...</span>
+                      </div>
+                    ) : filteredSlackChannels.length === 0 ? (
+                      <div className="text-center py-6 text-muted-foreground">
+                        <Hash className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                        <p className="text-sm">
+                          {channelSearch ? 'No channels match your search' : 'No channels available'}
+                        </p>
+                        <p className="text-xs mt-1">Make sure the bot is added to channels in Slack</p>
+                      </div>
+                    ) : (
+                      <div className="max-h-60 overflow-y-auto space-y-1">
+                        {filteredSlackChannels.map((channel) => (
+                          <button
+                            key={channel.id}
+                            type="button"
+                            onClick={() => handleToggleChannel(channel.id, channel.name, channel.isAssigned)}
+                            disabled={addChannelMutation.isPending || removeChannelMutation.isPending}
+                            className={cn(
+                              "w-full flex items-center justify-between p-2 rounded-md text-left transition-colors",
+                              channel.isAssigned
+                                ? "bg-violet-100 dark:bg-violet-900/30 border border-violet-500/50"
+                                : "hover:bg-secondary border border-transparent"
+                            )}
+                          >
+                            <div className="flex items-center gap-2">
+                              {channel.isPrivate ? (
+                                <Lock className="w-4 h-4 text-amber-500" />
+                              ) : (
+                                <Hash className="w-4 h-4 text-muted-foreground" />
+                              )}
+                              <span className="text-sm font-medium">{channel.name}</span>
+                              {channel.numMembers && (
+                                <span className="text-xs text-muted-foreground">
+                                  ({channel.numMembers} members)
+                                </span>
+                              )}
+                            </div>
+                            {channel.isAssigned && (
+                              <Check className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Assigned channel list */}
                 {(botChannels?.channels ?? []).length > 0 ? (
                   <div className="space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground">Assigned Channels</p>
                     {botChannels?.channels.map((channel) => (
                       <div
                         key={channel.id}
@@ -723,7 +786,7 @@ export function BotFormModal({ isOpen, onClose, editBot }: BotFormModalProps) {
             </Button>
             <Button
               type="submit"
-              disabled={isPending || !name || !slug}
+              disabled={isPending || !name}
               className="bg-gradient-to-r from-violet-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white"
             >
               {isPending ? (

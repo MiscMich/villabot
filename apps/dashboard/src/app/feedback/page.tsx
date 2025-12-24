@@ -13,9 +13,12 @@ import {
   Eye,
   ChevronLeft,
   ChevronRight,
+  XCircle,
+  RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 
 interface FeedbackItem {
   id: string;
@@ -54,15 +57,35 @@ export default function FeedbackPage() {
   const [filter, setFilter] = useState<'all' | 'helpful' | 'unhelpful' | 'unreviewed'>('all');
   const limit = 10;
 
-  const { data: analyticsData, isLoading: analyticsLoading } = useQuery<FeedbackAnalytics>({
-    queryKey: ['feedback-analytics'],
+  // Wait for workspace context before making API calls
+  const { workspace, isLoading: isWorkspaceLoading } = useWorkspace();
+
+  const {
+    data: analyticsData,
+    isLoading: isAnalyticsLoading,
+    isError: analyticsError,
+    error: analyticsErrorData,
+    refetch: refetchAnalytics,
+  } = useQuery<FeedbackAnalytics>({
+    queryKey: ['feedback-analytics', workspace?.id],
     queryFn: () => api.getFeedbackAnalytics(),
+    enabled: !!workspace?.id,
   });
 
-  const { data: feedbackData, isLoading: feedbackLoading } = useQuery({
-    queryKey: ['feedback', page, filter],
+  const {
+    data: feedbackData,
+    isLoading: isFeedbackLoading,
+    isError: feedbackError,
+    refetch: refetchFeedback,
+  } = useQuery({
+    queryKey: ['feedback', page, filter, workspace?.id],
     queryFn: () => api.getFeedback({ limit, offset: (page - 1) * limit }),
+    enabled: !!workspace?.id,
   });
+
+  // Combined loading states
+  const analyticsLoading = isWorkspaceLoading || isAnalyticsLoading;
+  const feedbackLoading = isWorkspaceLoading || isFeedbackLoading;
 
   const reviewMutation = useMutation({
     mutationFn: ({ id, isReviewed }: { id: string; isReviewed: boolean }) =>
@@ -84,6 +107,45 @@ export default function FeedbackPage() {
   const totalFeedback = analyticsData?.overall?.total_feedback ?? 0;
   const helpfulCount = analyticsData?.overall?.helpful_count ?? 0;
   const unhelpfulCount = analyticsData?.overall?.unhelpful_count ?? 0;
+
+  if (analyticsError || feedbackError) {
+    return (
+      <div className="space-y-8">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <ThumbsUp className="w-8 h-8 text-amber-500" />
+            <h1 className="text-4xl font-display font-bold">Feedback</h1>
+          </div>
+          <p className="text-lg text-muted-foreground">
+            Track user satisfaction and improve response quality
+          </p>
+        </div>
+        <div className="premium-card p-8 text-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="p-4 rounded-full bg-red-500/10 border border-red-500/20">
+              <XCircle className="w-8 h-8 text-red-400" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-xl font-semibold">Failed to load feedback</h2>
+              <p className="text-muted-foreground max-w-md">
+                {analyticsErrorData instanceof Error ? analyticsErrorData.message : 'An error occurred while loading feedback. Please try again.'}
+              </p>
+            </div>
+            <Button
+              onClick={() => {
+                refetchAnalytics();
+                refetchFeedback();
+              }}
+              className="mt-4"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Try Again
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (analyticsLoading || feedbackLoading) {
     return (

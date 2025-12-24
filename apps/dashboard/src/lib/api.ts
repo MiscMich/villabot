@@ -191,7 +191,7 @@ export const api = {
     }),
 
   // Documents
-  getDocuments: () => fetchApi<{
+  getDocuments: (params?: { category?: string }) => fetchApi<{
     documents: Array<{
       id: string;
       title: string;
@@ -201,9 +201,13 @@ export const api = {
       last_modified: string;
       last_synced: string;
       is_active: boolean;
+      category: 'shared' | 'operations' | 'marketing' | 'sales' | 'hr' | 'technical' | 'custom' | null;
+      bot_id?: string | null;
+      drive_folder_id?: string | null;
+      tags?: string[] | null;
     }>;
     total: number;
-  }>('/api/documents'),
+  }>(`/api/documents${params?.category ? `?category=${params.category}` : ''}`),
 
   getDocument: (id: string) => fetchApi<{
     id: string;
@@ -217,6 +221,15 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ is_active: isActive }),
     }),
+
+  updateDocument: (id: string, data: { bot_id?: string | null; category?: string }) =>
+    fetchApi<{ document: { id: string; bot_id: string | null; category: string } }>(
+      `/api/documents/${id}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }
+    ),
 
   deleteDocument: (id: string) =>
     fetchApi(`/api/documents/${id}`, { method: 'DELETE' }),
@@ -410,6 +423,7 @@ export const api = {
       description: string | null;
       status: 'active' | 'inactive' | 'error';
       is_default: boolean;
+      bot_type: 'operations' | 'marketing' | 'sales' | 'hr' | 'technical' | 'general';
       system_prompt: string | null;
       created_at: string;
       updated_at: string;
@@ -425,6 +439,7 @@ export const api = {
       description: string | null;
       status: 'active' | 'inactive' | 'error';
       is_default: boolean;
+      bot_type: 'operations' | 'marketing' | 'sales' | 'hr' | 'technical' | 'general';
       system_prompt: string | null;
       slack_bot_token: string | null;
       slack_app_token: string | null;
@@ -436,19 +451,21 @@ export const api = {
   createBot: (data: {
     name: string;
     slug: string;
+    bot_type?: 'operations' | 'marketing' | 'sales' | 'hr' | 'technical' | 'general';
     description?: string;
     system_prompt?: string;
     categories?: string[];
     slack_bot_token?: string;
     slack_app_token?: string;
     slack_signing_secret?: string;
-  }) => fetchApi<{ bot: { id: string; name: string; slug: string } }>('/api/bots', {
+  }) => fetchApi<{ bot: { id: string; name: string; slug: string; bot_type?: string } }>('/api/bots', {
     method: 'POST',
     body: JSON.stringify(data),
   }),
 
   updateBot: (id: string, data: {
     name?: string;
+    bot_type?: 'operations' | 'marketing' | 'sales' | 'hr' | 'technical' | 'general';
     description?: string;
     system_prompt?: string;
     categories?: string[];
@@ -536,6 +553,18 @@ export const api = {
 
   removeBotChannel: (botId: string, channelId: string) =>
     fetchApi(`/api/bots/${botId}/channels/${channelId}`, { method: 'DELETE' }),
+
+  // Fetch available Slack channels for the bot
+  getSlackChannels: (botId: string) => fetchApi<{
+    channels: Array<{
+      id: string;
+      name: string;
+      isPrivate: boolean;
+      isMember: boolean;
+      numMembers?: number;
+      isAssigned: boolean;
+    }>;
+  }>(`/api/bots/${botId}/slack-channels`),
 
   // Bot Sync
   triggerBotSync: (botId: string) => fetchApi<{

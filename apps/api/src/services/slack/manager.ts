@@ -489,6 +489,7 @@ class BotManager {
       slug: row.slug,
       description: row.description ?? null,
       avatarUrl: row.avatar_url ?? null,
+      botType: row.bot_type ?? 'general',
       slackBotToken: row.slack_bot_token ?? null,
       slackAppToken: row.slack_app_token ?? null,
       slackSigningSecret: row.slack_signing_secret ?? null,

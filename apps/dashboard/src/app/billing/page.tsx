@@ -4,7 +4,6 @@ import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { api } from '@/lib/api';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -104,17 +103,32 @@ function BillingContent() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
+      <div className="space-y-8">
+        <div className="space-y-2">
+          <div className="h-10 w-48 bg-muted rounded-lg shimmer" />
+          <div className="h-5 w-64 bg-muted rounded-lg shimmer" />
+        </div>
+        <div className="h-48 bg-muted rounded-xl shimmer" />
+        <div className="grid gap-6 md:grid-cols-3">
+          <div className="h-64 bg-muted rounded-xl shimmer" />
+          <div className="h-64 bg-muted rounded-xl shimmer" />
+          <div className="h-64 bg-muted rounded-xl shimmer" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-100">Billing & Subscription</h1>
-        <p className="text-slate-400">Manage your subscription and billing details</p>
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="opacity-0 animate-fade-in">
+        <div className="flex items-center gap-3 mb-2">
+          <CreditCard className="w-8 h-8 text-amber-500" />
+          <h1 className="text-4xl font-display font-bold">Billing & Subscription</h1>
+        </div>
+        <p className="text-lg text-muted-foreground">
+          Manage your subscription and billing details
+        </p>
       </div>
 
       {showSuccess && (
@@ -125,14 +139,14 @@ function BillingContent() {
       )}
 
       {/* Current Plan */}
-      <Card className="bg-slate-800/50 border-slate-700">
-        <CardHeader>
+      <div className="premium-card opacity-0 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
+        <div className="p-6 border-b border-border/50">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-slate-100">Current Plan</CardTitle>
-              <CardDescription className="text-slate-400">
+              <h2 className="font-display text-xl font-semibold">Current Plan</h2>
+              <p className="text-sm text-muted-foreground mt-1">
                 {workspace?.name ?? 'Your workspace'}
-              </CardDescription>
+              </p>
             </div>
             <div className="flex items-center gap-2">
               <Badge
@@ -142,7 +156,7 @@ function BillingContent() {
                     ? 'border-purple-500 text-purple-400'
                     : tier === 'pro'
                     ? 'border-amber-500 text-amber-400'
-                    : 'border-slate-500 text-slate-400'
+                    : 'border-white/20 text-muted-foreground'
                 }`}
               >
                 {tierIcons[tier]}
@@ -155,24 +169,24 @@ function BillingContent() {
               )}
             </div>
           </div>
-        </CardHeader>
-        <CardContent>
+        </div>
+        <div className="p-6">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-1">
-              <p className="text-sm text-slate-400">Monthly price</p>
-              <p className="text-2xl font-bold text-slate-100">
+              <p className="text-sm text-muted-foreground">Monthly price</p>
+              <p className="text-2xl font-bold text-foreground">
                 ${TIER_CONFIGS[tier].price}
-                <span className="text-sm text-slate-400 font-normal">/month</span>
+                <span className="text-sm text-muted-foreground font-normal">/month</span>
               </p>
             </div>
             {billing?.subscription?.current_period_end && (
               <div className="space-y-1">
-                <p className="text-sm text-slate-400">
+                <p className="text-sm text-muted-foreground">
                   {billing.subscription.cancel_at_period_end
                     ? 'Access until'
                     : 'Next billing date'}
                 </p>
-                <p className="text-lg font-medium text-slate-100">
+                <p className="text-lg font-medium text-foreground">
                   {new Date(billing.subscription.current_period_end).toLocaleDateString('en-US', {
                     year: 'numeric',
                     month: 'long',
@@ -188,7 +202,7 @@ function BillingContent() {
               <Button
                 onClick={handleManageBilling}
                 variant="outline"
-                className="border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-slate-100"
+                className="border-white/10 text-muted-foreground hover:bg-white/5 hover:text-foreground"
               >
                 <CreditCard className="mr-2 h-4 w-4" />
                 Manage Billing
@@ -196,42 +210,43 @@ function BillingContent() {
               </Button>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Plan Comparison */}
       <div className="grid gap-6 md:grid-cols-3">
         {(Object.entries(TIER_CONFIGS) as [SubscriptionTier, typeof TIER_CONFIGS.starter][]).map(
-          ([tierKey, config]) => {
+          ([tierKey, config], index) => {
             const isCurrent = tier === tierKey;
             const isUpgrade = TIER_CONFIGS[tierKey].price > TIER_CONFIGS[tier].price;
 
             return (
-              <Card
+              <div
                 key={tierKey}
-                className={`bg-slate-800/50 border-slate-700 ${
-                  isCurrent ? 'ring-2 ring-amber-500/50' : ''
+                className={`premium-card opacity-0 animate-fade-in-up ${
+                  isCurrent ? 'ring-2 ring-violet-500/50' : ''
                 } ${tierKey === 'pro' ? 'relative overflow-hidden' : ''}`}
+                style={{ animationDelay: `${150 + index * 50}ms` }}
               >
                 {tierKey === 'pro' && (
-                  <div className="absolute top-0 right-0 bg-amber-500 text-slate-900 text-xs font-bold px-3 py-1 rounded-bl-lg">
+                  <div className="absolute top-0 right-0 bg-gradient-to-r from-violet-600 to-pink-600 text-white text-xs font-bold px-3 py-1 rounded-bl-lg">
                     POPULAR
                   </div>
                 )}
-                <CardHeader>
+                <div className="p-6 border-b border-border/50">
                   <div className="flex items-center gap-2">
                     {tierIcons[tierKey]}
-                    <CardTitle className="text-slate-100">{config.name}</CardTitle>
+                    <h3 className="font-display text-lg font-semibold">{config.name}</h3>
                   </div>
                   <div className="mt-2">
-                    <span className="text-3xl font-bold text-slate-100">${config.price}</span>
-                    <span className="text-slate-400">/month</span>
+                    <span className="text-3xl font-bold text-foreground">${config.price}</span>
+                    <span className="text-muted-foreground">/month</span>
                   </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
+                </div>
+                <div className="p-6 space-y-4">
                   <ul className="space-y-2">
-                    {config.features.map((feature, index) => (
-                      <li key={index} className="flex items-start gap-2 text-sm text-slate-300">
+                    {config.features.map((feature, featureIndex) => (
+                      <li key={featureIndex} className="flex items-start gap-2 text-sm text-foreground">
                         <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
                         {feature}
                       </li>
@@ -244,10 +259,10 @@ function BillingContent() {
                       disabled={isCurrent || isUpgrading}
                       className={`w-full ${
                         isCurrent
-                          ? 'bg-slate-700 text-slate-400 cursor-default'
+                          ? 'bg-white/10 text-muted-foreground cursor-default'
                           : tierKey === 'pro'
-                          ? 'bg-amber-500 hover:bg-amber-600 text-slate-900'
-                          : 'bg-slate-700 hover:bg-slate-600 text-slate-100'
+                          ? 'bg-gradient-to-r from-violet-600 to-pink-600 hover:from-violet-500 hover:to-pink-500 text-white font-medium shadow-glow-purple'
+                          : 'bg-white/10 hover:bg-white/20 text-foreground'
                       }`}
                     >
                       {isUpgrading && selectedTier === tierKey ? (
@@ -264,8 +279,8 @@ function BillingContent() {
                       )}
                     </Button>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             );
           }
         )}
@@ -273,24 +288,25 @@ function BillingContent() {
 
       {/* Payment Methods */}
       {billing?.payment_methods && billing.payment_methods.length > 0 && (
-        <Card className="bg-slate-800/50 border-slate-700">
-          <CardHeader>
-            <CardTitle className="text-slate-100">Payment Methods</CardTitle>
-            <CardDescription className="text-slate-400">
+        <div className="premium-card opacity-0 animate-fade-in-up" style={{ animationDelay: '300ms' }}>
+          <div className="p-6 border-b border-border/50">
+            <h2 className="font-display text-xl font-semibold">Payment Methods</h2>
+            <p className="text-sm text-muted-foreground mt-1">
               Manage your payment methods
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+            </p>
+          </div>
+          <div className="p-6">
             <div className="space-y-3">
-              {billing.payment_methods.map((method) => (
+              {billing.payment_methods.map((method, index) => (
                 <div
                   key={method.id}
-                  className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg"
+                  className="flex items-center justify-between p-3 bg-white/5 rounded-lg opacity-0 animate-fade-in"
+                  style={{ animationDelay: `${350 + index * 50}ms` }}
                 >
                   <div className="flex items-center gap-3">
-                    <CreditCard className="h-5 w-5 text-slate-400" />
+                    <CreditCard className="h-5 w-5 text-muted-foreground" />
                     <div>
-                      <p className="text-sm font-medium text-slate-100 capitalize">
+                      <p className="text-sm font-medium text-foreground capitalize">
                         {method.brand} ending in {method.last_four}
                       </p>
                     </div>
@@ -303,36 +319,37 @@ function BillingContent() {
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* Invoice History */}
       {billing?.invoices && billing.invoices.length > 0 && (
-        <Card className="bg-slate-800/50 border-slate-700">
-          <CardHeader>
-            <CardTitle className="text-slate-100">Invoice History</CardTitle>
-            <CardDescription className="text-slate-400">
+        <div className="premium-card opacity-0 animate-fade-in-up" style={{ animationDelay: '350ms' }}>
+          <div className="p-6 border-b border-border/50">
+            <h2 className="font-display text-xl font-semibold">Invoice History</h2>
+            <p className="text-sm text-muted-foreground mt-1">
               View and download your invoices
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+            </p>
+          </div>
+          <div className="p-6">
             <div className="space-y-3">
-              {billing.invoices.slice(0, 5).map((invoice) => (
+              {billing.invoices.slice(0, 5).map((invoice, index) => (
                 <div
                   key={invoice.id}
-                  className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg"
+                  className="flex items-center justify-between p-3 bg-white/5 rounded-lg opacity-0 animate-fade-in"
+                  style={{ animationDelay: `${400 + index * 50}ms` }}
                 >
                   <div className="flex items-center gap-3">
                     <div>
-                      <p className="text-sm font-medium text-slate-100">
+                      <p className="text-sm font-medium text-foreground">
                         {new Date(invoice.created_at).toLocaleDateString('en-US', {
                           year: 'numeric',
                           month: 'long',
                           day: 'numeric',
                         })}
                       </p>
-                      <p className="text-xs text-slate-400">
+                      <p className="text-xs text-muted-foreground">
                         ${(invoice.amount_due / 100).toFixed(2)}
                       </p>
                     </div>
@@ -353,7 +370,7 @@ function BillingContent() {
                         href={invoice.hosted_invoice_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-amber-500 hover:text-amber-400"
+                        className="text-violet-400 hover:text-violet-300 transition-colors"
                       >
                         <ExternalLink className="h-4 w-4" />
                       </a>
@@ -362,8 +379,8 @@ function BillingContent() {
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -371,8 +388,17 @@ function BillingContent() {
 
 function BillingLoading() {
   return (
-    <div className="flex items-center justify-center min-h-[400px]">
-      <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
+    <div className="space-y-8">
+      <div className="space-y-2">
+        <div className="h-10 w-48 bg-muted rounded-lg shimmer" />
+        <div className="h-5 w-64 bg-muted rounded-lg shimmer" />
+      </div>
+      <div className="h-48 bg-muted rounded-xl shimmer" />
+      <div className="grid gap-6 md:grid-cols-3">
+        <div className="h-64 bg-muted rounded-xl shimmer" />
+        <div className="h-64 bg-muted rounded-xl shimmer" />
+        <div className="h-64 bg-muted rounded-xl shimmer" />
+      </div>
     </div>
   );
 }

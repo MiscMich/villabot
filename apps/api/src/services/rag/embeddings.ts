@@ -1,26 +1,31 @@
 /**
  * Embedding generation service
- * Uses Google Gemini text-embedding-004 model
+ * Uses OpenAI text-embedding-3-small model
  */
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import OpenAI from 'openai';
 import { env } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
 import { EMBEDDING_CONFIG } from '@cluebase/shared';
 import { embeddingCache, generateCacheKey } from '../../utils/cache.js';
 import { withTimeout, withRetry } from '../../utils/timeout.js';
 
-// Initialize Gemini client
-const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
-const embeddingModel = genAI.getGenerativeModel({ model: EMBEDDING_CONFIG.model });
+// Initialize OpenAI client
+const openai = new OpenAI({
+  apiKey: env.OPENAI_API_KEY,
+});
 
 /**
- * Generate embedding for a single text
+ * Generate embedding for a single text using OpenAI
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
   try {
-    const result = await embeddingModel.embedContent(text);
-    return result.embedding.values;
+    const response = await openai.embeddings.create({
+      model: EMBEDDING_CONFIG.model,
+      input: text,
+      dimensions: EMBEDDING_CONFIG.dimensions,
+    });
+    return response.data[0]?.embedding ?? [];
   } catch (error) {
     logger.error('Failed to generate embedding', { error, textLength: text.length });
     throw error;
@@ -38,20 +43,23 @@ export async function generateEmbeddings(texts: string[]): Promise<number[][]> {
 
   logger.debug(`Generating embeddings for ${texts.length} texts`);
 
-  // Process in batches
+  // Process in batches (OpenAI supports multiple inputs in one request)
   for (let i = 0; i < texts.length; i += batchSize) {
     const batch = texts.slice(i, i + batchSize);
 
     try {
-      // Process batch concurrently
-      const batchResults = await Promise.all(
-        batch.map(async (text) => {
-          const result = await embeddingModel.embedContent(text);
-          return result.embedding.values;
-        })
-      );
+      const response = await openai.embeddings.create({
+        model: EMBEDDING_CONFIG.model,
+        input: batch,
+        dimensions: EMBEDDING_CONFIG.dimensions,
+      });
 
-      embeddings.push(...batchResults);
+      // Extract embeddings in order
+      const batchEmbeddings = response.data
+        .sort((a, b) => a.index - b.index)
+        .map(item => item.embedding);
+
+      embeddings.push(...batchEmbeddings);
 
       // Small delay between batches to avoid rate limiting
       if (i + batchSize < texts.length) {
@@ -67,8 +75,12 @@ export async function generateEmbeddings(texts: string[]): Promise<number[][]> {
       // Retry individual items on batch failure
       for (const text of batch) {
         try {
-          const result = await embeddingModel.embedContent(text);
-          embeddings.push(result.embedding.values);
+          const response = await openai.embeddings.create({
+            model: EMBEDDING_CONFIG.model,
+            input: text,
+            dimensions: EMBEDDING_CONFIG.dimensions,
+          });
+          embeddings.push(response.data[0]?.embedding ?? []);
         } catch (retryError) {
           logger.error('Failed to generate embedding after retry', { retryError });
           // Push zero vector as fallback
@@ -87,7 +99,6 @@ const EMBEDDING_TIMEOUT_MS = 10000;
 
 /**
  * Generate embedding for a search query
- * Uses task_type 'RETRIEVAL_QUERY' for better search performance
  * Includes caching, timeout, and retry logic
  */
 export async function generateQueryEmbedding(query: string): Promise<number[]> {
@@ -106,12 +117,12 @@ export async function generateQueryEmbedding(query: string): Promise<number[]> {
       async () => {
         return withTimeout(
           (async () => {
-            const result = await embeddingModel.embedContent({
-              content: { role: 'user', parts: [{ text: query }] },
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              taskType: 'RETRIEVAL_QUERY' as any,
+            const response = await openai.embeddings.create({
+              model: EMBEDDING_CONFIG.model,
+              input: query,
+              dimensions: EMBEDDING_CONFIG.dimensions,
             });
-            return result.embedding.values;
+            return response.data[0]?.embedding ?? [];
           })(),
           EMBEDDING_TIMEOUT_MS,
           'generateQueryEmbedding'

@@ -2,14 +2,22 @@
  * Billing Page E2E Tests
  *
  * Tests subscription management and Stripe integration.
+ *
+ * Uses fixtures for clean workspace state.
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 test.describe('Billing Page', () => {
+  // Reset workspace - subscription data is preserved
+  test.beforeAll(async ({ resetWorkspace }) => {
+    await resetWorkspace();
+  });
+
   test.beforeEach(async ({ page }) => {
     await page.goto('/billing');
-    await page.waitForLoadState('networkidle');
+    // Wait for React to render content, not just network idle
+    await expect(page.getByRole('heading', { name: /billing|subscription/i })).toBeVisible({ timeout: 15000 });
   });
 
   test.describe('Page Layout', () => {
@@ -18,23 +26,25 @@ test.describe('Billing Page', () => {
     });
 
     test('should display current plan info', async ({ page }) => {
-      const hasPlanInfo = await Promise.race([
-        page.getByText(/current plan|your plan|free|pro|enterprise/i).isVisible(),
-        page.locator('[data-testid="current-plan"]').isVisible(),
-      ]).catch(() => false);
+      // Check for plan info text sequentially (Promise.race doesn't work as expected)
+      const hasCurrentPlan = await page.getByText(/current plan/i).first().isVisible().catch(() => false);
+      const hasPlanName = await page.getByText(/starter|pro|business|free|enterprise/i).first().isVisible().catch(() => false);
+      const hasDataTestId = await page.locator('[data-testid="current-plan"]').isVisible().catch(() => false);
 
-      expect(hasPlanInfo).toBe(true);
+      expect(hasCurrentPlan || hasPlanName || hasDataTestId).toBe(true);
     });
   });
 
   test.describe('Plan Display', () => {
     test('should show plan options', async ({ page }) => {
-      const hasPlanOptions = await Promise.race([
-        page.getByText(/upgrade|plans|pricing/i).isVisible(),
-        page.locator('[data-testid="plan-options"]').isVisible(),
-      ]).catch(() => false);
+      // Check for plan cards sequentially (Promise.race doesn't work as expected)
+      // Page shows Starter, Pro, Business plan cards
+      const hasStarter = await page.getByRole('heading', { name: /starter/i }).isVisible().catch(() => false);
+      const hasPro = await page.getByRole('heading', { name: /pro/i }).isVisible().catch(() => false);
+      const hasBusiness = await page.getByRole('heading', { name: /business/i }).isVisible().catch(() => false);
+      const hasDataTestId = await page.locator('[data-testid="plan-options"]').isVisible().catch(() => false);
 
-      expect(hasPlanOptions).toBe(true);
+      expect(hasStarter || hasPro || hasBusiness || hasDataTestId).toBe(true);
     });
 
     test('should display plan features', async ({ page }) => {
@@ -78,7 +88,8 @@ test.describe('Billing Page', () => {
 
   test.describe('Accessibility', () => {
     test('should have proper heading hierarchy', async ({ page }) => {
-      await expect(page.locator('h1')).toBeVisible();
+      // Page has two h1s - sidebar logo and page title - use first()
+      await expect(page.locator('h1').first()).toBeVisible();
     });
   });
 });

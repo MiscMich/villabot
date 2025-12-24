@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useSetupStatus } from '@/hooks/useSetupStatus';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { Bot, Loader2 } from 'lucide-react';
 
 interface SetupGuardProps {
@@ -39,8 +40,8 @@ function isE2ETestMode(): boolean {
 }
 
 // Maximum time to wait for setup status before showing children anyway
-// Keep short for better UX - 3 seconds for E2E testing
-const MAX_LOADING_TIME_MS = 3000; // 3 seconds
+// Keep short for better UX - 5 seconds to allow workspace to load
+const MAX_LOADING_TIME_MS = 5000; // 5 seconds
 
 /**
  * Check if a pathname is a public route that should skip setup guard
@@ -55,12 +56,26 @@ function isPublicRoute(pathname: string | null): boolean {
 /**
  * Client-side guard that redirects to setup wizard if setup is not complete
  * Acts as a fallback for middleware (e.g., when API was unavailable during SSR)
+ *
+ * IMPORTANT: Waits for WorkspaceContext to load before checking setup status
+ * to avoid race conditions where setup status is checked before workspace ID is available.
  */
 export function SetupGuard({ children }: SetupGuardProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const { data: status, isLoading, error } = useSetupStatus();
+
+  // Get workspace from context - wait for it to load before checking setup
+  const { workspace, isLoading: isWorkspaceLoading } = useWorkspace();
+
+  // Pass workspace ID to setup status hook, or null if workspace is still loading
+  // This prevents the race condition where setup is checked before workspace loads
+  const workspaceIdForQuery = isWorkspaceLoading ? null : (workspace?.id ?? undefined);
+  const { data: status, isLoading: isStatusLoading } = useSetupStatus(workspaceIdForQuery);
+
   const [loadingTimedOut, setLoadingTimedOut] = useState(false);
+
+  // Combined loading state - wait for both workspace AND setup status
+  const isLoading = isWorkspaceLoading || isStatusLoading;
 
   // Timeout for loading state - show children if loading takes too long
   // Start timeout immediately on mount, not dependent on isLoading changes
@@ -90,11 +105,17 @@ export function SetupGuard({ children }: SetupGuardProps) {
       return;
     }
 
+    // Don't redirect while still loading workspace or status
+    if (isWorkspaceLoading || isStatusLoading) {
+      return;
+    }
+
     // If setup is not complete, redirect to setup wizard
     if (status && !status.completed) {
+      console.log('Setup not complete, redirecting to /setup');
       router.push('/setup');
     }
-  }, [status, pathname, router]);
+  }, [status, pathname, router, isWorkspaceLoading, isStatusLoading]);
 
   // For public routes, skip loading state and show children immediately
   if (isPublicRoute(pathname)) {
@@ -127,12 +148,6 @@ export function SetupGuard({ children }: SetupGuardProps) {
         </div>
       </div>
     );
-  }
-
-  // If there's an error checking status, show the children anyway
-  // (better UX than blocking, and API might just be slow)
-  if (error) {
-    console.warn('Setup status check failed:', error);
   }
 
   // If setup not complete and not on setup page, middleware should have redirected

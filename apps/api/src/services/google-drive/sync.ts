@@ -33,6 +33,7 @@ interface SyncOptions {
 
 interface BotFolder {
   id: string;
+  bot_id: string;  // Bot this folder is assigned to
   drive_folder_id: string;
   folder_name: string;
   is_active: boolean;
@@ -86,18 +87,31 @@ export async function fullSync(options: SyncOptions): Promise<SyncResult> {
     let foldersToSync: BotFolder[] = [];
 
     if (folderId) {
-      // Sync specific folder only
-      foldersToSync = [{
-        id: 'single',
-        drive_folder_id: folderId,
-        folder_name: 'Specified Folder',
-        is_active: true,
-      }];
+      // Sync specific folder only - look up the bot assignment if it exists
+      const { data: folderData } = await supabase
+        .from('bot_drive_folders')
+        .select('id, bot_id, drive_folder_id, folder_name, is_active')
+        .eq('drive_folder_id', folderId)
+        .eq('workspace_id', workspaceId)
+        .single();
+
+      if (folderData) {
+        foldersToSync = [folderData];
+      } else {
+        // Folder not in bot_drive_folders - use without bot assignment
+        foldersToSync = [{
+          id: 'single',
+          bot_id: botId || '',  // Use provided botId or empty
+          drive_folder_id: folderId,
+          folder_name: 'Specified Folder',
+          is_active: true,
+        }];
+      }
     } else if (botId) {
       // Get folders assigned to this bot from bot_drive_folders table
       const { data: botFolders, error: folderError } = await supabase
         .from('bot_drive_folders')
-        .select('id, drive_folder_id, folder_name, is_active')
+        .select('id, bot_id, drive_folder_id, folder_name, is_active')
         .eq('bot_id', botId)
         .eq('is_active', true);
 
@@ -117,7 +131,7 @@ export async function fullSync(options: SyncOptions): Promise<SyncResult> {
       // Workspace-wide sync: get all folders from all bots in workspace
       const { data: workspaceFolders, error: wsError } = await supabase
         .from('bot_drive_folders')
-        .select('id, drive_folder_id, folder_name, is_active, bots!inner(workspace_id)')
+        .select('id, bot_id, drive_folder_id, folder_name, is_active, bots!inner(workspace_id)')
         .eq('bots.workspace_id', workspaceId)
         .eq('is_active', true);
 
@@ -133,7 +147,7 @@ export async function fullSync(options: SyncOptions): Promise<SyncResult> {
     // Get all existing documents from DB for this scope
     let existingQuery = supabase
       .from('documents')
-      .select('id, drive_file_id, content_hash, drive_folder_id')
+      .select('id, drive_file_id, content_hash, drive_folder_id, bot_id')
       .eq('workspace_id', workspaceId)
       .eq('source_type', 'google_drive');
 
@@ -168,8 +182,21 @@ export async function fullSync(options: SyncOptions): Promise<SyncResult> {
 
             if (existing) {
               // Check if content changed
+              const effectiveBotId = botId || folder.bot_id;
               if (existing.content_hash === contentHash) {
-                logger.debug(`Skipping unchanged file: ${file.name}`);
+                // Content unchanged - but check if bot_id needs updating
+                // This handles documents that were synced before bot assignment was fixed
+                const existingDoc = existingMap.get(file.id);
+                if (effectiveBotId && existingDoc && !existingDoc.bot_id) {
+                  await supabase
+                    .from('documents')
+                    .update({ bot_id: effectiveBotId })
+                    .eq('id', existing.id);
+                  logger.info(`Updated bot_id for unchanged file: ${file.name}`, { botId: effectiveBotId });
+                  result.updated++;
+                } else {
+                  logger.debug(`Skipping unchanged file: ${file.name}`);
+                }
                 continue;
               }
 
@@ -178,7 +205,9 @@ export async function fullSync(options: SyncOptions): Promise<SyncResult> {
               result.updated++;
             } else {
               // Add new document with workspace, bot, and folder context
-              await addDocument(file, parsed.content, contentHash, workspaceId, botId, folder.drive_folder_id);
+              // Use folder.bot_id to properly associate document with the bot that owns this folder
+              const effectiveBotId = botId || folder.bot_id;
+              await addDocument(file, parsed.content, contentHash, workspaceId, effectiveBotId, folder.drive_folder_id);
               result.added++;
             }
           } catch (error) {
@@ -186,6 +215,13 @@ export async function fullSync(options: SyncOptions): Promise<SyncResult> {
             logger.error(message);
             result.errors.push(message);
           }
+        }
+        // Update last_synced timestamp on the folder
+        if (folder.id !== 'single') {
+          await supabase
+            .from('bot_drive_folders')
+            .update({ last_synced: new Date().toISOString() })
+            .eq('id', folder.id);
         }
       } catch (error) {
         const message = `Failed to sync folder ${folder.folder_name}: ${error instanceof Error ? error.message : 'Unknown error'}`;

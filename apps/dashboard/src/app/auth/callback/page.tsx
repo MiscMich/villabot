@@ -3,8 +3,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getSupabase } from '@/lib/supabase';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Loader2, AlertCircle, CheckCircle2, Brain } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 
@@ -66,81 +65,85 @@ function AuthCallbackContent() {
   }, [router, searchParams]);
 
   return (
-    <Card className="w-full max-w-md bg-slate-800/50 border-slate-700 backdrop-blur-sm">
-      <CardHeader className="space-y-1 text-center">
+    <div className="w-full max-w-md glass-card p-8">
+      <div className="space-y-1 text-center mb-6">
         <div className="flex items-center justify-center gap-2 mb-4">
           {status === 'loading' && (
-            <div className="p-2 bg-amber-500/10 rounded-lg">
-              <Loader2 className="h-8 w-8 text-amber-500 animate-spin" />
+            <div className="p-3 rounded-xl bg-gradient-to-br from-violet-600 to-pink-600 shadow-glow-purple">
+              <Loader2 className="h-8 w-8 text-white animate-spin" />
             </div>
           )}
           {status === 'success' && (
-            <div className="p-2 bg-green-500/10 rounded-lg">
-              <CheckCircle2 className="h-8 w-8 text-green-500" />
+            <div className="p-3 rounded-xl bg-gradient-to-br from-green-500/20 to-emerald-500/20 shadow-lg">
+              <CheckCircle2 className="h-8 w-8 text-green-400" />
             </div>
           )}
           {status === 'error' && (
-            <div className="p-2 bg-red-500/10 rounded-lg">
-              <AlertCircle className="h-8 w-8 text-red-500" />
+            <div className="p-3 rounded-xl bg-gradient-to-br from-red-500/20 to-rose-500/20 shadow-lg">
+              <AlertCircle className="h-8 w-8 text-red-400" />
             </div>
           )}
         </div>
-        <CardTitle className="text-2xl font-bold text-slate-100">
+        <h1 className="text-2xl font-bold text-white">
           {status === 'loading' && 'Signing you in...'}
           {status === 'success' && 'Welcome back!'}
           {status === 'error' && 'Authentication failed'}
-        </CardTitle>
-        <CardDescription className="text-slate-400">
+        </h1>
+        <p className="text-white/60">
           {status === 'loading' && 'Please wait while we verify your account.'}
           {status === 'success' && 'Redirecting you to the dashboard...'}
           {status === 'error' && (error || 'Something went wrong. Please try again.')}
-        </CardDescription>
-      </CardHeader>
+        </p>
+      </div>
 
       {status === 'error' && (
-        <CardContent className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3">
           <Link href="/auth/signin">
-            <Button className="w-full bg-amber-500 hover:bg-amber-600 text-slate-900 font-medium">
+            <Button className="w-full bg-gradient-to-r from-violet-600 to-pink-600 hover:from-violet-500 hover:to-pink-500 text-white font-medium shadow-glow-purple">
               Try signing in again
             </Button>
           </Link>
           <Link href="/auth/signup">
             <Button
               variant="outline"
-              className="w-full border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-slate-100"
+              className="w-full border-white/10 text-white/80 hover:bg-white/5 hover:text-white"
             >
               Create a new account
             </Button>
           </Link>
-        </CardContent>
+        </div>
       )}
-    </Card>
+    </div>
   );
 }
 
 function AuthCallbackLoading() {
   return (
-    <Card className="w-full max-w-md bg-slate-800/50 border-slate-700 backdrop-blur-sm">
-      <CardHeader className="space-y-1 text-center">
+    <div className="w-full max-w-md glass-card p-8">
+      <div className="space-y-1 text-center">
         <div className="flex items-center justify-center gap-2 mb-4">
-          <div className="p-2 bg-amber-500/10 rounded-lg">
-            <Loader2 className="h-8 w-8 text-amber-500 animate-spin" />
+          <div className="p-3 rounded-xl bg-gradient-to-br from-violet-600 to-pink-600 shadow-glow-purple">
+            <Loader2 className="h-8 w-8 text-white animate-spin" />
           </div>
         </div>
-        <CardTitle className="text-2xl font-bold text-slate-100">
+        <h1 className="text-2xl font-bold text-white">
           Signing you in...
-        </CardTitle>
-        <CardDescription className="text-slate-400">
+        </h1>
+        <p className="text-white/60">
           Please wait while we verify your account.
-        </CardDescription>
-      </CardHeader>
-    </Card>
+        </p>
+      </div>
+    </div>
   );
 }
 
 export default function AuthCallbackPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
+    <div className="min-h-screen flex items-center justify-center p-4 relative">
+      {/* Background */}
+      <div className="mesh-gradient" />
+      <div className="grid-pattern fixed inset-0" />
+
       <Suspense fallback={<AuthCallbackLoading />}>
         <AuthCallbackContent />
       </Suspense>

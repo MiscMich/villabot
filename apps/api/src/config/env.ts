@@ -32,8 +32,9 @@ const envSchema = z.object({
   GOOGLE_REDIRECT_URI: z.string().url().default('http://localhost:3000/auth/google/callback'),
   GOOGLE_DRIVE_FOLDER_ID: optionalString,
 
-  // Gemini
-  GEMINI_API_KEY: z.string().min(1),
+  // AI - OpenAI (primary) and Gemini (legacy/optional)
+  OPENAI_API_KEY: z.string().startsWith('sk-').min(1),
+  GEMINI_API_KEY: optionalString, // Legacy - kept for backwards compatibility
 
   // Slack (optional - bot won't start without these)
   SLACK_BOT_TOKEN: optionalStartsWith('xoxb-'),
@@ -54,7 +55,7 @@ const envSchema = z.object({
   // Optional
   COMPANY_WEBSITE_URL: optionalUrl,
   DRIVE_POLL_INTERVAL_MS: z.string().transform(Number).default('300000'),
-  SCRAPE_SCHEDULE: z.string().default('0 3 * * 0'), // Cron: every Sunday at 3 AM
+  SCRAPE_SCHEDULE: z.string().default('0 3 * * *'), // Cron: daily at 3 AM (sitemap-based detection makes this efficient)
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 });
 

@@ -41,6 +41,62 @@ import { cn } from '@/lib/utils';
 // TYPES
 // ============================================
 
+// Bot type configuration matching shared/constants.ts
+type BotType = 'operations' | 'marketing' | 'sales' | 'hr' | 'technical' | 'general';
+
+interface BotTypeInfo {
+  value: BotType;
+  label: string;
+  description: string;
+  categories: string[];
+  color: string;
+}
+
+const BOT_TYPE_INFO: BotTypeInfo[] = [
+  {
+    value: 'operations',
+    label: 'Operations',
+    description: 'SOPs, procedures, and workflow inquiries',
+    categories: ['shared', 'operations'],
+    color: 'blue',
+  },
+  {
+    value: 'marketing',
+    label: 'Marketing',
+    description: 'Brand guidelines and campaign info',
+    categories: ['shared', 'marketing'],
+    color: 'pink',
+  },
+  {
+    value: 'sales',
+    label: 'Sales',
+    description: 'Product info, pricing, and sales materials',
+    categories: ['shared', 'sales'],
+    color: 'green',
+  },
+  {
+    value: 'hr',
+    label: 'HR & People',
+    description: 'Policies, benefits, and employee resources',
+    categories: ['shared', 'hr'],
+    color: 'purple',
+  },
+  {
+    value: 'technical',
+    label: 'Technical',
+    description: 'Documentation, APIs, and dev guidelines',
+    categories: ['shared', 'technical'],
+    color: 'orange',
+  },
+  {
+    value: 'general',
+    label: 'General',
+    description: 'Cross-functional company knowledge',
+    categories: ['shared', 'operations', 'marketing', 'sales', 'technical'],
+    color: 'violet',
+  },
+];
+
 interface SetupConfig {
   workspace: {
     name: string;
@@ -66,6 +122,7 @@ interface SetupConfig {
   bot: {
     name: string;
     slug: string;
+    botType: BotType;
     personality: string;
     instructions: string;
   };
@@ -877,6 +934,17 @@ function FirstBotStep({
     return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   };
 
+  const selectedBotType = BOT_TYPE_INFO.find(t => t.value === config.botType) ?? BOT_TYPE_INFO[5];
+
+  const COLOR_CLASSES: Record<string, { bg: string; border: string; text: string }> = {
+    blue: { bg: 'bg-blue-500/10', border: 'border-blue-500/50', text: 'text-blue-600 dark:text-blue-400' },
+    pink: { bg: 'bg-pink-500/10', border: 'border-pink-500/50', text: 'text-pink-600 dark:text-pink-400' },
+    green: { bg: 'bg-green-500/10', border: 'border-green-500/50', text: 'text-green-600 dark:text-green-400' },
+    purple: { bg: 'bg-purple-500/10', border: 'border-purple-500/50', text: 'text-purple-600 dark:text-purple-400' },
+    orange: { bg: 'bg-orange-500/10', border: 'border-orange-500/50', text: 'text-orange-600 dark:text-orange-400' },
+    violet: { bg: 'bg-violet-500/10', border: 'border-violet-500/50', text: 'text-violet-600 dark:text-violet-400' },
+  };
+
   return (
     <div className="space-y-6">
       <div className="grid md:grid-cols-2 gap-4">
@@ -909,6 +977,65 @@ function FirstBotStep({
         </div>
       </div>
 
+      {/* Bot Type Selection */}
+      <div className="space-y-3">
+        <label className="block text-sm font-medium text-foreground">
+          Bot Type
+        </label>
+        <p className="text-xs text-muted-foreground mb-3">
+          Select the department this bot serves. Each type automatically accesses shared company knowledge plus documents relevant to its specialty.
+        </p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+          {BOT_TYPE_INFO.map((type) => {
+            const isSelected = config.botType === type.value;
+            const colors = COLOR_CLASSES[type.color];
+            return (
+              <button
+                key={type.value}
+                type="button"
+                onClick={() => onUpdate({ botType: type.value })}
+                className={cn(
+                  'flex flex-col items-center gap-2 p-3 rounded-xl border text-center transition-all',
+                  isSelected
+                    ? `${colors.border} ${colors.bg} ring-1 ring-offset-0`
+                    : 'border-border/50 bg-secondary/30 hover:bg-secondary/50 hover:border-border'
+                )}
+              >
+                <span className={cn('text-sm font-medium', isSelected && colors.text)}>
+                  {type.label}
+                </span>
+                {isSelected && <Check className="w-4 h-4 text-current" />}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Knowledge Access Info */}
+      <div className="p-4 bg-violet-500/10 border border-violet-500/20 rounded-xl">
+        <div className="flex items-start gap-3">
+          <Info className="w-5 h-5 text-purple-600 dark:text-violet-400 flex-shrink-0 mt-0.5" />
+          <div className="space-y-2 text-sm">
+            <p className="font-medium text-purple-700 dark:text-purple-300">
+              {selectedBotType.label} Bot Knowledge Access
+            </p>
+            <p className="text-purple-600/80 dark:text-violet-400/80">
+              This bot will automatically search documents in these categories:
+            </p>
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {selectedBotType.categories.map(cat => (
+                <span
+                  key={cat}
+                  className="px-2 py-0.5 rounded-full text-xs bg-white/50 dark:bg-black/20 text-purple-700 dark:text-purple-300 capitalize"
+                >
+                  {cat === 'shared' ? 'Company-Wide' : cat}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="space-y-2">
         <label className="block text-sm font-medium text-foreground">
           Personality
@@ -933,12 +1060,25 @@ function FirstBotStep({
           value={config.instructions}
           onChange={(e) => onUpdate({ instructions: e.target.value })}
           placeholder="You are a helpful AI assistant for this organization. Help team members find information about company procedures, policies, and operations. Always be friendly and cite your sources."
-          rows={5}
+          rows={4}
           className="w-full px-4 py-3 rounded-xl border border-border/50 bg-secondary/50 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 transition-all resize-none"
         />
         <p className="text-xs text-muted-foreground">
           Custom instructions that define how the bot should behave and respond
         </p>
+      </div>
+
+      {/* Channel Assignment Info */}
+      <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+        <div className="flex items-start gap-3">
+          <MessageSquare className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+          <div className="space-y-1 text-sm">
+            <p className="font-medium text-amber-700 dark:text-amber-300">Channel Assignment (After Setup)</p>
+            <p className="text-amber-600/80 dark:text-amber-400/80">
+              After completing setup, you can assign specific Slack channels to this bot from the Bots dashboard. By default, the bot responds in all channels where it&apos;s mentioned.
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -969,6 +1109,9 @@ function CompleteStep({
   // All required checks must pass, plus at least one knowledge source
   const requiredPassed = checks.filter(c => !c.optional).every(c => c.passed);
   const allPassed = requiredPassed && hasKnowledgeSource;
+
+  // Get bot type info for display
+  const selectedBotType = BOT_TYPE_INFO.find(t => t.value === config.bot.botType) ?? BOT_TYPE_INFO[5];
 
   return (
     <div className="space-y-8">
@@ -1012,17 +1155,43 @@ function CompleteStep({
         ))}
       </div>
 
-      {/* Bot Preview */}
-      <div className="p-6 rounded-2xl bg-secondary/30 border border-border/50">
-        <h3 className="font-semibold mb-4">Your Bot</h3>
+      {/* Bot Preview - Enhanced */}
+      <div className="p-6 rounded-2xl bg-secondary/30 border border-border/50 space-y-4">
+        <h3 className="font-semibold">Your Bot</h3>
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-400 to-purple-600 flex items-center justify-center shadow-glow">
             <Bot className="w-7 h-7 text-white" />
           </div>
           <div>
             <p className="text-lg font-semibold">{config.bot.name || 'Cluebase'}</p>
-            <p className="text-sm text-muted-foreground">{config.bot.personality || 'Friendly and professional'}</p>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-xs px-2 py-0.5 rounded-full bg-violet-500/10 text-purple-600 dark:text-violet-400 font-medium">
+                {selectedBotType.label}
+              </span>
+              <span className="text-sm text-muted-foreground">{config.bot.personality || 'Friendly and professional'}</span>
+            </div>
           </div>
+        </div>
+
+        {/* Knowledge Access */}
+        <div className="pt-3 border-t border-border/50">
+          <p className="text-xs text-muted-foreground mb-2">Knowledge Access</p>
+          <div className="flex flex-wrap gap-1.5">
+            {selectedBotType.categories.map(cat => (
+              <span
+                key={cat}
+                className="px-2 py-0.5 rounded-full text-xs bg-violet-500/10 text-purple-600 dark:text-violet-400 capitalize"
+              >
+                {cat === 'shared' ? 'Company-Wide' : cat}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* Channel Status */}
+        <div className="pt-3 border-t border-border/50">
+          <p className="text-xs text-muted-foreground mb-1">Slack Channels</p>
+          <p className="text-sm text-foreground">Responds in all channels (configurable after setup)</p>
         </div>
       </div>
 
@@ -1098,7 +1267,7 @@ function SetupWizardContent() {
     slack: { botToken: '', appToken: '', signingSecret: '', connected: false, tested: false },
     googleDrive: { authenticated: false, selectedFolders: [] },
     knowledgeSources: { driveEnabled: true, websiteEnabled: false, websiteUrl: '', maxPages: 200 },
-    bot: { name: 'Cluebase', slug: 'cluebase', personality: 'Friendly and professional', instructions: '' },
+    bot: { name: 'Cluebase', slug: 'cluebase', botType: 'general' as BotType, personality: 'Friendly and professional', instructions: '' },
   });
 
   // Handle OAuth callback - restore state after Google redirect

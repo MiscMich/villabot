@@ -13,7 +13,7 @@ interface HealthStatus {
   uptime: number;
   services: {
     supabase: 'connected' | 'disconnected';
-    gemini: 'connected' | 'disconnected';
+    openai: 'connected' | 'disconnected';
   };
   // Per-workspace integrations - informational only, don't affect platform health
   integrations: {
@@ -27,7 +27,7 @@ interface HealthStatus {
 // Slack and Google Drive are per-workspace OAuth integrations, not platform services
 const serviceStatus = {
   supabase: false,
-  gemini: false,
+  openai: false,
 };
 
 // Track workspace integration counts (informational)
@@ -59,7 +59,7 @@ healthRouter.get('/', async (_req: Request, res: Response) => {
     uptime: process.uptime(),
     services: {
       supabase: serviceStatus.supabase ? 'connected' : 'disconnected',
-      gemini: serviceStatus.gemini ? 'connected' : 'disconnected',
+      openai: serviceStatus.openai ? 'connected' : 'disconnected',
     },
     // Per-workspace integrations (informational - doesn't affect platform status)
     integrations: {
@@ -130,23 +130,23 @@ healthRouter.get('/deep', async (_req: Request, res: Response) => {
     checks.database = { status: 'fail', error: (error as Error).message };
   }
 
-  // 2. Gemini API check (embedding generation)
-  if (env.GEMINI_API_KEY) {
+  // 2. OpenAI API check (embedding generation)
+  if (env.OPENAI_API_KEY) {
     try {
-      const geminiStart = Date.now();
+      const openaiStart = Date.now();
       const embedding = await generateQueryEmbedding('health check test');
-      checks.gemini = {
+      checks.openai = {
         status: embedding.length > 0 ? 'pass' : 'fail',
-        latency: Date.now() - geminiStart,
+        latency: Date.now() - openaiStart,
         details: {
           embeddingDimensions: embedding.length,
         },
       };
     } catch (error) {
-      checks.gemini = { status: 'fail', error: (error as Error).message };
+      checks.openai = { status: 'fail', error: (error as Error).message };
     }
   } else {
-    checks.gemini = { status: 'fail', error: 'API key not configured' };
+    checks.openai = { status: 'fail', error: 'API key not configured' };
   }
 
   // 3. Vector search function check
@@ -212,7 +212,7 @@ healthRouter.get('/deep', async (_req: Request, res: Response) => {
 
   // Calculate overall status
   const allPassing = Object.values(checks).every(c => c.status === 'pass');
-  const criticalFailing = checks.database?.status === 'fail' || checks.gemini?.status === 'fail';
+  const criticalFailing = checks.database?.status === 'fail' || checks.openai?.status === 'fail';
 
   const overallStatus = allPassing ? 'healthy' : criticalFailing ? 'unhealthy' : 'degraded';
 

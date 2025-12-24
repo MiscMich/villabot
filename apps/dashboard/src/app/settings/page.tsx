@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,6 +23,7 @@ import {
   Mail,
   Shield,
   ExternalLink,
+  RefreshCw,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -56,15 +58,29 @@ export default function SettingsPage() {
     }
   };
 
-  const { data: config, isLoading: configLoading } = useQuery({
-    queryKey: ['config'],
+  // Wait for workspace context before making API calls
+  const { workspace, isLoading: isWorkspaceLoading } = useWorkspace();
+
+  const {
+    data: config,
+    isLoading: isConfigLoading,
+    isError: configError,
+    error: configErrorData,
+    refetch: refetchConfig,
+  } = useQuery({
+    queryKey: ['config', workspace?.id],
     queryFn: api.getConfig,
+    enabled: !!workspace?.id,
   });
 
   const { data: authStatus } = useQuery({
-    queryKey: ['authStatus'],
+    queryKey: ['authStatus', workspace?.id],
     queryFn: api.getAuthStatus,
+    enabled: !!workspace?.id,
   });
+
+  // Combined loading state
+  const configLoading = isWorkspaceLoading || isConfigLoading;
 
   const [generalSettings, setGeneralSettings] = useState({
     timezone: 'America/Los_Angeles',
@@ -127,6 +143,42 @@ export default function SettingsPage() {
       queryClient.invalidateQueries({ queryKey: ['authStatus'] });
     }
   };
+
+  if (configError) {
+    return (
+      <div className="space-y-8">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <Settings className="w-8 h-8 text-violet-500" />
+            <h1 className="text-4xl font-display font-bold">Settings</h1>
+          </div>
+          <p className="text-lg text-muted-foreground">
+            Configure your workspace and integrations
+          </p>
+        </div>
+        <div className="glass-card p-8 text-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="p-4 rounded-full bg-red-500/10 border border-red-500/20">
+              <XCircle className="w-8 h-8 text-red-400" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-xl font-semibold">Failed to load settings</h2>
+              <p className="text-muted-foreground max-w-md">
+                {configErrorData instanceof Error ? configErrorData.message : 'An error occurred while loading settings. Please try again.'}
+              </p>
+            </div>
+            <Button
+              onClick={() => refetchConfig()}
+              className="mt-4"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Try Again
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (configLoading) {
     return (

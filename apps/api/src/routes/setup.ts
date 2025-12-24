@@ -365,6 +365,7 @@ setupRouter.post('/complete', authenticate, async (req, res) => {
       workspaceId,
       name: bot.name,
       slug: bot.slug,
+      botType: bot.botType ?? 'general',
       description: bot.personality ?? 'AI assistant powered by TeamBrain AI',
       systemInstructions: bot.instructions ?? undefined,
       slackBotToken: slack.botToken,

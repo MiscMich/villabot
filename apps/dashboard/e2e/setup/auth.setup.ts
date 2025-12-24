@@ -33,8 +33,8 @@ setup('authenticate', async ({ page, context }) => {
   ]);
   console.log('E2E bypass cookie set for domain:', domain);
 
-  // Navigate to sign in page and wait for full load
-  await page.goto('/auth/signin', { waitUntil: 'networkidle' });
+  // Navigate to sign in page - use 'load' instead of 'networkidle' to avoid timeout issues
+  await page.goto('/auth/signin', { waitUntil: 'load', timeout: 60000 });
 
   // Wait for the sign in form to be visible
   await expect(page.getByRole('heading', { name: /welcome back|sign in/i })).toBeVisible({ timeout: 30000 });
@@ -94,7 +94,7 @@ setup('authenticate', async ({ page, context }) => {
   if (currentUrl.includes('/setup')) {
     console.log('Landed on setup - navigating to dashboard with e2e_test param');
     await page.goto('/dashboard?e2e_test=true');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
   }
 
   // Wait for page to settle

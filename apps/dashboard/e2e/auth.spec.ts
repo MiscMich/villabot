@@ -10,7 +10,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Authentication', () => {
   test.describe('Login Page', () => {
     test('should display login form', async ({ page }) => {
-      await page.goto('/auth/login');
+      await page.goto('/auth/signin');
 
       // Check for login form elements
       await expect(page.getByLabel(/email/i)).toBeVisible();
@@ -19,7 +19,7 @@ test.describe('Authentication', () => {
     });
 
     test('should show validation errors for empty submission', async ({ page }) => {
-      await page.goto('/auth/login');
+      await page.goto('/auth/signin');
 
       // Try to submit empty form
       await page.getByRole('button', { name: /sign in|log in/i }).click();
@@ -34,7 +34,7 @@ test.describe('Authentication', () => {
     });
 
     test('should show error for invalid credentials', async ({ page }) => {
-      await page.goto('/auth/login');
+      await page.goto('/auth/signin');
 
       await page.getByLabel(/email/i).fill('invalid@example.com');
       await page.getByLabel(/password/i).fill('wrongpassword');
@@ -53,7 +53,7 @@ test.describe('Authentication', () => {
         return;
       }
 
-      await page.goto('/auth/login');
+      await page.goto('/auth/signin');
 
       await page.getByLabel(/email/i).fill(email);
       await page.getByLabel(/password/i).fill(password);
@@ -64,7 +64,7 @@ test.describe('Authentication', () => {
     });
 
     test('should have link to signup page', async ({ page }) => {
-      await page.goto('/auth/login');
+      await page.goto('/auth/signin');
 
       const signupLink = page.getByRole('link', { name: /sign up|create account|register/i });
       await expect(signupLink).toBeVisible();
@@ -93,23 +93,23 @@ test.describe('Authentication', () => {
       // Try to access protected page without auth
       await page.goto('/dashboard');
 
-      // Should redirect to login
-      await expect(page).toHaveURL(/\/auth\/login/);
+      // Should redirect to signin
+      await expect(page).toHaveURL(/\/auth\/signin/);
     });
 
     test('should redirect from /bots to login when unauthenticated', async ({ page }) => {
       await page.goto('/bots');
-      await expect(page).toHaveURL(/\/auth\/login/);
+      await expect(page).toHaveURL(/\/auth\/signin/);
     });
 
     test('should redirect from /documents to login when unauthenticated', async ({ page }) => {
       await page.goto('/documents');
-      await expect(page).toHaveURL(/\/auth\/login/);
+      await expect(page).toHaveURL(/\/auth\/signin/);
     });
 
     test('should redirect from /settings to login when unauthenticated', async ({ page }) => {
       await page.goto('/settings');
-      await expect(page).toHaveURL(/\/auth\/login/);
+      await expect(page).toHaveURL(/\/auth\/signin/);
     });
   });
 
@@ -123,22 +123,24 @@ test.describe('Authentication', () => {
       // Should not redirect to login
       await expect(page).not.toHaveURL(/\/auth\/login/);
 
-      // Should see dashboard content
-      await expect(page.locator('nav, [data-testid="sidebar"]')).toBeVisible({ timeout: 10000 });
+      // Wait for loading to complete - look for nav element or specific dashboard content
+      await expect(
+        page.locator('nav').or(page.getByRole('heading', { name: /dashboard|overview/i }))
+      ).toBeVisible({ timeout: 15000 });
     });
 
     test('should display user info or logout option', async ({ page }) => {
       await page.goto('/dashboard');
 
-      // Wait for page to load
-      await page.waitForLoadState('networkidle');
+      // Wait for navigation to be visible first (indicates page loaded)
+      await expect(page.locator('nav')).toBeVisible({ timeout: 15000 });
 
-      // Should have some indication of logged-in state (user menu, email, or logout button)
+      // Should have some indication of logged-in state
+      // The sidebar has user-menu data-testid and a sign-out button with aria-label
       const hasUserIndicator = await Promise.race([
-        page.getByText(process.env.PLAYWRIGHT_TEST_EMAIL || '').isVisible(),
-        page.getByRole('button', { name: /logout|sign out/i }).isVisible(),
         page.locator('[data-testid="user-menu"]').isVisible(),
-        page.locator('[aria-label*="user" i]').isVisible(),
+        page.locator('[data-testid="sign-out-button"]').isVisible(),
+        page.getByRole('button', { name: /sign out/i }).isVisible(),
       ]).catch(() => false);
 
       // At minimum, we should be able to navigate

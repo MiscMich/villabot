@@ -14,7 +14,8 @@ import {
   checkUsageLimit,
   generalApiRateLimiter,
 } from '../middleware/index.js';
-import type { BotCreateInput, BotUpdateInput } from '@cluebase/shared';
+import type { BotCreateInput, BotUpdateInput, BotType } from '@cluebase/shared';
+import { getBotTypeConfig } from '@cluebase/shared';
 
 export const botsRouter = Router();
 
@@ -144,16 +145,21 @@ botsRouter.post('/', requireWorkspaceAdmin, checkUsageLimit('bots'), async (req,
       }
     }
 
-    // Create the bot
+    // Get bot type config for auto-generating description and system instructions
+    const botType: BotType = (input as { bot_type?: BotType }).bot_type ?? 'general';
+    const typeConfig = getBotTypeConfig(botType);
+
+    // Create the bot with auto-generated description and system instructions from bot type
     const { data: bot, error } = await supabase
       .from('bots')
       .insert({
         workspace_id: workspaceId,
         name: input.name,
         slug: input.slug,
-        description: input.description ?? null,
+        bot_type: botType,
+        description: input.description ?? typeConfig.description,
         personality: input.personality ?? 'helpful',
-        system_instructions: input.systemInstructions ?? null,
+        system_instructions: input.systemInstructions ?? typeConfig.systemInstructions,
         slack_bot_token: input.slackBotToken ?? null,
         slack_app_token: input.slackAppToken ?? null,
         slack_signing_secret: input.slackSigningSecret ?? null,
@@ -212,10 +218,22 @@ botsRouter.patch('/:id', requireWorkspaceAdmin, async (req, res) => {
       updated_at: new Date().toISOString(),
     };
 
+    // Handle bot_type change - auto-update description and system instructions
+    const newBotType = (input as { bot_type?: BotType }).bot_type;
+    if (newBotType !== undefined) {
+      updateData.bot_type = newBotType;
+      const typeConfig = getBotTypeConfig(newBotType);
+      // Auto-update description and system instructions when bot type changes
+      updateData.description = typeConfig.description;
+      updateData.system_instructions = typeConfig.systemInstructions;
+    }
+
     if (input.name !== undefined) updateData.name = input.name;
-    if (input.description !== undefined) updateData.description = input.description;
+    // Only override auto-generated description if explicitly provided
+    if (input.description !== undefined && !newBotType) updateData.description = input.description;
     if (input.personality !== undefined) updateData.personality = input.personality;
-    if (input.systemInstructions !== undefined) updateData.system_instructions = input.systemInstructions;
+    // Only override auto-generated system instructions if explicitly provided
+    if (input.systemInstructions !== undefined && !newBotType) updateData.system_instructions = input.systemInstructions;
     if (input.status !== undefined) updateData.status = input.status;
     if (input.slackBotToken !== undefined) updateData.slack_bot_token = input.slackBotToken;
     if (input.slackAppToken !== undefined) updateData.slack_app_token = input.slackAppToken;
@@ -350,7 +368,7 @@ botsRouter.post('/:id/folders', requireWorkspaceAdmin, async (req, res) => {
         workspace_id: workspaceId,
         drive_folder_id: driveFolderId,
         folder_name: folderName,
-        category: category ?? 'company_knowledge',
+        category: category ?? 'shared',
       })
       .select()
       .single();
@@ -464,10 +482,9 @@ botsRouter.post('/:id/channels', requireWorkspaceAdmin, async (req, res) => {
       .from('bot_channels')
       .insert({
         bot_id: req.params.id,
-        workspace_id: workspaceId,
         slack_channel_id: slackChannelId,
         channel_name: channelName ?? null,
-        is_enabled: true,
+        is_active: true,
       })
       .select()
       .single();
@@ -514,6 +531,120 @@ botsRouter.delete('/:botId/channels/:channelId', requireWorkspaceAdmin, async (r
   } catch (error) {
     logger.error('Failed to remove bot channel', { error, channelId: req.params.channelId, workspaceId: req.workspace!.id });
     res.status(500).json({ error: 'Failed to remove channel' });
+  }
+});
+
+/**
+ * Fetch available Slack channels the bot can access
+ * Uses the Slack users.conversations API
+ */
+botsRouter.get('/:id/slack-channels', requireWorkspaceAdmin, async (req, res) => {
+  try {
+    const workspaceId = req.workspace!.id;
+
+    // Get bot with Slack credentials
+    const { data: bot } = await supabase
+      .from('bots')
+      .select('id, slack_bot_token')
+      .eq('id', req.params.id)
+      .eq('workspace_id', workspaceId)
+      .single();
+
+    if (!bot) {
+      return res.status(404).json({ error: 'Bot not found' });
+    }
+
+    if (!bot.slack_bot_token) {
+      return res.status(400).json({ error: 'Bot has no Slack token configured' });
+    }
+
+    // Fetch channels from Slack API using cursor-based pagination
+    const allChannels: Array<{
+      id: string;
+      name: string;
+      is_member: boolean;
+      is_private: boolean;
+      num_members?: number;
+    }> = [];
+
+    let cursor: string | undefined;
+    let hasMore = true;
+
+    while (hasMore) {
+      const params = new URLSearchParams({
+        types: 'public_channel,private_channel',
+        exclude_archived: 'true',
+        limit: '200',
+      });
+
+      if (cursor) {
+        params.set('cursor', cursor);
+      }
+
+      const response = await fetch(
+        `https://slack.com/api/users.conversations?${params.toString()}`,
+        {
+          headers: {
+            Authorization: `Bearer ${bot.slack_bot_token}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+        }
+      );
+
+      const data = await response.json() as {
+        ok: boolean;
+        error?: string;
+        channels?: Array<{
+          id: string;
+          name: string;
+          is_member: boolean;
+          is_private: boolean;
+          num_members?: number;
+        }>;
+        response_metadata?: {
+          next_cursor?: string;
+        };
+      };
+
+      if (!data.ok) {
+        logger.error('Slack API error fetching channels', { error: data.error, botId: bot.id });
+        return res.status(400).json({ error: `Slack API error: ${data.error}` });
+      }
+
+      if (data.channels) {
+        allChannels.push(...data.channels);
+      }
+
+      cursor = data.response_metadata?.next_cursor;
+      hasMore = !!cursor && cursor !== '';
+    }
+
+    // Get already assigned channels
+    const { data: assignedChannels } = await supabase
+      .from('bot_channels')
+      .select('slack_channel_id')
+      .eq('bot_id', req.params.id);
+
+    const assignedIds = new Set(assignedChannels?.map(c => c.slack_channel_id) ?? []);
+
+    // Format response with assignment status
+    const channels = allChannels.map(channel => ({
+      id: channel.id,
+      name: channel.name,
+      isPrivate: channel.is_private,
+      isMember: channel.is_member,
+      numMembers: channel.num_members,
+      isAssigned: assignedIds.has(channel.id),
+    }));
+
+    // Sort by name
+    channels.sort((a, b) => a.name.localeCompare(b.name));
+
+    logger.info('Fetched Slack channels for bot', { botId: bot.id, count: channels.length });
+    res.json({ channels });
+  } catch (error) {
+    logger.error('Failed to fetch Slack channels', { error, botId: req.params.id, workspaceId: req.workspace!.id });
+    res.status(500).json({ error: 'Failed to fetch Slack channels' });
   }
 });
 

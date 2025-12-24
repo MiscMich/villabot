@@ -6,10 +6,81 @@
 import { Router } from 'express';
 import { supabase } from '../services/supabase/client.js';
 import { logger } from '../utils/logger.js';
-import { triggerImmediateSync, triggerWebsiteScrape } from '../services/scheduler/index.js';
+import { triggerImmediateSync, triggerWebsiteScrape, getWorkspaceWebsiteUrl } from '../services/scheduler/index.js';
 import { fullSync, getSyncStatus } from '../services/google-drive/sync.js';
-import { isDriveClientInitialized } from '../services/google-drive/client.js';
-import { env } from '../config/env.js';
+import { isDriveClientInitialized, initializeDriveClient } from '../services/google-drive/client.js';
+
+const TOKENS_KEY = 'google_drive_tokens';
+
+/**
+ * Check if Google Drive is connected by verifying tokens exist in database
+ * This is more reliable than checking in-memory client state
+ */
+async function isDriveConnectedInDB(workspaceId: string): Promise<boolean> {
+  try {
+    // Check for workspace-specific tokens
+    const { data } = await supabase
+      .from('bot_config')
+      .select('value')
+      .eq('key', TOKENS_KEY)
+      .eq('workspace_id', workspaceId)
+      .single();
+
+    if (data?.value?.access_token) {
+      return true;
+    }
+
+    // Check for legacy global tokens
+    const { data: legacyData } = await supabase
+      .from('bot_config')
+      .select('value')
+      .eq('key', TOKENS_KEY)
+      .is('workspace_id', null)
+      .single();
+
+    return !!legacyData?.value?.access_token;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Ensure Drive client is initialized, loading tokens from DB if needed
+ */
+async function ensureDriveInitialized(workspaceId: string): Promise<boolean> {
+  // If already initialized, we're good
+  if (isDriveClientInitialized()) {
+    return true;
+  }
+
+  // Try to initialize from stored tokens
+  const { data } = await supabase
+    .from('bot_config')
+    .select('value')
+    .eq('key', TOKENS_KEY)
+    .eq('workspace_id', workspaceId)
+    .single();
+
+  if (data?.value?.access_token && data?.value?.refresh_token) {
+    await initializeDriveClient(data.value);
+    return isDriveClientInitialized();
+  }
+
+  // Try legacy global tokens
+  const { data: legacyData } = await supabase
+    .from('bot_config')
+    .select('value')
+    .eq('key', TOKENS_KEY)
+    .is('workspace_id', null)
+    .single();
+
+  if (legacyData?.value?.access_token && legacyData?.value?.refresh_token) {
+    await initializeDriveClient(legacyData.value);
+    return isDriveClientInitialized();
+  }
+
+  return false;
+}
 import {
   authenticate,
   resolveWorkspace,
@@ -29,11 +100,11 @@ documentsRouter.use(authenticate, resolveWorkspace, documentSyncRateLimiter);
  */
 documentsRouter.get('/', async (req, res) => {
   try {
-    const { source_type: sourceType, is_active: isActive, bot_id: botId } = req.query;
+    const { source_type: sourceType, is_active: isActive, bot_id: botId, category } = req.query;
 
     let query = supabase
       .from('documents')
-      .select('id, title, file_type, source_type, source_url, last_modified, last_synced, is_active, created_at, tags, bot_id, drive_folder_id')
+      .select('id, title, file_type, source_type, source_url, last_modified, last_synced, is_active, created_at, tags, bot_id, drive_folder_id, category')
       .eq('workspace_id', req.workspace!.id)
       .order('last_modified', { ascending: false });
 
@@ -47,6 +118,10 @@ documentsRouter.get('/', async (req, res) => {
 
     if (botId) {
       query = query.eq('bot_id', botId as string);
+    }
+
+    if (category) {
+      query = query.eq('category', category as string);
     }
 
     const { data, error, count } = await query;
@@ -157,7 +232,9 @@ documentsRouter.delete('/:id', requireWorkspaceAdmin, async (req, res) => {
 documentsRouter.get('/sync/status', async (req, res) => {
   try {
     const status = await getSyncStatus(req.workspace!.id);
-    const driveConnected = isDriveClientInitialized();
+
+    // Check database for tokens - more reliable than in-memory client state
+    const driveConnected = await isDriveConnectedInDB(req.workspace!.id);
 
     // Get workspace-specific document counts
     const { count: docCount } = await supabase
@@ -182,7 +259,9 @@ documentsRouter.get('/sync/status', async (req, res) => {
  */
 documentsRouter.post('/sync', requireWorkspaceAdmin, checkUsageLimit('documents'), async (req, res) => {
   try {
-    if (!isDriveClientInitialized()) {
+    // Auto-initialize from database tokens if needed
+    const initialized = await ensureDriveInitialized(req.workspace!.id);
+    if (!initialized) {
       return res.status(400).json({ error: 'Google Drive not connected' });
     }
 
@@ -204,7 +283,9 @@ documentsRouter.post('/sync', requireWorkspaceAdmin, checkUsageLimit('documents'
  */
 documentsRouter.post('/sync/full', requireWorkspaceAdmin, checkUsageLimit('documents'), async (req, res) => {
   try {
-    if (!isDriveClientInitialized()) {
+    // Auto-initialize from database tokens if needed
+    const initialized = await ensureDriveInitialized(req.workspace!.id);
+    if (!initialized) {
       return res.status(400).json({ error: 'Google Drive not connected' });
     }
 
@@ -223,11 +304,14 @@ documentsRouter.post('/sync/full', requireWorkspaceAdmin, checkUsageLimit('docum
 
 /**
  * Trigger website scrape for the workspace
+ * Reads website URL from workspace's setup config (not env var)
  */
 documentsRouter.post('/scrape/website', requireWorkspaceAdmin, checkUsageLimit('documents'), async (req, res) => {
   try {
-    if (!env.COMPANY_WEBSITE_URL) {
-      return res.status(400).json({ error: 'Website URL not configured' });
+    // Check if website is configured for this workspace
+    const websiteConfig = await getWorkspaceWebsiteUrl(req.workspace!.id);
+    if (!websiteConfig) {
+      return res.status(400).json({ error: 'Website URL not configured. Add one in Settings.' });
     }
 
     const result = await triggerWebsiteScrape(req.workspace!.id);
@@ -245,10 +329,13 @@ documentsRouter.post('/scrape/website', requireWorkspaceAdmin, checkUsageLimit('
 
 /**
  * Get website scrape status for the workspace
+ * Reads website URL from workspace's setup config (not env var)
  */
 documentsRouter.get('/scrape/status', async (req, res) => {
   try {
-    const websiteConfigured = !!env.COMPANY_WEBSITE_URL;
+    // Get website config from workspace setup
+    const websiteConfig = await getWorkspaceWebsiteUrl(req.workspace!.id);
+    const websiteConfigured = !!websiteConfig;
 
     // Get latest website scrape event for this workspace
     const { data: lastScrape } = await supabase
@@ -269,7 +356,8 @@ documentsRouter.get('/scrape/status', async (req, res) => {
 
     res.json({
       websiteConfigured,
-      websiteUrl: env.COMPANY_WEBSITE_URL ?? null,
+      websiteUrl: websiteConfig?.url ?? null,
+      maxPages: websiteConfig?.maxPages ?? null,
       lastScrape: lastScrape?.created_at ?? null,
       lastScrapeResult: lastScrape?.event_data ?? null,
       documentCount: websiteDocCount ?? 0,
@@ -363,5 +451,78 @@ documentsRouter.patch('/:id/tags', requireWorkspaceAdmin, async (req, res) => {
   } catch (error) {
     logger.error('Failed to update document tags', { error, id: req.params.id, workspaceId: req.workspace!.id });
     res.status(500).json({ error: 'Failed to update document tags' });
+  }
+});
+
+/**
+ * Update document assignment (bot_id, category)
+ * Allows manually assigning documents to bots and categories
+ */
+documentsRouter.patch('/:id', requireWorkspaceAdmin, async (req, res) => {
+  try {
+    const { bot_id, category } = req.body;
+    const updateData: Record<string, unknown> = {};
+
+    // Validate and set bot_id
+    if (bot_id !== undefined) {
+      if (bot_id === null) {
+        updateData.bot_id = null;
+      } else if (typeof bot_id === 'string') {
+        // Verify bot exists and belongs to workspace
+        const { data: bot, error: botError } = await supabase
+          .from('bots')
+          .select('id')
+          .eq('id', bot_id)
+          .eq('workspace_id', req.workspace!.id)
+          .single();
+
+        if (botError || !bot) {
+          return res.status(400).json({ error: 'Invalid bot_id - bot not found in workspace' });
+        }
+        updateData.bot_id = bot_id;
+      } else {
+        return res.status(400).json({ error: 'bot_id must be a string or null' });
+      }
+    }
+
+    // Validate and set category
+    if (category !== undefined) {
+      const validCategories = ['shared', 'operations', 'marketing', 'sales', 'hr', 'technical', 'custom'];
+      if (category === null || validCategories.includes(category)) {
+        updateData.category = category;
+      } else {
+        return res.status(400).json({ error: `Invalid category. Must be one of: ${validCategories.join(', ')}` });
+      }
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ error: 'No valid fields to update. Provide bot_id and/or category.' });
+    }
+
+    const { data, error } = await supabase
+      .from('documents')
+      .update(updateData)
+      .eq('id', req.params.id)
+      .eq('workspace_id', req.workspace!.id)
+      .select('id, title, bot_id, category')
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+      throw error;
+    }
+
+    logger.info('Document assignment updated', {
+      id: req.params.id,
+      ...updateData,
+      workspaceId: req.workspace!.id
+    });
+
+    res.json(data);
+  } catch (error) {
+    logger.error('Failed to update document', { error, id: req.params.id, workspaceId: req.workspace!.id });
+    res.status(500).json({ error: 'Failed to update document' });
   }
 });

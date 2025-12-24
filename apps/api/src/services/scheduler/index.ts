@@ -182,7 +182,7 @@ async function runSessionCleanup(): Promise<void> {
 /**
  * Get website URL for a workspace from its setup config
  */
-async function getWorkspaceWebsiteUrl(workspaceId: string): Promise<{ url: string; maxPages: number } | null> {
+export async function getWorkspaceWebsiteUrl(workspaceId: string): Promise<{ url: string; maxPages: number } | null> {
   const { data } = await supabase
     .from('bot_config')
     .select('value')

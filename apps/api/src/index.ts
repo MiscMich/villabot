@@ -222,12 +222,12 @@ async function start(): Promise<void> {
     updateIntegrationCounts({ activeSlackBots: 0 });
   }
 
-  // Check Gemini API
-  if (env.GEMINI_API_KEY) {
-    updateServiceStatus('gemini', true);
-    logger.info('✓ Gemini API configured');
+  // Check OpenAI API
+  if (env.OPENAI_API_KEY) {
+    updateServiceStatus('openai', true);
+    logger.info('✓ OpenAI API configured');
   } else {
-    logger.info('○ Gemini API key not configured');
+    logger.info('○ OpenAI API key not configured');
   }
 
   // Check Stripe billing
@@ -283,3 +283,42 @@ async function shutdown(): Promise<void> {
 
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
+
+// Handle unhandled rejections (prevents Slack socket mode errors from crashing the server)
+process.on('unhandledRejection', (reason, promise) => {
+  const error = reason instanceof Error ? reason : new Error(String(reason));
+
+  // Check if this is a Slack socket mode issue (too_many_websockets)
+  if (error.message.includes('server explicit disconnect') || error.message.includes('websocket')) {
+    logger.warn('Slack socket mode disconnected (likely too many connections)', {
+      message: error.message,
+    });
+    // Don't crash - the HTTP server can still serve requests
+    return;
+  }
+
+  logger.error('Unhandled promise rejection', {
+    error: error.message,
+    stack: error.stack,
+    promise,
+  });
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  // Check if this is a non-fatal Slack socket mode error
+  if (error.message.includes('server explicit disconnect') || error.message.includes('websocket')) {
+    logger.warn('Slack socket mode error caught (non-fatal)', {
+      message: error.message,
+    });
+    // Don't crash - the HTTP server can still serve requests
+    return;
+  }
+
+  logger.error('Uncaught exception', {
+    error: error.message,
+    stack: error.stack,
+  });
+  // For truly fatal errors, exit
+  process.exit(1);
+});

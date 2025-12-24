@@ -1,7 +1,7 @@
 /**
  * Website scraper service
  * Scrapes company website content for the knowledge base
- * Supports configurable limits, rate limiting, and URL filtering
+ * Supports configurable limits, rate limiting, URL filtering, and sitemap-based change detection
  */
 
 import puppeteer from 'puppeteer';
@@ -24,6 +24,11 @@ interface ScrapedPage {
   content: string;
 }
 
+interface SitemapEntry {
+  url: string;
+  lastmod?: Date;
+}
+
 interface ScrapeOptions {
   workspaceId: string;  // Required for tenant isolation
   websiteUrl?: string;  // URL to scrape (from setup config or env var fallback)
@@ -34,6 +39,7 @@ interface ScrapeOptions {
   includePatterns?: RegExp[];  // Only scrape URLs matching these patterns
   excludePatterns?: RegExp[];  // Skip URLs matching these patterns
   respectRobotsTxt?: boolean;
+  useSitemapDetection?: boolean;  // Use sitemap.xml for incremental scraping (default: true)
 }
 
 /**
@@ -66,6 +72,7 @@ export async function scrapeWebsite(options: ScrapeOptions): Promise<{
       /\?/,  // Skip URLs with query parameters by default
     ],
     respectRobotsTxt = true,
+    useSitemapDetection = true,
   } = options;
 
   logger.info('Starting website scrape', {
@@ -73,11 +80,48 @@ export async function scrapeWebsite(options: ScrapeOptions): Promise<{
     maxPages,
     rateLimitMs,
     workspaceId,
+    useSitemapDetection,
   });
 
   const errors: string[] = [];
   const scrapedPages: ScrapedPage[] = [];
   let disallowedPaths: string[] = [];
+  let usingSitemap = false;
+  let unchangedCount = 0;
+
+  // Try sitemap-based incremental scraping first
+  let sitemapUrls: Set<string> = new Set();
+  if (useSitemapDetection) {
+    const sitemapEntries = await fetchSitemap(websiteUrl);
+
+    if (sitemapEntries.length > 0) {
+      // Get stored document dates for comparison
+      const storedDates = await getStoredDocumentDates(workspaceId, botId);
+
+      // Filter to only changed pages
+      const { toScrape, unchanged } = filterChangedPages(sitemapEntries, storedDates);
+      unchangedCount = unchanged;
+
+      if (toScrape.length === 0) {
+        logger.info('Sitemap check: No pages have changed', { totalInSitemap: sitemapEntries.length, unchanged });
+        return { pagesScraped: 0, chunksCreated: 0, errors: [] };
+      }
+
+      // Use sitemap URLs for scraping
+      sitemapUrls = new Set(toScrape.map(e => e.url));
+      usingSitemap = true;
+
+      logger.info('Sitemap-based incremental scrape', {
+        totalInSitemap: sitemapEntries.length,
+        toScrape: toScrape.length,
+        unchanged,
+        newPages: toScrape.filter(e => !storedDates.has(e.url)).length,
+        modifiedPages: toScrape.filter(e => storedDates.has(e.url) && e.lastmod).length,
+      });
+    } else {
+      logger.info('No sitemap found, falling back to full crawl');
+    }
+  }
 
   let browser;
   try {
@@ -97,8 +141,8 @@ export async function scrapeWebsite(options: ScrapeOptions): Promise<{
       }
     }
 
-    // Start with main page
-    const urlsToScrape = new Set([websiteUrl]);
+    // Determine starting URLs based on whether we're using sitemap
+    const urlsToScrape = usingSitemap ? sitemapUrls : new Set([websiteUrl]);
     const scrapedUrls = new Set<string>();
 
     while (urlsToScrape.size > 0 && scrapedUrls.size < maxPages) {
@@ -120,11 +164,14 @@ export async function scrapeWebsite(options: ScrapeOptions): Promise<{
         if (scrapedPage) {
           scrapedPages.push(scrapedPage);
 
-          // Find more links on the same domain
-          const links = await findInternalLinks(page, websiteUrl);
-          for (const link of links) {
-            if (!scrapedUrls.has(link) && !urlsToScrape.has(link)) {
-              urlsToScrape.add(link);
+          // Only discover new links if NOT using sitemap mode
+          // (sitemap mode should stick to known URLs from sitemap)
+          if (!usingSitemap) {
+            const links = await findInternalLinks(page, websiteUrl);
+            for (const link of links) {
+              if (!scrapedUrls.has(link) && !urlsToScrape.has(link)) {
+                urlsToScrape.add(link);
+              }
             }
           }
         }
@@ -145,6 +192,7 @@ export async function scrapeWebsite(options: ScrapeOptions): Promise<{
           scraped: scrapedUrls.size,
           queued: urlsToScrape.size,
           maxPages,
+          mode: usingSitemap ? 'sitemap' : 'crawl',
         });
       }
     }
@@ -174,6 +222,8 @@ export async function scrapeWebsite(options: ScrapeOptions): Promise<{
     pagesScraped: scrapedPages.length,
     chunksCreated: totalChunks,
     errorCount: errors.length,
+    mode: usingSitemap ? 'sitemap-incremental' : 'full-crawl',
+    unchangedPages: unchangedCount,
   });
 
   // Log to analytics with workspace context
@@ -185,6 +235,8 @@ export async function scrapeWebsite(options: ScrapeOptions): Promise<{
       chunks_created: totalChunks,
       errors: errors.length,
       bot_id: botId,
+      mode: usingSitemap ? 'sitemap-incremental' : 'full-crawl',
+      unchanged_pages: unchangedCount,
     },
   });
 
@@ -236,6 +288,143 @@ async function fetchRobotsTxt(baseUrl: string): Promise<string[]> {
   } catch {
     return [];
   }
+}
+
+/**
+ * Fetch and parse sitemap.xml (and sitemap index files)
+ * Returns URLs with their lastmod dates for incremental scraping
+ */
+async function fetchSitemap(baseUrl: string): Promise<SitemapEntry[]> {
+  const entries: SitemapEntry[] = [];
+  const processedSitemaps = new Set<string>();
+
+  async function parseSitemapUrl(sitemapUrl: string): Promise<void> {
+    if (processedSitemaps.has(sitemapUrl)) return;
+    processedSitemaps.add(sitemapUrl);
+
+    try {
+      const response = await fetch(sitemapUrl, {
+        headers: { 'User-Agent': 'TeamBrainBot/1.0 (Knowledge Base Crawler)' },
+      });
+
+      if (!response.ok) {
+        logger.debug('Sitemap not found or inaccessible', { url: sitemapUrl, status: response.status });
+        return;
+      }
+
+      const xml = await response.text();
+      const $ = cheerio.load(xml, { xmlMode: true });
+
+      // Check if this is a sitemap index (contains other sitemaps)
+      const sitemapLocations = $('sitemap > loc').map((_, el) => $(el).text().trim()).get();
+
+      if (sitemapLocations.length > 0) {
+        logger.info('Found sitemap index', { sitemapCount: sitemapLocations.length });
+        for (const loc of sitemapLocations) {
+          await parseSitemapUrl(loc);
+        }
+        return;
+      }
+
+      // Parse regular sitemap entries
+      $('url').each((_, urlEl) => {
+        const loc = $(urlEl).find('loc').text().trim();
+        const lastmodText = $(urlEl).find('lastmod').text().trim();
+
+        if (loc) {
+          const entry: SitemapEntry = { url: loc };
+
+          if (lastmodText) {
+            const lastmod = new Date(lastmodText);
+            if (!isNaN(lastmod.getTime())) {
+              entry.lastmod = lastmod;
+            }
+          }
+
+          entries.push(entry);
+        }
+      });
+
+      logger.debug('Parsed sitemap', { url: sitemapUrl, entries: entries.length });
+    } catch (error) {
+      logger.debug('Failed to parse sitemap', { url: sitemapUrl, error: error instanceof Error ? error.message : 'Unknown' });
+    }
+  }
+
+  // Try common sitemap locations
+  const sitemapUrls = [
+    new URL('/sitemap.xml', baseUrl).href,
+    new URL('/sitemap_index.xml', baseUrl).href,
+    new URL('/sitemap-index.xml', baseUrl).href,
+  ];
+
+  for (const sitemapUrl of sitemapUrls) {
+    await parseSitemapUrl(sitemapUrl);
+    if (entries.length > 0) break; // Stop once we find a working sitemap
+  }
+
+  if (entries.length > 0) {
+    logger.info('Sitemap parsing complete', { totalUrls: entries.length, withLastmod: entries.filter(e => e.lastmod).length });
+  }
+
+  return entries;
+}
+
+/**
+ * Get stored document dates for comparison with sitemap lastmod
+ */
+async function getStoredDocumentDates(workspaceId: string, botId?: string): Promise<Map<string, Date>> {
+  let query = supabase
+    .from('documents')
+    .select('source_url, last_modified')
+    .eq('workspace_id', workspaceId)
+    .eq('source_type', 'website');
+
+  if (botId) {
+    query = query.eq('bot_id', botId);
+  }
+
+  const { data } = await query;
+
+  const dateMap = new Map<string, Date>();
+  for (const doc of data ?? []) {
+    if (doc.source_url && doc.last_modified) {
+      dateMap.set(doc.source_url, new Date(doc.last_modified));
+    }
+  }
+
+  return dateMap;
+}
+
+/**
+ * Filter sitemap entries to only include pages that need updating
+ */
+function filterChangedPages(
+  sitemapEntries: SitemapEntry[],
+  storedDates: Map<string, Date>
+): { toScrape: SitemapEntry[]; unchanged: number } {
+  const toScrape: SitemapEntry[] = [];
+  let unchanged = 0;
+
+  for (const entry of sitemapEntries) {
+    const storedDate = storedDates.get(entry.url);
+
+    if (!storedDate) {
+      // New page - needs scraping
+      toScrape.push(entry);
+    } else if (!entry.lastmod) {
+      // No lastmod in sitemap - scrape to be safe (but lower priority)
+      toScrape.push(entry);
+    } else if (entry.lastmod > storedDate) {
+      // Page has been modified - needs re-scraping
+      toScrape.push(entry);
+    } else {
+      // Page unchanged
+      unchanged++;
+    }
+  }
+
+  return { toScrape, unchanged };
 }
 
 /**
@@ -390,6 +579,7 @@ async function processScrapedPage(
   }
 
   // Create document record with workspace context
+  // last_modified is set to now for sitemap-based change detection in future runs
   const insertData: Record<string, unknown> = {
     workspace_id: workspaceId,
     title: page.title,
@@ -397,6 +587,7 @@ async function processScrapedPage(
     source_type: 'website',
     source_url: page.url,
     content_hash: contentHash,
+    last_modified: new Date().toISOString(),
   };
 
   if (botId) {

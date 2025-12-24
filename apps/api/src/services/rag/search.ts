@@ -165,8 +165,11 @@ export async function hybridSearch(
 
     // Build results with document info
     // The new hybrid_search function returns category and source_title directly
+    // Filter by EITHER good vector similarity OR meaningful keyword match (rank_score > 0)
+    // This allows keyword-only matches to pass through even when vector similarity is low
+    const MIN_RANK_SCORE = 0.001; // Minimum RRF score to include (catches top ~50 keyword matches)
     let results: SearchResult[] = typedChunks
-      .filter(chunk => chunk.similarity >= minSimilarity)
+      .filter(chunk => chunk.similarity >= minSimilarity || chunk.rank_score >= MIN_RANK_SCORE)
       .map(chunk => {
         const doc = docMap.get(chunk.document_id);
         return {

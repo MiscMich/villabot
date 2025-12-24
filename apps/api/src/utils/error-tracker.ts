@@ -12,7 +12,7 @@ export interface TrackedError {
   message: string;
   stack?: string;
   context?: Record<string, unknown>;
-  service: 'slack' | 'rag' | 'google_drive' | 'gemini' | 'supabase' | 'api';
+  service: 'slack' | 'rag' | 'google_drive' | 'openai' | 'supabase' | 'api';
   severity: 'low' | 'medium' | 'high' | 'critical';
   user_id?: string;
   resolved: boolean;
@@ -104,11 +104,11 @@ class ErrorTracker {
    * Track API failure
    */
   async trackApiFailure(
-    api: 'gemini' | 'slack' | 'google_drive' | 'supabase',
+    api: 'openai' | 'slack' | 'google_drive' | 'supabase',
     error: Error,
     context?: Record<string, unknown>
   ): Promise<void> {
-    const severity = api === 'gemini' ? 'high' : 'medium';
+    const severity = api === 'openai' ? 'high' : 'medium';
     await this.track(error, api as TrackedError['service'], severity, context);
   }
 

@@ -16,9 +16,6 @@ import {
   CheckCircle,
   AlertCircle,
   Sparkles,
-  Hash,
-  FileText,
-  MessageSquare,
   Key,
   FolderPlus,
   Folder,
@@ -29,8 +26,78 @@ import {
   Slack,
   AlertTriangle,
   Play,
+  Settings,
+  Megaphone,
+  TrendingUp,
+  Users,
+  Code,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+// Bot type configuration matching shared/constants.ts
+type BotType = 'operations' | 'marketing' | 'sales' | 'hr' | 'technical' | 'general';
+
+interface BotTypeOption {
+  value: BotType;
+  label: string;
+  description: string;
+  icon: React.ReactNode;
+  color: string;
+}
+
+const BOT_TYPE_OPTIONS: BotTypeOption[] = [
+  {
+    value: 'operations',
+    label: 'Operations',
+    description: 'SOPs, procedures, and workflow inquiries',
+    icon: <Settings className="w-5 h-5" />,
+    color: 'blue',
+  },
+  {
+    value: 'marketing',
+    label: 'Marketing',
+    description: 'Brand guidelines and campaign info',
+    icon: <Megaphone className="w-5 h-5" />,
+    color: 'pink',
+  },
+  {
+    value: 'sales',
+    label: 'Sales',
+    description: 'Product info, pricing, and sales materials',
+    icon: <TrendingUp className="w-5 h-5" />,
+    color: 'green',
+  },
+  {
+    value: 'hr',
+    label: 'HR & People',
+    description: 'Policies, benefits, and employee resources',
+    icon: <Users className="w-5 h-5" />,
+    color: 'purple',
+  },
+  {
+    value: 'technical',
+    label: 'Technical',
+    description: 'Documentation, APIs, and dev guidelines',
+    icon: <Code className="w-5 h-5" />,
+    color: 'orange',
+  },
+  {
+    value: 'general',
+    label: 'General',
+    description: 'Cross-functional company knowledge',
+    icon: <Bot className="w-5 h-5" />,
+    color: 'violet',
+  },
+];
+
+const COLOR_CLASSES: Record<string, { bg: string; border: string; text: string }> = {
+  blue: { bg: 'bg-blue-500/10', border: 'border-blue-500/50', text: 'text-blue-600 dark:text-blue-400' },
+  pink: { bg: 'bg-pink-500/10', border: 'border-pink-500/50', text: 'text-pink-600 dark:text-pink-400' },
+  green: { bg: 'bg-green-500/10', border: 'border-green-500/50', text: 'text-green-600 dark:text-green-400' },
+  purple: { bg: 'bg-purple-500/10', border: 'border-purple-500/50', text: 'text-purple-600 dark:text-purple-400' },
+  orange: { bg: 'bg-orange-500/10', border: 'border-orange-500/50', text: 'text-orange-600 dark:text-orange-400' },
+  violet: { bg: 'bg-violet-500/10', border: 'border-violet-500/50', text: 'text-violet-600 dark:text-violet-400' },
+};
 
 interface BotSetupWizardProps {
   isOpen: boolean;
@@ -46,7 +113,7 @@ interface FolderEntry {
 type WizardStep = 'basic' | 'slack' | 'folders' | 'confirm';
 
 const STEPS: { key: WizardStep; title: string; description: string }[] = [
-  { key: 'basic', title: 'Basic Info', description: 'Name and describe your bot' },
+  { key: 'basic', title: 'Basic Info', description: 'Name your bot and choose its type' },
   { key: 'slack', title: 'Connect Slack', description: 'Add Slack credentials' },
   { key: 'folders', title: 'Add Folders', description: 'Link Google Drive folders' },
   { key: 'confirm', title: 'Confirm', description: 'Review and create' },
@@ -56,12 +123,9 @@ export function BotSetupWizard({ isOpen, onClose }: BotSetupWizardProps) {
   const queryClient = useQueryClient();
   const [currentStep, setCurrentStep] = useState<WizardStep>('basic');
 
-  // Basic info state
+  // Basic info state - simplified
   const [name, setName] = useState('');
-  const [slug, setSlug] = useState('');
-  const [description, setDescription] = useState('');
-  const [systemPrompt, setSystemPrompt] = useState('');
-  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+  const [botType, setBotType] = useState<BotType>('general');
 
   // Slack credentials state
   const [slackBotToken, setSlackBotToken] = useState('');
@@ -97,10 +161,7 @@ export function BotSetupWizard({ isOpen, onClose }: BotSetupWizardProps) {
     if (isOpen) {
       setCurrentStep('basic');
       setName('');
-      setSlug('');
-      setDescription('');
-      setSystemPrompt('');
-      setSlugManuallyEdited(false);
+      setBotType('general');
       setSlackBotToken('');
       setSlackAppToken('');
       setSlackSigningSecret('');
@@ -115,16 +176,13 @@ export function BotSetupWizard({ isOpen, onClose }: BotSetupWizardProps) {
     }
   }, [isOpen]);
 
-  // Auto-generate slug from name
-  useEffect(() => {
-    if (!slugManuallyEdited && name) {
-      const generatedSlug = name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '');
-      setSlug(generatedSlug);
-    }
-  }, [name, slugManuallyEdited]);
+  // Generate slug from name
+  const generateSlug = (botName: string): string => {
+    return botName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+  };
 
   // Create bot mutation
   const createMutation = useMutation({
@@ -225,12 +283,11 @@ export function BotSetupWizard({ isOpen, onClose }: BotSetupWizardProps) {
   // Handle final creation
   const handleCreate = async () => {
     try {
-      // First create the bot
+      // First create the bot with auto-generated slug and bot_type
       const result = await createMutation.mutateAsync({
         name,
-        slug,
-        description: description || undefined,
-        system_prompt: systemPrompt || undefined,
+        slug: generateSlug(name),
+        bot_type: botType,
         slack_bot_token: slackBotToken || undefined,
         slack_app_token: slackAppToken || undefined,
         slack_signing_secret: slackSigningSecret || undefined,
@@ -272,8 +329,8 @@ export function BotSetupWizard({ isOpen, onClose }: BotSetupWizardProps) {
     }
   };
 
-  // Validation
-  const isBasicValid = name.trim().length > 0 && slug.trim().length > 0;
+  // Validation - only name is required (slug auto-generated, bot_type has default)
+  const isBasicValid = name.trim().length > 0;
   const isSlackValid = slackTestStatus === 'success';
   const canProceedFromSlack = isSlackValid || (slackBotToken === '' && slackAppToken === '');
 
@@ -352,13 +409,14 @@ export function BotSetupWizard({ isOpen, onClose }: BotSetupWizardProps) {
         <div className="p-6 space-y-6 max-h-[calc(100vh-350px)] overflow-y-auto">
           {/* Step 1: Basic Info */}
           {currentStep === 'basic' && (
-            <div className="space-y-4 animate-fade-in">
-              <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                <Sparkles className="w-4 h-4" />
-                <span>Basic Information</span>
-              </div>
+            <div className="space-y-6 animate-fade-in">
+              {/* Bot Name Section */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <Sparkles className="w-4 h-4" />
+                  <span>Bot Identity</span>
+                </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="name">Bot Name *</Label>
                   <div className="relative">
@@ -367,67 +425,71 @@ export function BotSetupWizard({ isOpen, onClose }: BotSetupWizardProps) {
                       id="name"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      placeholder="Marketing Bot"
+                      placeholder="Operations Bot"
                       className="pl-10"
                       required
                     />
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    A descriptive name for your bot (e.g., "Operations Bot")
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="slug">Slug *</Label>
-                  <div className="relative">
-                    <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      id="slug"
-                      value={slug}
-                      onChange={(e) => {
-                        setSlug(e.target.value);
-                        setSlugManuallyEdited(true);
-                      }}
-                      placeholder="marketing-bot"
-                      className="pl-10 font-mono"
-                      required
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Auto-generated from name. Used in URLs.
+                    Give your bot a descriptive name that reflects its purpose.
                   </p>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <div className="relative">
-                  <FileText className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
-                  <textarea
-                    id="description"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="A helpful bot for marketing team questions..."
-                    className="w-full min-h-[80px] pl-10 pr-4 py-2 rounded-lg border border-border/50 bg-secondary/50 focus:bg-background focus:border-violet-500/50 focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all resize-none"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="systemPrompt">System Instructions (Optional)</Label>
-                <div className="relative">
-                  <MessageSquare className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
-                  <textarea
-                    id="systemPrompt"
-                    value={systemPrompt}
-                    onChange={(e) => setSystemPrompt(e.target.value)}
-                    placeholder="You are a helpful marketing assistant. Focus on..."
-                    className="w-full min-h-[100px] pl-10 pr-4 py-2 rounded-lg border border-border/50 bg-secondary/50 focus:bg-background focus:border-violet-500/50 focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all resize-none font-mono text-sm"
-                  />
+              {/* Bot Type Section */}
+              <div className="space-y-4 pt-4 border-t border-border/50">
+                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <Settings className="w-4 h-4" />
+                  <span>Bot Type</span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Custom personality and behavior instructions for this bot.
+                  Select the department this bot serves. The bot will be configured with appropriate personality and instructions.
                 </p>
+
+                <div className="grid gap-2 md:grid-cols-2">
+                  {BOT_TYPE_OPTIONS.map((option) => {
+                    const isSelected = botType === option.value;
+                    const colors = COLOR_CLASSES[option.color];
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setBotType(option.value)}
+                        className={cn(
+                          'flex items-start gap-3 p-3 rounded-lg border text-left transition-all',
+                          isSelected
+                            ? `${colors.border} ${colors.bg} ring-1 ring-${option.color}-500/30`
+                            : 'border-border/50 bg-secondary/30 hover:bg-secondary/50 hover:border-border'
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            'w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors',
+                            isSelected
+                              ? `${colors.bg} ${colors.text}`
+                              : 'bg-secondary text-muted-foreground'
+                          )}
+                        >
+                          {option.icon}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className={cn(
+                              'text-sm font-medium',
+                              isSelected ? colors.text : ''
+                            )}>
+                              {option.label}
+                            </p>
+                            {isSelected && <Check className="w-4 h-4 text-current" />}
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {option.description}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}
@@ -740,16 +802,19 @@ export function BotSetupWizard({ isOpen, onClose }: BotSetupWizardProps) {
                       <span className="text-muted-foreground">Name:</span>
                       <span className="font-medium">{name}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Slug:</span>
-                      <span className="font-mono">{slug}</span>
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Type:</span>
+                      {(() => {
+                        const selectedType = BOT_TYPE_OPTIONS.find(o => o.value === botType);
+                        const colors = selectedType ? COLOR_CLASSES[selectedType.color] : COLOR_CLASSES.violet;
+                        return (
+                          <span className={cn('flex items-center gap-2 px-2 py-0.5 rounded-full text-xs font-medium', colors.bg, colors.text)}>
+                            {selectedType?.icon}
+                            {selectedType?.label}
+                          </span>
+                        );
+                      })()}
                     </div>
-                    {description && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Description:</span>
-                        <span className="truncate max-w-[200px]">{description}</span>
-                      </div>
-                    )}
                   </div>
                 </div>
 

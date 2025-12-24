@@ -29,6 +29,7 @@ function mapBotRow(row: Record<string, unknown>): Bot {
     slug: row.slug as string,
     description: row.description as string | null,
     avatarUrl: row.avatar_url as string | null,
+    botType: (row.bot_type as Bot['botType']) || 'general',
     slackBotToken: row.slack_bot_token as string | null,
     slackAppToken: row.slack_app_token as string | null,
     slackSigningSecret: row.slack_signing_secret as string | null,
@@ -206,6 +207,7 @@ export async function createBot(input: BotCreateInput): Promise<Bot> {
       slug: input.slug,
       description: input.description ?? null,
       avatar_url: input.avatarUrl ?? null,
+      bot_type: input.botType ?? 'general',
       slack_bot_token: input.slackBotToken ?? null,
       slack_app_token: input.slackAppToken ?? null,
       slack_signing_secret: input.slackSigningSecret ?? null,
@@ -247,6 +249,7 @@ export async function updateBot(id: string, input: BotUpdateInput): Promise<Bot>
   if (input.name !== undefined) updateData.name = input.name;
   if (input.description !== undefined) updateData.description = input.description;
   if (input.avatarUrl !== undefined) updateData.avatar_url = input.avatarUrl;
+  if (input.botType !== undefined) updateData.bot_type = input.botType;
   if (input.slackBotToken !== undefined) updateData.slack_bot_token = input.slackBotToken;
   if (input.slackAppToken !== undefined) updateData.slack_app_token = input.slackAppToken;
   if (input.slackSigningSecret !== undefined) updateData.slack_signing_secret = input.slackSigningSecret;
