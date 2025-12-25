@@ -25,6 +25,7 @@ interface AuthState {
 // Auth actions
 interface AuthActions {
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
+  signInWithMagicLink: (email: string) => Promise<{ error: AuthError | null }>;
   signUp: (email: string, password: string, options?: SignUpOptions) => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: AuthError | null }>;
@@ -178,6 +179,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return { error: null };
   }, []);
 
+  // Sign in with magic link (passwordless)
+  const signInWithMagicLink = useCallback(async (email: string) => {
+    const supabase = getSupabase();
+    const redirectTo = `${window.location.origin}/auth/callback?type=magiclink`;
+
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: redirectTo,
+      },
+    });
+
+    return { error };
+  }, []);
+
   // Sign up with email/password - calls API to create user, profile, and workspace
   const signUp = useCallback(async (
     email: string,
@@ -288,6 +304,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const value: AuthContextType = {
     ...state,
     signIn,
+    signInWithMagicLink,
     signUp,
     signOut,
     resetPassword,

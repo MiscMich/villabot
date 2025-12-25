@@ -10,6 +10,7 @@ import Link from 'next/link';
 function AuthCallbackContent() {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
+  const [isRecovery, setIsRecovery] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -20,6 +21,7 @@ function AuthCallbackContent() {
 
         // Get the code from URL if present (for email confirmation)
         const code = searchParams.get('code');
+        const type = searchParams.get('type');
         const errorParam = searchParams.get('error');
         const errorDescription = searchParams.get('error_description');
 
@@ -46,6 +48,16 @@ function AuthCallbackContent() {
 
         if (session) {
           setStatus('success');
+
+          // Handle password recovery flow - redirect to reset password page
+          if (type === 'recovery') {
+            setIsRecovery(true);
+            setTimeout(() => {
+              router.push('/auth/reset-password');
+            }, 1000);
+            return;
+          }
+
           // Redirect to dashboard after a brief success message
           setTimeout(() => {
             router.push('/dashboard');
@@ -86,12 +98,12 @@ function AuthCallbackContent() {
         </div>
         <h1 className="text-2xl font-bold text-white">
           {status === 'loading' && 'Signing you in...'}
-          {status === 'success' && 'Welcome back!'}
+          {status === 'success' && (isRecovery ? 'Link verified!' : 'Welcome back!')}
           {status === 'error' && 'Authentication failed'}
         </h1>
         <p className="text-white/60">
           {status === 'loading' && 'Please wait while we verify your account.'}
-          {status === 'success' && 'Redirecting you to the dashboard...'}
+          {status === 'success' && (isRecovery ? 'Redirecting to reset your password...' : 'Redirecting you to the dashboard...')}
           {status === 'error' && (error || 'Something went wrong. Please try again.')}
         </p>
       </div>
