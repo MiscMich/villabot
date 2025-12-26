@@ -129,13 +129,13 @@ export const api = {
     services: Record<string, boolean>;
   }>('/health'),
 
-  // Setup (public - for initial setup wizard)
-  // Supports optional workspaceId for checking setup status of specific workspace
+  // Setup (authenticated - checks workspace-specific setup status)
+  // Requires auth to verify workspace membership for accurate status
   getSetupStatus: (workspaceId?: string) => {
     const url = workspaceId
       ? `/api/setup/status?workspaceId=${encodeURIComponent(workspaceId)}`
       : '/api/setup/status';
-    return fetchPublic<{
+    return fetchApi<{
       completed: boolean;
       completedAt: string | null;
       steps: {
