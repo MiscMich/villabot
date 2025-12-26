@@ -114,7 +114,8 @@ export async function middleware(request: NextRequest) {
 
     const workspaceId = profile?.default_workspace_id;
     console.log('[Middleware] Setup check:', { userId: session.user.id, workspaceId, hasProfile: !!profile });
-    return await checkSetupStatus(request, workspaceId);
+    // Pass access token for API authentication
+    return await checkSetupStatus(request, workspaceId, session.access_token);
   }
 
   return NextResponse.next();
@@ -144,7 +145,7 @@ function isE2ETestMode(request: NextRequest): boolean {
 /**
  * Check if initial setup is complete
  */
-async function checkSetupStatus(request: NextRequest, workspaceId?: string) {
+async function checkSetupStatus(request: NextRequest, workspaceId?: string, accessToken?: string) {
   // Bypass setup check in E2E test mode
   if (isE2ETestMode(request)) {
     console.log('E2E test mode - bypassing setup check in middleware');
@@ -157,13 +158,19 @@ async function checkSetupStatus(request: NextRequest, workspaceId?: string) {
       ? `${API_BASE}/api/setup/status?workspaceId=${encodeURIComponent(workspaceId)}`
       : `${API_BASE}/api/setup/status`;
 
-    console.log('[Middleware] Checking setup status:', { url, workspaceId, API_BASE });
+    console.log('[Middleware] Checking setup status:', { url, workspaceId, API_BASE, hasToken: !!accessToken });
+
+    // Build headers with optional auth token
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (accessToken) {
+      headers['Authorization'] = `Bearer ${accessToken}`;
+    }
 
     const response = await fetch(url, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       signal: AbortSignal.timeout(3000),
     });
 

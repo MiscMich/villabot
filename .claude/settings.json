@@ -1,12 +1,6 @@
 {
   "plugins": {
     "local": [
-      ".claude/plugins/commit-commands",
-      ".claude/plugins/code-review",
-      ".claude/plugins/feature-dev",
-      ".claude/plugins/frontend-design",
-      ".claude/plugins/pr-review-toolkit",
-      ".claude/plugins/security-guidance",
       ".claude/plugins/hookify",
       ".claude/plugins/plugin-dev"
     ],
