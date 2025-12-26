@@ -114,8 +114,9 @@ export async function middleware(request: NextRequest) {
 
     const workspaceId = profile?.default_workspace_id;
     console.log('[Middleware] Setup check:', { userId: session.user.id, workspaceId, hasProfile: !!profile });
-    // Pass access token for API authentication
-    return await checkSetupStatus(request, workspaceId, session.access_token);
+
+    // Check setup status directly via Supabase (faster and doesn't require API auth)
+    return await checkSetupStatusViaSupabase(request, supabase, workspaceId);
   }
 
   return NextResponse.next();
@@ -143,9 +144,61 @@ function isE2ETestMode(request: NextRequest): boolean {
 }
 
 /**
- * Check if initial setup is complete
+ * Check if initial setup is complete via Supabase (for authenticated users)
+ * This is faster and more reliable than calling the API
  */
-async function checkSetupStatus(request: NextRequest, workspaceId?: string, accessToken?: string) {
+async function checkSetupStatusViaSupabase(
+  request: NextRequest,
+  supabase: ReturnType<typeof createServerClient>,
+  workspaceId?: string
+) {
+  // Bypass setup check in E2E test mode
+  if (isE2ETestMode(request)) {
+    console.log('E2E test mode - bypassing setup check in middleware');
+    return NextResponse.next();
+  }
+
+  if (!workspaceId) {
+    // No workspace - redirect to setup
+    console.log('[Middleware] No workspace ID, redirecting to /setup');
+    const setupUrl = new URL('/setup', request.url);
+    return NextResponse.redirect(setupUrl);
+  }
+
+  try {
+    // Check if workspace has any bots (indicates setup is complete)
+    const { data: bots, error } = await supabase
+      .from('bots')
+      .select('id')
+      .eq('workspace_id', workspaceId)
+      .limit(1);
+
+    if (error) {
+      console.error('[Middleware] Failed to check bots:', error.message);
+      // On error, allow through to avoid blocking users
+      return NextResponse.next();
+    }
+
+    const hasBot = bots && bots.length > 0;
+    console.log('[Middleware] Setup status via Supabase:', { workspaceId, hasBot });
+
+    if (!hasBot) {
+      console.log('[Middleware] Setup not complete, redirecting to /setup');
+      const setupUrl = new URL('/setup', request.url);
+      return NextResponse.redirect(setupUrl);
+    }
+  } catch (error) {
+    // On error, allow through
+    console.warn('[Middleware] Setup status check error:', error);
+  }
+
+  return NextResponse.next();
+}
+
+/**
+ * Check if initial setup is complete (legacy API-based check for unauthenticated requests)
+ */
+async function checkSetupStatus(request: NextRequest, workspaceId?: string) {
   // Bypass setup check in E2E test mode
   if (isE2ETestMode(request)) {
     console.log('E2E test mode - bypassing setup check in middleware');
@@ -158,19 +211,13 @@ async function checkSetupStatus(request: NextRequest, workspaceId?: string, acce
       ? `${API_BASE}/api/setup/status?workspaceId=${encodeURIComponent(workspaceId)}`
       : `${API_BASE}/api/setup/status`;
 
-    console.log('[Middleware] Checking setup status:', { url, workspaceId, API_BASE, hasToken: !!accessToken });
-
-    // Build headers with optional auth token
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (accessToken) {
-      headers['Authorization'] = `Bearer ${accessToken}`;
-    }
+    console.log('[Middleware] Checking setup status via API:', { url, workspaceId, API_BASE });
 
     const response = await fetch(url, {
       method: 'GET',
-      headers,
+      headers: {
+        'Content-Type': 'application/json',
+      },
       signal: AbortSignal.timeout(3000),
     });
 
