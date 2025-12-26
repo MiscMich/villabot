@@ -19,6 +19,7 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
+  AlertTriangle,
   Search,
   Edit,
   RefreshCw,
@@ -29,6 +30,7 @@ import {
   Code,
   Hash,
   Globe,
+  KeyRound,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -113,6 +115,27 @@ interface BotData {
   system_prompt: string | null;
   created_at: string;
   updated_at: string;
+  // Credential status flags from API
+  has_slack_bot_token?: boolean;
+  has_slack_app_token?: boolean;
+  has_slack_signing_secret?: boolean;
+}
+
+/**
+ * Check if a bot has valid Slack credentials for activation
+ */
+function hasValidCredentials(bot: BotData): boolean {
+  return Boolean(bot.has_slack_bot_token && bot.has_slack_app_token);
+}
+
+/**
+ * Get missing credentials as a human-readable list
+ */
+function getMissingCredentials(bot: BotData): string[] {
+  const missing: string[] = [];
+  if (!bot.has_slack_bot_token) missing.push('Bot Token');
+  if (!bot.has_slack_app_token) missing.push('App Token');
+  return missing;
 }
 
 export default function BotsPage() {
@@ -280,7 +303,7 @@ export default function BotsPage() {
       </div>
 
       {/* Stats Overview */}
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-4">
         <div className="glass-card p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
           <div className="flex items-center justify-between">
             <div>
@@ -320,10 +343,24 @@ export default function BotsPage() {
             </div>
           </div>
         </div>
+
+        <div className="glass-card p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '250ms' }}>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">Needs Config</p>
+              <p className="text-3xl font-display font-bold text-amber-600 dark:text-amber-400">
+                {botsData?.bots.filter((b) => !hasValidCredentials(b)).length ?? 0}
+              </p>
+            </div>
+            <div className="p-3 rounded-xl bg-gradient-to-br from-amber-400/20 to-amber-600/20">
+              <AlertTriangle className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Search */}
-      <div className="flex items-center gap-4 opacity-0 animate-fade-in-up" style={{ animationDelay: '250ms' }}>
+      <div className="flex items-center gap-4 opacity-0 animate-fade-in-up" style={{ animationDelay: '300ms' }}>
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
@@ -359,16 +396,30 @@ export default function BotsPage() {
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className={cn(
-                    'w-12 h-12 rounded-xl flex items-center justify-center',
-                    bot.status === 'active'
-                      ? 'bg-gradient-to-br from-violet-400 to-purple-600 shadow-glow'
-                      : 'bg-secondary'
-                  )}>
-                    <Bot className={cn(
-                      'h-6 w-6',
-                      bot.status === 'active' ? 'text-white' : 'text-muted-foreground'
-                    )} />
+                  <div className="relative">
+                    <div className={cn(
+                      'w-12 h-12 rounded-xl flex items-center justify-center',
+                      bot.status === 'active'
+                        ? 'bg-gradient-to-br from-violet-400 to-purple-600 shadow-glow'
+                        : !hasValidCredentials(bot)
+                          ? 'bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700'
+                          : 'bg-secondary'
+                    )}>
+                      <Bot className={cn(
+                        'h-6 w-6',
+                        bot.status === 'active'
+                          ? 'text-white'
+                          : !hasValidCredentials(bot)
+                            ? 'text-amber-600 dark:text-amber-400'
+                            : 'text-muted-foreground'
+                      )} />
+                    </div>
+                    {/* Warning badge when credentials are missing */}
+                    {!hasValidCredentials(bot) && (
+                      <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center shadow-sm">
+                        <AlertTriangle className="w-3 h-3 text-white" />
+                      </div>
+                    )}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
@@ -442,6 +493,33 @@ export default function BotsPage() {
                 </div>
               </div>
 
+              {/* Credential Warning Banner */}
+              {!hasValidCredentials(bot) && (
+                <div className="flex items-center gap-2 p-2.5 mb-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
+                      Missing Slack Credentials
+                    </p>
+                    <p className="text-xs text-amber-600 dark:text-amber-400 truncate">
+                      {getMissingCredentials(bot).join(', ')} required
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs text-amber-700 hover:text-amber-900 dark:text-amber-400 dark:hover:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/40"
+                    onClick={() => {
+                      setEditingBot(bot);
+                      setShowFormModal(true);
+                    }}
+                  >
+                    <KeyRound className="h-3 w-3 mr-1" />
+                    Configure
+                  </Button>
+                </div>
+              )}
+
               <div className="flex items-center justify-between pt-4 border-t border-border/50">
                 <div className="flex items-center gap-2">
                   {getStatusIcon(bot.status)}
@@ -453,17 +531,39 @@ export default function BotsPage() {
                   </span>
                 </div>
 
-                <Switch
-                  checked={bot.status === 'active'}
-                  onCheckedChange={(checked) => {
-                    if (checked) {
-                      activateMutation.mutate(bot.id);
-                    } else {
-                      deactivateMutation.mutate(bot.id);
+                <div className="flex items-center gap-2">
+                  {/* Show disabled reason when credentials are missing */}
+                  {!hasValidCredentials(bot) && bot.status !== 'active' && (
+                    <span className="text-xs text-muted-foreground">
+                      Configure to activate
+                    </span>
+                  )}
+                  <Switch
+                    checked={bot.status === 'active'}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        // Double-check credentials before attempting activation
+                        if (!hasValidCredentials(bot)) {
+                          toast({
+                            title: 'Cannot Activate Bot',
+                            description: `Missing ${getMissingCredentials(bot).join(' and ')}. Configure Slack credentials first.`,
+                            variant: 'destructive',
+                          });
+                          return;
+                        }
+                        activateMutation.mutate(bot.id);
+                      } else {
+                        deactivateMutation.mutate(bot.id);
+                      }
+                    }}
+                    disabled={
+                      activateMutation.isPending ||
+                      deactivateMutation.isPending ||
+                      // Disable activation (not deactivation) if credentials are missing
+                      (!hasValidCredentials(bot) && bot.status !== 'active')
                     }
-                  }}
-                  disabled={activateMutation.isPending || deactivateMutation.isPending}
-                />
+                  />
+                </div>
               </div>
 
               <div className="mt-4 text-xs text-muted-foreground">

@@ -143,19 +143,20 @@ The platform owns a single OAuth application; users authenticate their Google ac
 
 ### Token Storage
 
-Credentials are stored per-workspace in the database:
+Credentials are stored in the database:
 
 ```sql
--- Workspace-level Google Drive tokens
-workspaces.google_access_token
-workspaces.google_refresh_token
-workspaces.google_token_expiry
+-- Bot-level Slack tokens (per-bot credentials)
+bots.slack_bot_token      -- OAuth bot token (xoxb-...)
+bots.slack_app_token      -- Socket Mode app token (xapp-...)
+bots.slack_team_id        -- Slack workspace ID
 
--- Bot-level Slack tokens
-bots.slack_bot_token
-bots.slack_app_token
-bots.slack_team_id
+-- Google Drive tokens (stored in bot_config JSONB column)
+bot_config.google_drive_tokens
+-- Contains: access_token, refresh_token, expiry_date
 ```
+
+**Note**: Google Drive OAuth tokens are stored per-bot in `bot_config.google_drive_tokens` (JSONB), not at the workspace level. This allows different bots to connect to different Google accounts if needed.
 
 ## User Roles
 
@@ -193,7 +194,7 @@ Platform admin is determined by `user_profiles.is_platform_admin = true`.
    │
 5. RRF fusion combines results
    │
-6. Gemini generates response with sources
+6. OpenAI generates response with sources
    │
 7. Response sent to Slack thread
 ```
@@ -220,8 +221,8 @@ Limits are enforced per-workspace:
 
 | Limit | Starter | Pro | Business |
 |-------|---------|-----|----------|
-| Queries/month | 500 | 2,000 | 10,000 |
-| Documents | 100 | 500 | Unlimited |
+| Queries/month | 500 | 5,000 | 25,000 |
+| Documents | 1,000 | 10,000 | 50,000 |
 | Bots | 1 | 3 | 10 |
 | Team members | 3 | 10 | Unlimited |
 
@@ -265,7 +266,7 @@ Billing is managed via Stripe with `workspace.stripe_customer_id` and `workspace
         │                     │                     │
         ▼                     ▼                     ▼
 ┌───────────────┐    ┌────────────────┐    ┌────────────────┐
-│   Slack API   │    │ Google Gemini  │    │  Google Drive  │
+│   Slack API   │    │    OpenAI      │    │  Google Drive  │
 │  (Per-Bot)    │    │  (Platform)    │    │  (Per-User)    │
 └───────────────┘    └────────────────┘    └────────────────┘
 ```

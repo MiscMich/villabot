@@ -5,8 +5,8 @@ PostgreSQL database schema with pgvector extension for semantic search.
 ## Overview
 
 The database uses:
-- **PostgreSQL 15+** via Supabase
-- **pgvector** extension for vector embeddings
+- **PostgreSQL 15+** via Supabase Cloud
+- **pgvector** extension for vector embeddings (768 dimensions, OpenAI text-embedding-3-small)
 - **Row Level Security (RLS)** for multi-tenant isolation
 
 ## Core Tables
@@ -37,16 +37,13 @@ CREATE TABLE workspaces (
   is_internal BOOLEAN DEFAULT FALSE,
   internal_notes TEXT,
 
-  -- OAuth tokens (encrypted)
-  google_access_token TEXT,
-  google_refresh_token TEXT,
-  google_token_expiry TIMESTAMPTZ,
-
   -- Metadata
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 ```
+
+**Note**: Google OAuth tokens are stored per-bot in `bot_config.google_drive_tokens`, not at the workspace level.
 
 ### user_profiles
 
@@ -129,7 +126,7 @@ CREATE TABLE document_chunks (
   chunk_index INTEGER NOT NULL,
   content TEXT NOT NULL,
 
-  -- Embeddings (Gemini text-embedding-004 = 768 dimensions)
+  -- Embeddings (OpenAI text-embedding-3-small = 768 dimensions)
   embedding VECTOR(768),
 
   -- Full-text search
@@ -285,22 +282,265 @@ CREATE TABLE analytics (
 CREATE INDEX idx_analytics_workspace_time ON analytics(workspace_id, created_at);
 ```
 
+---
+
+## Additional Tables
+
+### bot_channels
+
+Slack channel assignments per bot.
+
+```sql
+CREATE TABLE bot_channels (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  bot_id UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+  slack_channel_id VARCHAR(50) NOT NULL,
+  channel_name VARCHAR(255),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(bot_id, slack_channel_id)
+);
+```
+
+### bot_drive_folders
+
+Google Drive folder mappings per bot.
+
+```sql
+CREATE TABLE bot_drive_folders (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  bot_id UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+  folder_id VARCHAR(255) NOT NULL,
+  folder_name VARCHAR(500),
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### bot_config
+
+Legacy bot configuration (JSONB storage for various settings).
+
+```sql
+CREATE TABLE bot_config (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id),
+  
+  -- Google Drive OAuth tokens (stored here, not in workspaces)
+  google_drive_tokens JSONB, -- { access_token, refresh_token, expiry_date }
+  google_drive_folder_id VARCHAR(255),
+  
+  -- Website scraping config
+  website_url TEXT,
+  scrape_limit INTEGER DEFAULT 50,
+  
+  -- Other settings
+  settings JSONB DEFAULT '{}',
+  
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### bot_health
+
+Real-time health monitoring for bots.
+
+```sql
+CREATE TABLE bot_health (
+  bot_id UUID PRIMARY KEY REFERENCES bots(id) ON DELETE CASCADE,
+  is_healthy BOOLEAN DEFAULT FALSE,
+  is_running BOOLEAN DEFAULT FALSE,
+  last_check_at TIMESTAMPTZ,
+  consecutive_failures INTEGER DEFAULT 0,
+  total_restart_attempts INTEGER DEFAULT 0,
+  permanently_disabled BOOLEAN DEFAULT FALSE,
+  last_restart_at TIMESTAMPTZ,
+  error_message TEXT,
+  checked_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### workspace_invites
+
+Team invitation tracking.
+
+```sql
+CREATE TABLE workspace_invites (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  email VARCHAR(255) NOT NULL,
+  role workspace_role DEFAULT 'member',
+  invited_by UUID REFERENCES user_profiles(id),
+  token VARCHAR(255) UNIQUE NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  accepted_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### usage_tracking
+
+Real-time usage tracking for rate limiting.
+
+```sql
+CREATE TABLE usage_tracking (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id),
+  period_start DATE NOT NULL,
+  query_count INTEGER DEFAULT 0,
+  document_count INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(workspace_id, period_start)
+);
+```
+
+### usage_daily
+
+Daily aggregated usage statistics.
+
+```sql
+CREATE TABLE usage_daily (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id),
+  date DATE NOT NULL,
+  queries INTEGER DEFAULT 0,
+  successful_responses INTEGER DEFAULT 0,
+  failed_responses INTEGER DEFAULT 0,
+  avg_response_time_ms INTEGER,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(workspace_id, date)
+);
+```
+
+### subscriptions
+
+Stripe subscription data.
+
+```sql
+CREATE TABLE subscriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id),
+  stripe_subscription_id VARCHAR(255) UNIQUE,
+  stripe_price_id VARCHAR(255),
+  status VARCHAR(50),
+  current_period_start TIMESTAMPTZ,
+  current_period_end TIMESTAMPTZ,
+  cancel_at TIMESTAMPTZ,
+  canceled_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### billing_events
+
+Stripe webhook event log.
+
+```sql
+CREATE TABLE billing_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID REFERENCES workspaces(id),
+  stripe_event_id VARCHAR(255) UNIQUE,
+  event_type VARCHAR(100) NOT NULL,
+  event_data JSONB,
+  processed_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### platform_feedback
+
+Platform-wide feedback system.
+
+```sql
+CREATE TABLE platform_feedback (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES user_profiles(id),
+  workspace_id UUID REFERENCES workspaces(id),
+  
+  type VARCHAR(50) NOT NULL, -- 'feature_request', 'bug_report', 'general'
+  title VARCHAR(500) NOT NULL,
+  description TEXT,
+  status VARCHAR(50) DEFAULT 'open', -- 'open', 'in_progress', 'completed', 'closed'
+  
+  vote_count INTEGER DEFAULT 0,
+  
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### platform_feedback_votes
+
+User votes on platform feedback.
+
+```sql
+CREATE TABLE platform_feedback_votes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  feedback_id UUID NOT NULL REFERENCES platform_feedback(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES user_profiles(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(feedback_id, user_id)
+);
+```
+
+### admin_audit_log
+
+Platform admin action audit trail.
+
+```sql
+CREATE TABLE admin_audit_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  admin_id UUID NOT NULL REFERENCES user_profiles(id),
+  action VARCHAR(100) NOT NULL,
+  target_type VARCHAR(50), -- 'workspace', 'user', 'subscription'
+  target_id UUID,
+  details JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### error_logs
+
+Error tracking and monitoring.
+
+```sql
+CREATE TABLE error_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID REFERENCES workspaces(id),
+  bot_id UUID REFERENCES bots(id),
+  
+  service VARCHAR(50) NOT NULL, -- 'slack', 'api', 'sync', 'rag'
+  severity VARCHAR(20) NOT NULL, -- 'low', 'medium', 'high', 'critical'
+  error_message TEXT NOT NULL,
+  error_stack TEXT,
+  context JSONB,
+  
+  resolved_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_error_logs_workspace ON error_logs(workspace_id, created_at);
+CREATE INDEX idx_error_logs_severity ON error_logs(severity, created_at);
+```
+
 ## Enums
 
 ```sql
 CREATE TYPE subscription_tier AS ENUM ('starter', 'pro', 'business');
 CREATE TYPE workspace_role AS ENUM ('owner', 'admin', 'member');
 CREATE TYPE document_category AS ENUM (
-  'company_knowledge',
-  'internal_sops',
-  'marketing',
-  'sales',
-  'operations',
-  'hr_policies',
-  'technical',
-  'custom'
+  'shared',        -- General company knowledge accessible to all bots
+  'operations',    -- Operations procedures and workflows
+  'marketing',     -- Marketing materials and guidelines
+  'sales',         -- Sales collateral and processes
+  'technical',     -- Technical documentation
+  'hr',            -- HR policies and procedures
+  'custom'         -- User-defined categories
 );
 ```
+
+**Note**: Categories are assigned per-document. Each bot can be configured to access specific categories (e.g., Sales bot → sales + shared).
 
 ## Key Functions
 

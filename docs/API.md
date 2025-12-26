@@ -32,13 +32,17 @@ Returns the health status of the API and connected services.
 {
   "status": "healthy",
   "timestamp": "2024-12-20T10:00:00Z",
+  "uptime": 86400,
   "services": {
-    "database": true,
+    "supabase": true,
     "slack": true,
-    "gemini": true
+    "openai": true,
+    "googleDrive": true
   }
 }
 ```
+
+Possible status values: `healthy`, `degraded`, `unhealthy`
 
 ---
 
@@ -268,10 +272,116 @@ Rate limits vary by subscription tier:
 | Tier | Requests/minute | Queries/month |
 |------|-----------------|---------------|
 | Starter | 60 | 500 |
-| Pro | 120 | 2,000 |
-| Business | 300 | 10,000 |
+| Pro | 120 | 5,000 |
+| Business | 300 | 25,000 |
 
 Rate limit headers are included in all responses:
 - `X-RateLimit-Limit`: Maximum requests allowed
 - `X-RateLimit-Remaining`: Requests remaining
 - `X-RateLimit-Reset`: Unix timestamp when limit resets
+
+---
+
+## Setup (Onboarding)
+
+### GET /setup/status
+
+Get the current onboarding status for a workspace.
+
+### POST /setup/slack
+
+Configure Slack credentials during setup.
+
+### POST /setup/drive
+
+Connect Google Drive during setup.
+
+### POST /setup/complete
+
+Mark onboarding as complete.
+
+---
+
+## Google Drive
+
+### GET /drive/status
+
+Get Google Drive connection status.
+
+### POST /drive/auth
+
+Initiate Google Drive OAuth flow.
+
+### GET /drive/callback
+
+OAuth callback handler.
+
+### POST /drive/sync
+
+Trigger manual Drive sync.
+
+### DELETE /drive/disconnect
+
+Disconnect Google Drive.
+
+---
+
+## Conversations
+
+### GET /conversations
+
+List Slack conversation threads.
+
+**Query Parameters:**
+- `limit` - Number of results (default: 50)
+- `offset` - Pagination offset (default: 0)
+- `botId` - Filter by bot ID (optional)
+
+### GET /conversations/:sessionId
+
+Get full conversation thread with messages.
+
+---
+
+## Bot Configuration
+
+### GET /config
+
+Get bot configuration (legacy endpoint).
+
+### PATCH /config
+
+Update bot configuration.
+
+---
+
+## Platform Feedback
+
+### GET /platform-feedback
+
+List platform feedback submissions.
+
+### POST /platform-feedback
+
+Submit platform feedback.
+
+### POST /platform-feedback/:id/vote
+
+Vote on feedback item.
+
+---
+
+## Error Logs (Admin)
+
+### GET /errors
+
+List error logs with filtering.
+
+**Query Parameters:**
+- `service` - Filter by service: `slack`, `api`, `sync`
+- `severity` - Filter by severity: `low`, `medium`, `high`, `critical`
+- `limit` - Number of results (default: 100)
+
+### DELETE /errors/cleanup
+
+Delete old error logs (admin only).

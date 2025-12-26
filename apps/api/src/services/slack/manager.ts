@@ -14,6 +14,7 @@ import type { Bot, DocumentCategory } from '@cluebase/shared';
 const HEALTH_CHECK_INTERVAL_MS = 30_000; // 30 seconds
 const MAX_CONSECUTIVE_FAILURES = 3;
 const RESTART_COOLDOWN_MS = 60_000; // 1 minute between restart attempts
+const MAX_RESTART_ATTEMPTS = 5; // Circuit breaker: give up after this many failed restarts
 
 interface BotHealthStatus {
   botId: string;
@@ -24,6 +25,8 @@ interface BotHealthStatus {
   consecutiveFailures: number;
   lastRestartAt: Date | null;
   errorMessage: string | null;
+  totalRestartAttempts: number; // Track total restart attempts for circuit breaker
+  permanentlyDisabled: boolean; // Circuit breaker tripped - stop trying
 }
 
 class BotManager {
@@ -63,6 +66,23 @@ class BotManager {
       // Load channel assignments for each bot
       for (const botRow of bots) {
         const bot = this.mapBotFromRow(botRow);
+
+        // Skip bots without credentials and auto-fix their status
+        if (!bot.slackBotToken || !bot.slackAppToken) {
+          logger.warn(`Bot ${bot.name} has no Slack credentials, marking as inactive`, {
+            botId: bot.id,
+            hasBotToken: !!bot.slackBotToken,
+            hasAppToken: !!bot.slackAppToken,
+          });
+
+          // Auto-fix: mark bot as inactive since it can't run
+          await supabase
+            .from('bots')
+            .update({ status: 'inactive', updated_at: new Date().toISOString() })
+            .eq('id', bot.id);
+
+          continue;
+        }
 
         // Get assigned channels
         const { data: channels } = await supabase
@@ -273,6 +293,8 @@ class BotManager {
         consecutiveFailures: 0,
         lastRestartAt: null,
         errorMessage: null,
+        totalRestartAttempts: 0,
+        permanentlyDisabled: false,
       });
     }
 
@@ -311,7 +333,15 @@ class BotManager {
         consecutiveFailures: 0,
         lastRestartAt: null,
         errorMessage: null,
+        totalRestartAttempts: 0,
+        permanentlyDisabled: false,
       };
+
+      // Skip permanently disabled bots
+      if (status.permanentlyDisabled) {
+        logger.debug(`Skipping health check for permanently disabled bot ${status.botName}`);
+        continue;
+      }
 
       try {
         // Check if bot is still running
@@ -363,14 +393,60 @@ class BotManager {
 
   /**
    * Try to auto-restart a failed bot
+   * Implements circuit breaker pattern - gives up after MAX_RESTART_ATTEMPTS
    */
   private async tryAutoRestart(
     botId: string,
     status: BotHealthStatus,
     now: Date
   ): Promise<void> {
-    // Check if we've exceeded max failures
+    // Circuit breaker: if permanently disabled, don't try to restart
+    if (status.permanentlyDisabled) {
+      return;
+    }
+
+    // Check if we've exceeded max failures threshold for this check cycle
     if (status.consecutiveFailures < MAX_CONSECUTIVE_FAILURES) {
+      return;
+    }
+
+    // Circuit breaker: check if we've exceeded max restart attempts
+    if (status.totalRestartAttempts >= MAX_RESTART_ATTEMPTS) {
+      logger.error(`🚨 CIRCUIT BREAKER TRIPPED: Bot ${status.botName} permanently disabled after ${MAX_RESTART_ATTEMPTS} failed restart attempts`, {
+        botId,
+        totalRestartAttempts: status.totalRestartAttempts,
+        lastError: status.errorMessage,
+      });
+
+      // Mark as permanently disabled
+      status.permanentlyDisabled = true;
+      status.errorMessage = `Permanently disabled: exceeded ${MAX_RESTART_ATTEMPTS} restart attempts`;
+
+      // Update database status to disabled (not just error)
+      await supabase
+        .from('bots')
+        .update({ 
+          status: 'inactive',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', botId);
+
+      // Remove from instances and health monitoring to stop the loop
+      this.instances.delete(botId);
+
+      // Track critical error for alerting
+      await errorTracker.track(
+        new Error(`CIRCUIT BREAKER: Bot ${status.botName} permanently disabled - requires manual intervention`),
+        'slack',
+        'critical',
+        { 
+          botId, 
+          action: 'circuit_breaker_tripped', 
+          totalRestartAttempts: status.totalRestartAttempts,
+          reason: 'Max restart attempts exceeded',
+        }
+      );
+
       return;
     }
 
@@ -386,9 +462,13 @@ class BotManager {
       }
     }
 
-    logger.info(`Auto-restarting bot ${status.botName}`, {
+    // Increment restart attempt counter
+    status.totalRestartAttempts += 1;
+
+    logger.info(`Auto-restarting bot ${status.botName} (attempt ${status.totalRestartAttempts}/${MAX_RESTART_ATTEMPTS})`, {
       botId,
       consecutiveFailures: status.consecutiveFailures,
+      totalRestartAttempts: status.totalRestartAttempts,
     });
 
     try {
@@ -402,8 +482,10 @@ class BotManager {
         status.isHealthy = true;
         status.isRunning = true;
         status.consecutiveFailures = 0;
+        status.totalRestartAttempts = 0; // Reset on successful restart
         status.lastRestartAt = now;
         status.errorMessage = null;
+        status.permanentlyDisabled = false;
 
         logger.info(`Bot ${status.botName} auto-restarted successfully`, { botId });
 
@@ -416,9 +498,13 @@ class BotManager {
         );
       } else {
         status.lastRestartAt = now;
-        status.errorMessage = 'Auto-restart failed';
+        status.errorMessage = `Auto-restart failed (attempt ${status.totalRestartAttempts}/${MAX_RESTART_ATTEMPTS})`;
 
-        logger.error(`Failed to auto-restart bot ${status.botName}`, { botId });
+        logger.error(`Failed to auto-restart bot ${status.botName}`, { 
+          botId,
+          attempt: status.totalRestartAttempts,
+          maxAttempts: MAX_RESTART_ATTEMPTS,
+        });
 
         // Update database status to error
         await supabase
@@ -428,10 +514,10 @@ class BotManager {
 
         // Track failed restart
         await errorTracker.track(
-          new Error(`Bot ${status.botName} auto-restart failed`),
+          new Error(`Bot ${status.botName} auto-restart failed (attempt ${status.totalRestartAttempts})`),
           'slack',
           'high',
-          { botId, action: 'auto_restart', success: false }
+          { botId, action: 'auto_restart', success: false, attempt: status.totalRestartAttempts }
         );
       }
     } catch (error) {
@@ -441,6 +527,7 @@ class BotManager {
       logger.error(`Error during auto-restart of bot ${status.botName}`, {
         botId,
         error,
+        attempt: status.totalRestartAttempts,
       });
     }
   }
@@ -459,6 +546,8 @@ class BotManager {
         last_restart_at: status.lastRestartAt?.toISOString() ?? null,
         error_message: status.errorMessage,
         checked_at: new Date().toISOString(),
+        total_restart_attempts: status.totalRestartAttempts,
+        permanently_disabled: status.permanentlyDisabled,
       }));
 
       // Upsert health records (if table exists)

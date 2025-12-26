@@ -11,8 +11,8 @@ Multi-tenant SaaS platform for AI-powered knowledge management. Features RAG-pow
 ## Tech Stack
 - **Backend**: Node.js/TypeScript + Express (port 3000)
 - **Dashboard**: Next.js 15 + React 19 (port 3001)
-- **AI**: Google Gemini API (embeddings + generation)
-- **Database**: Supabase + pgvector
+- **AI**: OpenAI API (text-embedding-3-small for embeddings, gpt-4o-mini for generation)
+- **Database**: Supabase + pgvector (768-dim vectors)
 - **Integration**: Slack Bolt SDK, Google Drive API
 - **Package Manager**: pnpm (monorepo)
 - **Deployment**: Coolify + Docker + Supabase Cloud
@@ -89,13 +89,22 @@ docs/
 ```
 
 ## Database Schema (Key Tables)
+Core tables:
+- `workspaces` - Multi-tenant workspace data
+- `bots` - Bot instances with Slack credentials per workspace
 - `documents` - Document metadata (Drive files, website pages)
 - `document_chunks` - Chunked content with embeddings (768-dim vectors)
 - `thread_sessions` - Slack conversation threads
 - `thread_messages` - Individual messages with sources
 - `learned_facts` - User-taught corrections
 - `analytics` - Usage events
-- `bot_config` - Configuration settings
+- `bot_config` - Legacy configuration (being replaced by `bots` table)
+- `bot_channels` - Slack channel assignments per bot
+- `bot_drive_folders` - Google Drive folder mappings per bot
+- `bot_health` - Real-time health monitoring for bots
+- `response_feedback` - User feedback on bot responses
+- `subscriptions` - Stripe subscription data
+- `error_logs` - Error tracking and monitoring
 
 ## RAG Pipeline
 1. **Hybrid Search**: Vector (semantic) + BM25 (keyword) with RRF fusion
@@ -135,8 +144,8 @@ Key constants in `packages/shared/src/constants.ts`:
 ## Environment Variables
 See `.env.example` for required configuration:
 - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` - Database
-- `GEMINI_API_KEY` - AI embeddings and generation
-- `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN` - Slack integration
+- `OPENAI_API_KEY` - AI embeddings and generation (OpenAI)
+- `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN` - Slack integration (legacy single-bot)
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` - Drive OAuth
 - `GOOGLE_DRIVE_FOLDER_ID` - Source folder for documents
 - `COMPANY_WEBSITE_URL` - Website to scrape
@@ -150,9 +159,10 @@ See `.env.example` for required configuration:
 - Team member management and invites
 
 ### Document Categorization (Complete)
-- Categories: `company_knowledge`, `internal_sops`, `marketing`, `sales`, etc.
+- Default categories: `shared`, `operations`, `marketing`, `sales`, `technical`, `hr`, `custom`
+- Categories are assigned per-document and can be filtered per-bot
+- Each bot can be configured to access specific categories (e.g., Sales bot → sales + shared)
 - Category-filtered search with workspace isolation
-- Source attribution by category
 
 ### Multi-Bot Architecture (Complete)
 - Multiple bots per workspace with different Slack credentials
@@ -179,7 +189,7 @@ Located in `apps/dashboard/e2e/`:
 **68 tests** covering all major user flows.
 
 ### Health Check Endpoints
-- `GET /health` - Service status (supabase, slack, gemini, googleDrive)
+- `GET /health` - Service status (supabase, slack, openai, googleDrive)
 - Returns: `{ status: 'healthy' | 'degraded', services: {...}, uptime: number }`
 
 ## Background Services

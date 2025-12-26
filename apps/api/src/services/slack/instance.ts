@@ -81,14 +81,24 @@ export class BotInstance {
   }
 
   /**
+   * Check if this bot has valid Slack credentials
+   */
+  hasValidCredentials(): boolean {
+    const { bot } = this.config;
+    return !!(bot.slackBotToken && bot.slackAppToken);
+  }
+
+  /**
    * Initialize and start the bot
+   * Throws an error if credentials are missing (caller should handle)
    */
   async start(): Promise<void> {
     const { bot } = this.config;
 
     if (!bot.slackBotToken || !bot.slackAppToken) {
-      logger.warn(`Bot ${bot.name} has no Slack credentials, skipping`);
-      return;
+      const error = new Error(`Bot ${bot.name} cannot start: missing Slack credentials (bot_token: ${!!bot.slackBotToken}, app_token: ${!!bot.slackAppToken})`);
+      logger.error(error.message, { botId: bot.id, botName: bot.name });
+      throw error;
     }
 
     try {

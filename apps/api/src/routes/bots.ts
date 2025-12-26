@@ -827,12 +827,55 @@ botsRouter.get('/:id/slack-channels', requireWorkspaceAdmin, async (req, res) =>
 /**
  * Activate a bot - updates status AND starts it in the BotManager
  * SECURITY: Uses safe columns to avoid exposing tokens
+ * VALIDATION: Checks for required Slack credentials before activation
  */
 botsRouter.post('/:id/activate', requireWorkspaceAdmin, async (req, res) => {
   try {
     const botId = req.params.id as string;
     const workspaceId = req.workspace!.id;
 
+    // First check if bot exists and has required credentials
+    const { data: existingBot, error: checkError } = await supabase
+      .from('bots')
+      .select('id, name, slack_bot_token, slack_app_token')
+      .eq('id', botId)
+      .eq('workspace_id', workspaceId)
+      .single();
+
+    if (checkError) {
+      if (checkError.code === 'PGRST116') {
+        return res.status(404).json({ error: 'Bot not found', code: 'BOT_NOT_FOUND' });
+      }
+      throw checkError;
+    }
+
+    // VALIDATION: Check for required Slack credentials before activation
+    const hasSlackBotToken = !!existingBot.slack_bot_token;
+    const hasSlackAppToken = !!existingBot.slack_app_token;
+    const missingCredentials: string[] = [];
+
+    if (!hasSlackBotToken) missingCredentials.push('Bot Token (xoxb-)');
+    if (!hasSlackAppToken) missingCredentials.push('App Token (xapp-)');
+
+    if (missingCredentials.length > 0) {
+      logger.warn('Bot activation blocked - missing credentials', {
+        botId,
+        botName: existingBot.name,
+        workspaceId,
+        missing: missingCredentials,
+      });
+
+      return res.status(400).json({
+        error: 'Cannot activate bot without Slack credentials',
+        code: 'MISSING_CREDENTIALS',
+        details: {
+          missing: missingCredentials,
+          message: `Missing: ${missingCredentials.join(', ')}. Please configure Slack credentials before activating this bot.`,
+        },
+      });
+    }
+
+    // Credentials are valid, proceed with activation
     const { data: bot, error } = await supabase
       .from('bots')
       .update({ status: 'active', updated_at: new Date().toISOString() })
@@ -846,13 +889,6 @@ botsRouter.post('/:id/activate', requireWorkspaceAdmin, async (req, res) => {
     // Start the bot in the manager
     const started = await botManager.startBot(botId);
 
-    // Get token status for response
-    const { data: tokenStatus } = await supabase
-      .from('bots')
-      .select('slack_bot_token, slack_app_token, slack_signing_secret')
-      .eq('id', botId)
-      .single();
-
     logger.info('Bot activated', {
       id: botId,
       workspaceId,
@@ -862,9 +898,9 @@ botsRouter.post('/:id/activate', requireWorkspaceAdmin, async (req, res) => {
     res.json({
       bot: {
         ...bot,
-        has_slack_bot_token: !!tokenStatus?.slack_bot_token,
-        has_slack_app_token: !!tokenStatus?.slack_app_token,
-        has_slack_signing_secret: !!tokenStatus?.slack_signing_secret,
+        has_slack_bot_token: hasSlackBotToken,
+        has_slack_app_token: hasSlackAppToken,
+        has_slack_signing_secret: !!existingBot.slack_app_token, // Use existing check
       },
       started,
       message: started
