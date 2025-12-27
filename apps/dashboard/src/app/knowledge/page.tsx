@@ -85,11 +85,11 @@ export default function KnowledgePage() {
     return (
       <div className="space-y-8">
         <div>
-          <div className="flex items-center gap-3 mb-2">
-            <Brain className="w-8 h-8 text-amber-500" />
-            <h1 className="text-4xl font-display font-bold">Knowledge Base</h1>
+          <div className="flex items-center gap-2 md:gap-3 mb-2">
+            <Brain className="w-6 h-6 md:w-8 md:h-8 text-amber-500 shrink-0" />
+            <h1 className="text-2xl md:text-4xl font-display font-bold">Knowledge Base</h1>
           </div>
-          <p className="text-lg text-muted-foreground">
+          <p className="text-sm md:text-lg text-muted-foreground">
             Review and manage facts learned from user corrections
           </p>
         </div>
@@ -137,10 +137,10 @@ export default function KnowledgePage() {
     <div className="space-y-8">
       {/* Header */}
       <div className="opacity-0 animate-fade-in">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-3">
-            <Brain className="w-8 h-8 text-amber-500" />
-            <h1 className="text-4xl font-display font-bold">Knowledge Base</h1>
+        <div className="flex items-center justify-between mb-2 flex-wrap gap-3">
+          <div className="flex items-center gap-2 md:gap-3">
+            <Brain className="w-6 h-6 md:w-8 md:h-8 text-amber-500 shrink-0" />
+            <h1 className="text-2xl md:text-4xl font-display font-bold">Knowledge Base</h1>
           </div>
           <Button
             onClick={() => setIsCreateModalOpen(true)}
@@ -150,43 +150,43 @@ export default function KnowledgePage() {
             Add Fact
           </Button>
         </div>
-        <p className="text-lg text-muted-foreground">
+        <p className="text-sm md:text-lg text-muted-foreground">
           Review and manage facts learned from user corrections
         </p>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-6 md:grid-cols-3 opacity-0 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
-        <div className="premium-card p-6">
-          <div className="flex items-center gap-4">
-            <div className="p-3 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600">
-              <AlertCircle className="h-6 w-6 text-white" />
+      <div className="grid gap-4 md:gap-6 grid-cols-1 sm:grid-cols-3 opacity-0 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
+        <div className="premium-card p-4 md:p-6">
+          <div className="flex items-center gap-3 md:gap-4">
+            <div className="p-2 md:p-3 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 shrink-0">
+              <AlertCircle className="h-5 w-5 md:h-6 md:w-6 text-white" />
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Pending Review</p>
-              <p className="text-3xl font-bold text-gradient">{unverifiedFacts.length}</p>
-            </div>
-          </div>
-        </div>
-        <div className="premium-card p-6">
-          <div className="flex items-center gap-4">
-            <div className="p-3 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600">
-              <CheckCircle2 className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Verified Facts</p>
-              <p className="text-3xl font-bold text-gradient">{verifiedFacts.length}</p>
+            <div className="min-w-0">
+              <p className="text-xs md:text-sm text-muted-foreground">Pending Review</p>
+              <p className="text-2xl md:text-3xl font-bold text-gradient">{unverifiedFacts.length}</p>
             </div>
           </div>
         </div>
-        <div className="premium-card p-6">
-          <div className="flex items-center gap-4">
-            <div className="p-3 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600">
-              <Lightbulb className="h-6 w-6 text-white" />
+        <div className="premium-card p-4 md:p-6">
+          <div className="flex items-center gap-3 md:gap-4">
+            <div className="p-2 md:p-3 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 shrink-0">
+              <CheckCircle2 className="h-5 w-5 md:h-6 md:w-6 text-white" />
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Total Knowledge</p>
-              <p className="text-3xl font-bold text-gradient">{(facts?.facts.length ?? 0)}</p>
+            <div className="min-w-0">
+              <p className="text-xs md:text-sm text-muted-foreground">Verified Facts</p>
+              <p className="text-2xl md:text-3xl font-bold text-gradient">{verifiedFacts.length}</p>
+            </div>
+          </div>
+        </div>
+        <div className="premium-card p-4 md:p-6">
+          <div className="flex items-center gap-3 md:gap-4">
+            <div className="p-2 md:p-3 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 shrink-0">
+              <Lightbulb className="h-5 w-5 md:h-6 md:w-6 text-white" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs md:text-sm text-muted-foreground">Total Knowledge</p>
+              <p className="text-2xl md:text-3xl font-bold text-gradient">{(facts?.facts.length ?? 0)}</p>
             </div>
           </div>
         </div>

@@ -109,67 +109,67 @@ export default function AnalyticsPage() {
     <div className="space-y-8">
       {/* Header */}
       <div className="opacity-0 animate-fade-in">
-        <div className="flex items-center gap-3 mb-2">
-          <BarChart3 className="w-8 h-8 text-amber-500" />
-          <h1 className="text-4xl font-display font-bold">Analytics</h1>
+        <div className="flex items-center gap-2 md:gap-3 mb-2">
+          <BarChart3 className="w-6 h-6 md:w-8 md:h-8 text-amber-500 shrink-0" />
+          <h1 className="text-2xl md:text-4xl font-display font-bold">Analytics</h1>
         </div>
-        <p className="text-lg text-muted-foreground">
+        <p className="text-sm md:text-lg text-muted-foreground">
           Monitor bot performance and user engagement
         </p>
       </div>
 
       {/* Stats Overview */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <div className="premium-card p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
+      <div className="grid gap-4 md:gap-6 grid-cols-2 lg:grid-cols-4">
+        <div className="premium-card p-4 md:p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
           <div className="flex items-start justify-between">
-            <div className="icon-container">
-              <MessageSquare className="w-6 h-6" />
+            <div className="icon-container w-10 h-10 md:w-12 md:h-12">
+              <MessageSquare className="w-5 h-5 md:w-6 md:h-6" />
             </div>
           </div>
-          <div className="mt-4">
-            <p className="text-sm text-muted-foreground">Messages Received</p>
-            <p className="stat-value">{overview?.activity.messagesThisWeek ?? 0}</p>
+          <div className="mt-3 md:mt-4">
+            <p className="text-xs md:text-sm text-muted-foreground">Messages Received</p>
+            <p className="stat-value text-2xl md:text-4xl">{overview?.activity.messagesThisWeek ?? 0}</p>
           </div>
         </div>
 
-        <div className="premium-card p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '150ms' }}>
+        <div className="premium-card p-4 md:p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '150ms' }}>
           <div className="flex items-start justify-between">
-            <div className="icon-container">
-              <Zap className="w-6 h-6" />
+            <div className="icon-container w-10 h-10 md:w-12 md:h-12">
+              <Zap className="w-5 h-5 md:w-6 md:h-6" />
             </div>
-            <span className="text-xs font-medium px-2 py-1 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+            <span className="text-[10px] md:text-xs font-medium px-1.5 md:px-2 py-0.5 md:py-1 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
               Active
             </span>
           </div>
-          <div className="mt-4">
-            <p className="text-sm text-muted-foreground">Responses Sent</p>
-            <p className="stat-value">{overview?.activity.responsesThisWeek ?? 0}</p>
+          <div className="mt-3 md:mt-4">
+            <p className="text-xs md:text-sm text-muted-foreground">Responses Sent</p>
+            <p className="stat-value text-2xl md:text-4xl">{overview?.activity.responsesThisWeek ?? 0}</p>
           </div>
         </div>
 
-        <div className="premium-card p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
+        <div className="premium-card p-4 md:p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
           <div className="flex items-start justify-between">
-            <div className="icon-container">
-              <ThumbsUp className="w-6 h-6" />
+            <div className="icon-container w-10 h-10 md:w-12 md:h-12">
+              <ThumbsUp className="w-5 h-5 md:w-6 md:h-6" />
             </div>
           </div>
-          <div className="mt-4">
-            <p className="text-sm text-muted-foreground">Positive Feedback</p>
-            <p className="text-4xl font-bold tracking-tight text-green-600 dark:text-green-400">
+          <div className="mt-3 md:mt-4">
+            <p className="text-xs md:text-sm text-muted-foreground">Positive Feedback</p>
+            <p className="text-2xl md:text-4xl font-bold tracking-tight text-green-600 dark:text-green-400">
               {overview?.feedback.positive ?? 0}
             </p>
           </div>
         </div>
 
-        <div className="premium-card p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '250ms' }}>
+        <div className="premium-card p-4 md:p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '250ms' }}>
           <div className="flex items-start justify-between">
-            <div className="icon-container">
-              <ThumbsDown className="w-6 h-6" />
+            <div className="icon-container w-10 h-10 md:w-12 md:h-12">
+              <ThumbsDown className="w-5 h-5 md:w-6 md:h-6" />
             </div>
           </div>
-          <div className="mt-4">
-            <p className="text-sm text-muted-foreground">Negative Feedback</p>
-            <p className="text-4xl font-bold tracking-tight text-red-600 dark:text-red-400">
+          <div className="mt-3 md:mt-4">
+            <p className="text-xs md:text-sm text-muted-foreground">Negative Feedback</p>
+            <p className="text-2xl md:text-4xl font-bold tracking-tight text-red-600 dark:text-red-400">
               {overview?.feedback.negative ?? 0}
             </p>
           </div>

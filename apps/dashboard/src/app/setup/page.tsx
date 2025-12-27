@@ -1270,17 +1270,19 @@ function SetupWizardContent() {
     bot: { name: 'Cluebase', slug: 'cluebase', botType: 'general' as BotType, personality: 'Friendly and professional', instructions: '' },
   });
 
-  // Handle OAuth callback - restore state after Google redirect
+  // Handle OAuth callback and restore state on mount
   useEffect(() => {
     const googleAuthResult = searchParams.get('google_auth');
     const savedConfig = sessionStorage.getItem('setup_wizard_config');
     const savedStep = sessionStorage.getItem('setup_wizard_step');
+    const isPendingAuth = sessionStorage.getItem('setup_pending_google_auth');
 
+    // Case 1: Returning from Google OAuth
     if (googleAuthResult && savedConfig) {
       try {
         const parsedConfig = JSON.parse(savedConfig) as SetupConfig;
 
-        // Restore the saved config
+        // Restore the saved config with OAuth result
         setConfig({
           ...parsedConfig,
           googleDrive: {
@@ -1294,9 +1296,7 @@ function SetupWizardContent() {
           setCurrentStep(parseInt(savedStep, 10));
         }
 
-        // Clean up sessionStorage and URL
-        sessionStorage.removeItem('setup_wizard_config');
-        sessionStorage.removeItem('setup_wizard_step');
+        // Clean up pending auth flag and URL (keep config for refresh persistence)
         sessionStorage.removeItem('setup_pending_google_auth');
 
         // Remove query params from URL without reload
@@ -1306,7 +1306,40 @@ function SetupWizardContent() {
         console.error('Failed to restore setup wizard state:', e);
       }
     }
-  }, [searchParams]);
+    // Case 2: Regular page load with saved state (not during OAuth flow)
+    else if (savedConfig && !isPendingAuth) {
+      try {
+        const parsedConfig = JSON.parse(savedConfig) as SetupConfig;
+        setConfig(parsedConfig);
+        if (savedStep) {
+          setCurrentStep(parseInt(savedStep, 10));
+        }
+      } catch (e) {
+        console.error('Failed to restore setup wizard state:', e);
+        // Clear corrupted data
+        sessionStorage.removeItem('setup_wizard_config');
+        sessionStorage.removeItem('setup_wizard_step');
+      }
+    }
+  }, []); // Only run on mount - intentionally empty deps
+
+  // Persist state changes to sessionStorage (for refresh protection)
+  useEffect(() => {
+    // Don't persist if we haven't started yet (step 0) or if complete
+    if (currentStep > 0 && !isComplete) {
+      sessionStorage.setItem('setup_wizard_config', JSON.stringify(config));
+      sessionStorage.setItem('setup_wizard_step', String(currentStep));
+    }
+  }, [config, currentStep, isComplete]);
+
+  // Clear persisted state when setup is complete
+  useEffect(() => {
+    if (isComplete) {
+      sessionStorage.removeItem('setup_wizard_config');
+      sessionStorage.removeItem('setup_wizard_step');
+      sessionStorage.removeItem('setup_pending_google_auth');
+    }
+  }, [isComplete]);
 
   const updateConfig = useCallback(
     <K extends keyof SetupConfig>(key: K) =>

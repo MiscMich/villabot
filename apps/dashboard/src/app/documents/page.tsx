@@ -617,34 +617,34 @@ export default function DocumentsPage() {
     <div className="space-y-8">
       {/* Header */}
       <div className="opacity-0 animate-fade-in">
-        <div className="flex items-center gap-3 mb-2">
-          <FileText className="w-8 h-8 text-amber-500" />
-          <h1 className="text-4xl font-display font-bold">Documents</h1>
+        <div className="flex items-center gap-2 md:gap-3 mb-2">
+          <FileText className="w-6 h-6 md:w-8 md:h-8 text-amber-500 shrink-0" />
+          <h1 className="text-2xl md:text-4xl font-display font-bold">Documents</h1>
         </div>
-        <p className="text-lg text-muted-foreground">
+        <p className="text-sm md:text-lg text-muted-foreground">
           Manage your knowledge base documents and sync settings
         </p>
       </div>
 
       {/* Sync Status Cards */}
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-4 md:gap-6 md:grid-cols-2">
         {/* Google Drive Sync */}
-        <div className="premium-card p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600">
-                <Cloud className="h-6 w-6 text-white" />
+        <div className="premium-card p-4 md:p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3 md:gap-4">
+              <div className="p-2 md:p-3 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shrink-0">
+                <Cloud className="h-5 w-5 md:h-6 md:w-6 text-white" />
               </div>
-              <div>
-                <p className="font-display font-semibold text-lg">Google Drive</p>
-                <p className="text-sm text-muted-foreground">
+              <div className="min-w-0">
+                <p className="font-display font-semibold text-base md:text-lg">Google Drive</p>
+                <p className="text-xs md:text-sm text-muted-foreground truncate">
                   {syncStatus?.driveConnected
                     ? `Last synced: ${syncStatus.lastSync ? new Date(syncStatus.lastSync).toLocaleString() : 'Never'}`
                     : 'Not connected - configure in Settings'}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 md:gap-3 flex-wrap">
               {/* Status indicator */}
               {syncProgress.driveSync ? (
                 <SyncStatusBadge
@@ -652,7 +652,7 @@ export default function DocumentsPage() {
                   progress={syncProgress.driveSync.progress}
                 />
               ) : (
-                <span className={`text-sm font-medium px-3 py-1 rounded-full ${syncStatus?.driveConnected ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
+                <span className={`text-xs md:text-sm font-medium px-2 md:px-3 py-1 rounded-full ${syncStatus?.driveConnected ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
                   {syncStatus?.driveConnected ? 'Connected' : 'Not Connected'}
                 </span>
               )}
@@ -663,9 +663,9 @@ export default function DocumentsPage() {
                   variant="outline"
                   onClick={handleSync}
                   disabled={syncing}
-                  className="hover:border-blue-500/50"
+                  className="hover:border-blue-500/50 text-xs md:text-sm"
                 >
-                  <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+                  <RefreshCw className={`h-3.5 w-3.5 md:h-4 md:w-4 mr-1.5 md:mr-2 ${syncing ? 'animate-spin' : ''}`} />
                   {syncing ? 'Syncing...' : 'Sync Now'}
                 </Button>
               )}
@@ -674,7 +674,7 @@ export default function DocumentsPage() {
 
           {/* Real-time sync progress */}
           {syncProgress.driveSync && syncProgress.driveSync.status === 'running' && (
-            <div className="mt-4">
+            <div className="mt-3 md:mt-4">
               <SyncProgressBar
                 progress={syncProgress.driveSync.progress}
                 totalItems={syncProgress.driveSync.totalItems}
@@ -684,37 +684,61 @@ export default function DocumentsPage() {
               />
             </div>
           )}
+
+          {/* Drive Stats Grid - matches Website Scraping card structure */}
+          {syncStatus?.driveConnected && !syncProgress.driveSync && (
+            <div className="grid grid-cols-3 gap-2 md:gap-4 mt-3 md:mt-4">
+              <div className="text-center p-2 md:p-3 rounded-xl bg-secondary/50">
+                <p className="text-lg md:text-2xl font-display font-bold text-blue-600 dark:text-blue-400">
+                  {syncStatus.documentCount ?? 0}
+                </p>
+                <p className="text-[10px] md:text-xs text-muted-foreground">Docs Synced</p>
+              </div>
+              <div className="text-center p-2 md:p-3 rounded-xl bg-secondary/50">
+                <p className="text-lg md:text-2xl font-display font-bold">
+                  {syncStatus.lastSync ? new Date(syncStatus.lastSync).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '-'}
+                </p>
+                <p className="text-[10px] md:text-xs text-muted-foreground">Last Sync</p>
+              </div>
+              <div className="text-center p-2 md:p-3 rounded-xl bg-secondary/50">
+                <p className="text-lg md:text-2xl font-display font-bold text-indigo-600 dark:text-indigo-400">
+                  {documents?.documents.filter(d => d.source_type === 'google_drive').length ?? 0}
+                </p>
+                <p className="text-[10px] md:text-xs text-muted-foreground">Drive Files</p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Website Scraping */}
-        <div className="premium-card p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '150ms' }}>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600">
-                <Globe className="h-6 w-6 text-white" />
+        <div className="premium-card p-4 md:p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '150ms' }}>
+          <div className="flex items-center justify-between mb-3 md:mb-4 flex-wrap gap-3">
+            <div className="flex items-center gap-3 md:gap-4">
+              <div className="p-2 md:p-3 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 shrink-0">
+                <Globe className="h-5 w-5 md:h-6 md:w-6 text-white" />
               </div>
-              <div>
-                <p className="font-display font-semibold text-lg">Website Scraping</p>
+              <div className="min-w-0">
+                <p className="font-display font-semibold text-base md:text-lg">Website Scraping</p>
                 {scrapeStatus?.websiteUrl && (
                   <a
                     href={scrapeStatus.websiteUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-sm text-muted-foreground hover:text-amber-600 dark:hover:text-amber-400 flex items-center gap-1 transition-colors"
+                    className="text-xs md:text-sm text-muted-foreground hover:text-amber-600 dark:hover:text-amber-400 flex items-center gap-1 transition-colors truncate"
                   >
                     {scrapeStatus.websiteUrl}
-                    <ExternalLink className="h-3 w-3" />
+                    <ExternalLink className="h-3 w-3 shrink-0" />
                   </a>
                 )}
                 {!scrapeStatus?.websiteConfigured && (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-xs md:text-sm text-muted-foreground">
                     No website URL configured - add in Settings
                   </p>
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <span className={`text-sm font-medium px-3 py-1 rounded-full ${scrapeStatus?.websiteConfigured ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400'}`}>
+            <div className="flex items-center gap-2 md:gap-3 flex-wrap">
+              <span className={`text-xs md:text-sm font-medium px-2 md:px-3 py-1 rounded-full ${scrapeStatus?.websiteConfigured ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400'}`}>
                 {scrapeStatus?.websiteConfigured ? 'Configured' : 'Not Set'}
               </span>
               {scrapeStatus?.websiteConfigured && (
@@ -723,9 +747,9 @@ export default function DocumentsPage() {
                   variant="outline"
                   onClick={handleScrape}
                   disabled={scraping}
-                  className="hover:border-amber-500/50"
+                  className="hover:border-amber-500/50 text-xs md:text-sm"
                 >
-                  <RefreshCw className={`h-4 w-4 mr-2 ${scraping ? 'animate-spin' : ''}`} />
+                  <RefreshCw className={`h-3.5 w-3.5 md:h-4 md:w-4 mr-1.5 md:mr-2 ${scraping ? 'animate-spin' : ''}`} />
                   {scraping ? 'Scraping...' : 'Scrape Now'}
                 </Button>
               )}
@@ -734,7 +758,7 @@ export default function DocumentsPage() {
 
           {/* Real-time Scraping Progress Indicator */}
           {(scraping || syncProgress.websiteScrape) && (
-            <div className="mt-4 p-4 rounded-xl bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800">
+            <div className="mt-3 md:mt-4 p-3 md:p-4 rounded-xl bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800">
               {syncProgress.websiteScrape ? (
                 <>
                   <div className="flex items-center justify-between mb-3">
@@ -776,24 +800,24 @@ export default function DocumentsPage() {
 
           {/* Stats Grid */}
           {scrapeStatus?.websiteConfigured && !scraping && (
-            <div className="grid grid-cols-3 gap-4 mt-4">
-              <div className="text-center p-3 rounded-xl bg-secondary/50">
-                <p className="text-2xl font-display font-bold text-purple-600 dark:text-purple-400">
+            <div className="grid grid-cols-3 gap-2 md:gap-4 mt-3 md:mt-4">
+              <div className="text-center p-2 md:p-3 rounded-xl bg-secondary/50">
+                <p className="text-lg md:text-2xl font-display font-bold text-purple-600 dark:text-purple-400">
                   {scrapeStatus.documentCount}
                 </p>
-                <p className="text-xs text-muted-foreground">Pages Indexed</p>
+                <p className="text-[10px] md:text-xs text-muted-foreground">Pages Indexed</p>
               </div>
-              <div className="text-center p-3 rounded-xl bg-secondary/50">
-                <p className="text-2xl font-display font-bold">
+              <div className="text-center p-2 md:p-3 rounded-xl bg-secondary/50">
+                <p className="text-lg md:text-2xl font-display font-bold">
                   {scrapeStatus.lastScrapeResult?.pagesScraped ?? '-'}
                 </p>
-                <p className="text-xs text-muted-foreground">Last Scraped</p>
+                <p className="text-[10px] md:text-xs text-muted-foreground">Last Scraped</p>
               </div>
-              <div className="text-center p-3 rounded-xl bg-secondary/50">
-                <p className="text-2xl font-display font-bold">
+              <div className="text-center p-2 md:p-3 rounded-xl bg-secondary/50">
+                <p className="text-lg md:text-2xl font-display font-bold">
                   {scrapeStatus.lastScrapeResult?.chunksCreated ?? '-'}
                 </p>
-                <p className="text-xs text-muted-foreground">Chunks Created</p>
+                <p className="text-[10px] md:text-xs text-muted-foreground">Chunks Created</p>
               </div>
             </div>
           )}

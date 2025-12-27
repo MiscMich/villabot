@@ -63,31 +63,31 @@ function StatCard({
       whileHover={{ y: -4, transition: { duration: 0.2 } }}
     >
       <GlassCard hover glow={gradient} padding="none" className="h-full">
-        <div className="p-6">
+        <div className="p-4 md:p-6">
           <div className="flex items-start justify-between">
-            <div className={`p-3 rounded-xl bg-gradient-to-br ${gradientColors[gradient]} ${glowColors[gradient]}`}>
-              <Icon className="w-5 h-5 text-white" />
+            <div className={`p-2 md:p-3 rounded-xl bg-gradient-to-br ${gradientColors[gradient]} ${glowColors[gradient]}`}>
+              <Icon className="w-4 h-4 md:w-5 md:h-5 text-white" />
             </div>
             {trend && (
               <div
-                className={`flex items-center gap-1 text-sm font-medium px-2.5 py-1 rounded-full ${
+                className={`flex items-center gap-1 text-xs md:text-sm font-medium px-2 md:px-2.5 py-0.5 md:py-1 rounded-full ${
                   trend.positive
                     ? 'bg-emerald-500/10 text-emerald-400'
                     : 'bg-red-500/10 text-red-400'
                 }`}
               >
                 <TrendingUp
-                  className={`w-3.5 h-3.5 ${!trend.positive && 'rotate-180'}`}
+                  className={`w-3 h-3 md:w-3.5 md:h-3.5 ${!trend.positive && 'rotate-180'}`}
                 />
                 {trend.value}%
               </div>
             )}
           </div>
 
-          <div className="mt-5 space-y-1">
-            <p className="text-sm font-medium text-white/60">{title}</p>
-            <p className="text-3xl font-bold text-white">{value}</p>
-            <p className="text-sm text-white/40">{subtitle}</p>
+          <div className="mt-3 md:mt-5 space-y-0.5 md:space-y-1">
+            <p className="text-xs md:text-sm font-medium text-white/60">{title}</p>
+            <p className="text-xl md:text-3xl font-bold text-white">{value}</p>
+            <p className="text-xs md:text-sm text-white/40 truncate">{subtitle}</p>
           </div>
         </div>
       </GlassCard>
@@ -348,8 +348,8 @@ export default function OverviewPage() {
         type: 'success',
         text: `Sync complete! Added: ${data.added}, Updated: ${data.updated}, Removed: ${data.removed}`,
       });
-      queryClient.invalidateQueries({ queryKey: ['syncStatus'] });
-      queryClient.invalidateQueries({ queryKey: ['overview'] });
+      queryClient.invalidateQueries({ queryKey: ['syncStatus', workspace?.id] });
+      queryClient.invalidateQueries({ queryKey: ['overview', workspace?.id] });
       setTimeout(() => setSyncMessage(null), 5000);
     },
     onError: (error) => {
@@ -399,15 +399,15 @@ export default function OverviewPage() {
     >
       {/* Header */}
       <motion.div variants={fadeInUp}>
-        <div className="flex items-center gap-3 mb-2">
-          <div className="p-2.5 rounded-xl bg-gradient-to-br from-violet-600 to-pink-600 shadow-glow-purple">
-            <Sparkles className="w-6 h-6 text-white" />
+        <div className="flex items-center gap-2 md:gap-3 mb-2">
+          <div className="p-2 md:p-2.5 rounded-xl bg-gradient-to-br from-violet-600 to-pink-600 shadow-glow-purple shrink-0">
+            <Sparkles className="w-5 h-5 md:w-6 md:h-6 text-white" />
           </div>
-          <h1 className="text-4xl font-bold text-white">
-            Dash<GradientText as="span" className="text-4xl font-bold">board</GradientText>
+          <h1 className="text-2xl md:text-4xl font-bold text-white">
+            Dash<GradientText as="span" className="text-2xl md:text-4xl font-bold">board</GradientText>
           </h1>
         </div>
-        <p className="text-lg text-white/60">
+        <p className="text-sm md:text-lg text-white/60">
           Monitor your AI knowledge assistant performance and activity
         </p>
       </motion.div>
@@ -415,7 +415,7 @@ export default function OverviewPage() {
       {/* Stats Grid */}
       <motion.div
         variants={staggerContainer}
-        className="grid gap-6 md:grid-cols-2 lg:grid-cols-4"
+        className="grid gap-4 md:gap-6 grid-cols-2 lg:grid-cols-4"
       >
         <StatCard
           title="Total Documents"
@@ -430,7 +430,6 @@ export default function OverviewPage() {
           value={overview?.activity.messagesThisWeek ?? 0}
           subtitle={`${overview?.activity.responsesThisWeek ?? 0} responses sent`}
           icon={MessageSquare}
-          trend={{ value: 12, positive: true }}
           index={1}
           gradient="blue"
         />

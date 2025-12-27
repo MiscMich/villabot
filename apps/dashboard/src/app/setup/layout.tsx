@@ -1,16 +1,22 @@
 'use client';
 
 import '../globals.css';
+import { LogOut } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/components/ui/button';
 
 /**
  * Setup Layout - Full-screen wizard without sidebar
  * This bypasses the main dashboard layout for a focused onboarding experience
+ * Includes a sign-out option so users aren't trapped in the wizard
  */
 export default function SetupLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const { signOut, user } = useAuth();
+
   return (
     <div className="min-h-screen bg-background font-geist relative overflow-hidden">
       {/* Animated grid background */}
@@ -22,6 +28,21 @@ export default function SetupLayout({
 
       {/* Noise texture overlay */}
       <div className="noise-overlay" />
+
+      {/* Sign-out header - allows users to exit the wizard */}
+      {user && (
+        <header className="absolute top-4 right-4 z-50">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={signOut}
+            className="text-muted-foreground hover:text-foreground hover:bg-white/10 gap-2"
+          >
+            <LogOut className="h-4 w-4" />
+            <span className="hidden sm:inline">Sign Out</span>
+          </Button>
+        </header>
+      )}
 
       {/* Content */}
       <div className="relative z-10">

@@ -232,11 +232,11 @@ export default function BotsPage() {
     return (
       <div className="space-y-8">
         <div>
-          <div className="flex items-center gap-3 mb-2">
-            <Bot className="w-8 h-8 text-violet-500" />
-            <h1 className="text-4xl font-display font-bold">Bots</h1>
+          <div className="flex items-center gap-2 md:gap-3 mb-2">
+            <Bot className="w-6 h-6 md:w-8 md:h-8 text-violet-500 shrink-0" />
+            <h1 className="text-2xl md:text-4xl font-display font-bold">Bots</h1>
           </div>
-          <p className="text-lg text-muted-foreground">
+          <p className="text-sm md:text-lg text-muted-foreground">
             Manage your AI bot instances and configurations
           </p>
         </div>
@@ -285,11 +285,11 @@ export default function BotsPage() {
       {/* Header */}
       <div className="flex items-start justify-between opacity-0 animate-fade-in">
         <div>
-          <div className="flex items-center gap-3 mb-2">
-            <Bot className="w-8 h-8 text-violet-500" />
-            <h1 className="text-4xl font-display font-bold">Bots</h1>
+          <div className="flex items-center gap-2 md:gap-3 mb-2">
+            <Bot className="w-6 h-6 md:w-8 md:h-8 text-violet-500 shrink-0" />
+            <h1 className="text-2xl md:text-4xl font-display font-bold">Bots</h1>
           </div>
-          <p className="text-lg text-muted-foreground">
+          <p className="text-sm md:text-lg text-muted-foreground">
             Manage your AI bot instances and configurations
           </p>
         </div>

@@ -112,11 +112,11 @@ export default function FeedbackPage() {
     return (
       <div className="space-y-8">
         <div>
-          <div className="flex items-center gap-3 mb-2">
-            <ThumbsUp className="w-8 h-8 text-amber-500" />
-            <h1 className="text-4xl font-display font-bold">Feedback</h1>
+          <div className="flex items-center gap-2 md:gap-3 mb-2">
+            <ThumbsUp className="w-6 h-6 md:w-8 md:h-8 text-amber-500 shrink-0" />
+            <h1 className="text-2xl md:text-4xl font-display font-bold">Feedback</h1>
           </div>
-          <p className="text-lg text-muted-foreground">
+          <p className="text-sm md:text-lg text-muted-foreground">
             Track user satisfaction and improve response quality
           </p>
         </div>
@@ -169,23 +169,23 @@ export default function FeedbackPage() {
     <div className="space-y-8">
       {/* Header */}
       <div className="opacity-0 animate-fade-in">
-        <div className="flex items-center gap-3 mb-2">
-          <ThumbsUp className="w-8 h-8 text-amber-500" />
-          <h1 className="text-4xl font-display font-bold">Feedback</h1>
+        <div className="flex items-center gap-2 md:gap-3 mb-2">
+          <ThumbsUp className="w-6 h-6 md:w-8 md:h-8 text-amber-500 shrink-0" />
+          <h1 className="text-2xl md:text-4xl font-display font-bold">Feedback</h1>
         </div>
-        <p className="text-lg text-muted-foreground">
+        <p className="text-sm md:text-lg text-muted-foreground">
           Track user satisfaction and improve response quality
         </p>
       </div>
 
       {/* Stats Overview */}
-      <div className="grid gap-6 md:grid-cols-4">
-        <div className="premium-card p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
+      <div className="grid gap-4 md:gap-6 grid-cols-2 lg:grid-cols-4">
+        <div className="premium-card p-4 md:p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground">Satisfaction Rate</p>
+              <p className="text-xs md:text-sm text-muted-foreground">Satisfaction Rate</p>
               <p className={cn(
-                'text-3xl font-display font-bold',
+                'text-2xl md:text-3xl font-display font-bold',
                 satisfactionRate >= 80 ? 'text-green-600 dark:text-green-400' :
                 satisfactionRate >= 60 ? 'text-amber-600 dark:text-amber-400' :
                 'text-red-600 dark:text-red-400'
@@ -193,48 +193,48 @@ export default function FeedbackPage() {
                 {satisfactionRate.toFixed(1)}%
               </p>
             </div>
-            <div className="p-3 rounded-xl bg-gradient-to-br from-amber-400/20 to-amber-600/20">
-              <TrendingUp className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+            <div className="p-2 md:p-3 rounded-xl bg-gradient-to-br from-amber-400/20 to-amber-600/20 shrink-0">
+              <TrendingUp className="h-5 w-5 md:h-6 md:w-6 text-amber-600 dark:text-amber-400" />
             </div>
           </div>
         </div>
 
-        <div className="premium-card p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '150ms' }}>
+        <div className="premium-card p-4 md:p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '150ms' }}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground">Total Feedback</p>
-              <p className="text-3xl font-display font-bold">{totalFeedback}</p>
+              <p className="text-xs md:text-sm text-muted-foreground">Total Feedback</p>
+              <p className="text-2xl md:text-3xl font-display font-bold">{totalFeedback}</p>
             </div>
-            <div className="p-3 rounded-xl bg-gradient-to-br from-blue-400/20 to-blue-600/20">
-              <MessageSquare className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+            <div className="p-2 md:p-3 rounded-xl bg-gradient-to-br from-blue-400/20 to-blue-600/20 shrink-0">
+              <MessageSquare className="h-5 w-5 md:h-6 md:w-6 text-blue-600 dark:text-blue-400" />
             </div>
           </div>
         </div>
 
-        <div className="premium-card p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
+        <div className="premium-card p-4 md:p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground">Helpful</p>
-              <p className="text-3xl font-display font-bold text-green-600 dark:text-green-400">
+              <p className="text-xs md:text-sm text-muted-foreground">Helpful</p>
+              <p className="text-2xl md:text-3xl font-display font-bold text-green-600 dark:text-green-400">
                 {helpfulCount}
               </p>
             </div>
-            <div className="p-3 rounded-xl bg-gradient-to-br from-green-400/20 to-green-600/20">
-              <ThumbsUp className="h-6 w-6 text-green-600 dark:text-green-400" />
+            <div className="p-2 md:p-3 rounded-xl bg-gradient-to-br from-green-400/20 to-green-600/20 shrink-0">
+              <ThumbsUp className="h-5 w-5 md:h-6 md:w-6 text-green-600 dark:text-green-400" />
             </div>
           </div>
         </div>
 
-        <div className="premium-card p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '250ms' }}>
+        <div className="premium-card p-4 md:p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: '250ms' }}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground">Not Helpful</p>
-              <p className="text-3xl font-display font-bold text-red-600 dark:text-red-400">
+              <p className="text-xs md:text-sm text-muted-foreground">Not Helpful</p>
+              <p className="text-2xl md:text-3xl font-display font-bold text-red-600 dark:text-red-400">
                 {unhelpfulCount}
               </p>
             </div>
-            <div className="p-3 rounded-xl bg-gradient-to-br from-red-400/20 to-red-600/20">
-              <ThumbsDown className="h-6 w-6 text-red-600 dark:text-red-400" />
+            <div className="p-2 md:p-3 rounded-xl bg-gradient-to-br from-red-400/20 to-red-600/20 shrink-0">
+              <ThumbsDown className="h-5 w-5 md:h-6 md:w-6 text-red-600 dark:text-red-400" />
             </div>
           </div>
         </div>

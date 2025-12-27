@@ -202,13 +202,13 @@ export default function TeamPage() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between opacity-0 animate-fade-in">
+      <div className="flex items-center justify-between opacity-0 animate-fade-in flex-wrap gap-4">
         <div>
-          <div className="flex items-center gap-3 mb-2">
-            <Users className="w-8 h-8 text-amber-500" />
-            <h1 className="text-4xl font-display font-bold">Team Management</h1>
+          <div className="flex items-center gap-2 md:gap-3 mb-2">
+            <Users className="w-6 h-6 md:w-8 md:h-8 text-amber-500 shrink-0" />
+            <h1 className="text-2xl md:text-4xl font-display font-bold">Team Management</h1>
           </div>
-          <p className="text-lg text-muted-foreground">
+          <p className="text-sm md:text-lg text-muted-foreground">
             Manage your workspace members and invitations
           </p>
         </div>

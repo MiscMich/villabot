@@ -203,11 +203,11 @@ export default function SettingsPage() {
     return (
       <div className="space-y-8">
         <div>
-          <div className="flex items-center gap-3 mb-2">
-            <Settings className="w-8 h-8 text-violet-500" />
-            <h1 className="text-4xl font-display font-bold">Settings</h1>
+          <div className="flex items-center gap-2 md:gap-3 mb-2">
+            <Settings className="w-6 h-6 md:w-8 md:h-8 text-violet-500 shrink-0" />
+            <h1 className="text-2xl md:text-4xl font-display font-bold">Settings</h1>
           </div>
-          <p className="text-lg text-muted-foreground">
+          <p className="text-sm md:text-lg text-muted-foreground">
             Configure your workspace and integrations
           </p>
         </div>
@@ -251,11 +251,11 @@ export default function SettingsPage() {
     <div className="space-y-8">
       {/* Header */}
       <div className="opacity-0 animate-fade-in">
-        <div className="flex items-center gap-3 mb-2">
-          <Settings className="w-8 h-8 text-violet-500" />
-          <h1 className="text-4xl font-display font-bold">Settings</h1>
+        <div className="flex items-center gap-2 md:gap-3 mb-2">
+          <Settings className="w-6 h-6 md:w-8 md:h-8 text-violet-500 shrink-0" />
+          <h1 className="text-2xl md:text-4xl font-display font-bold">Settings</h1>
         </div>
-        <p className="text-lg text-muted-foreground">
+        <p className="text-sm md:text-lg text-muted-foreground">
           Configure your AI knowledge assistant
         </p>
       </div>

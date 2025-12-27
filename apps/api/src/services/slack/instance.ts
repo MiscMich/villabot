@@ -480,10 +480,20 @@ export class BotInstance {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.app.event('reaction_added', async ({ event }: { event: any }) => {
-      if (event.reaction === '+1' || event.reaction === 'thumbsup') {
-        await this.handleFeedbackReaction(event.item.ts, 1);
-      } else if (event.reaction === '-1' || event.reaction === 'thumbsdown') {
-        await this.handleFeedbackReaction(event.item.ts, -1);
+      try {
+        if (event.reaction === '+1' || event.reaction === 'thumbsup') {
+          await this.handleFeedbackReaction(event.item.ts, 1);
+        } else if (event.reaction === '-1' || event.reaction === 'thumbsdown') {
+          await this.handleFeedbackReaction(event.item.ts, -1);
+        }
+      } catch (error) {
+        // Log error but don't crash - feedback is non-critical
+        logger.error('Failed to handle reaction event', {
+          error,
+          reaction: event.reaction,
+          messageTs: event.item?.ts,
+          botId: this.id,
+        });
       }
     });
   }

@@ -277,11 +277,11 @@ export default function ConversationsPage() {
     return (
       <div className="space-y-8">
         <div>
-          <div className="flex items-center gap-3 mb-2">
-            <MessageSquare className="w-8 h-8 text-amber-500" />
-            <h1 className="text-4xl font-display font-bold">Conversations</h1>
+          <div className="flex items-center gap-2 md:gap-3 mb-2">
+            <MessageSquare className="w-6 h-6 md:w-8 md:h-8 text-amber-500 shrink-0" />
+            <h1 className="text-2xl md:text-4xl font-display font-bold">Conversations</h1>
           </div>
-          <p className="text-lg text-muted-foreground">
+          <p className="text-sm md:text-lg text-muted-foreground">
             Browse and review bot interactions with your team
           </p>
         </div>
@@ -321,33 +321,33 @@ export default function ConversationsPage() {
     <div className="space-y-8">
       {/* Header */}
       <div className="opacity-0 animate-fade-in">
-        <div className="flex items-center gap-3 mb-2">
-          <MessageSquare className="w-8 h-8 text-amber-500" />
-          <h1 className="text-4xl font-display font-bold">Conversations</h1>
+        <div className="flex items-center gap-2 md:gap-3 mb-2">
+          <MessageSquare className="w-6 h-6 md:w-8 md:h-8 text-amber-500 shrink-0" />
+          <h1 className="text-2xl md:text-4xl font-display font-bold">Conversations</h1>
         </div>
-        <p className="text-lg text-muted-foreground">
+        <p className="text-sm md:text-lg text-muted-foreground">
           Browse and review bot interactions with your team
         </p>
       </div>
 
       {/* Stats */}
       {stats && (
-        <div className="grid gap-4 md:grid-cols-4 opacity-0 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
-          <div className="premium-card p-4">
-            <p className="text-sm text-muted-foreground">Total Conversations</p>
-            <p className="text-2xl font-bold">{stats.totalConversations}</p>
+        <div className="grid gap-4 grid-cols-2 lg:grid-cols-4 opacity-0 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
+          <div className="premium-card p-3 md:p-4">
+            <p className="text-xs md:text-sm text-muted-foreground">Total Conversations</p>
+            <p className="text-xl md:text-2xl font-bold">{stats.totalConversations}</p>
           </div>
-          <div className="premium-card p-4">
-            <p className="text-sm text-muted-foreground">Active (24h)</p>
-            <p className="text-2xl font-bold">{stats.activeConversations}</p>
+          <div className="premium-card p-3 md:p-4">
+            <p className="text-xs md:text-sm text-muted-foreground">Active (24h)</p>
+            <p className="text-xl md:text-2xl font-bold">{stats.activeConversations}</p>
           </div>
-          <div className="premium-card p-4">
-            <p className="text-sm text-muted-foreground">Total Messages</p>
-            <p className="text-2xl font-bold">{stats.totalMessages}</p>
+          <div className="premium-card p-3 md:p-4">
+            <p className="text-xs md:text-sm text-muted-foreground">Total Messages</p>
+            <p className="text-xl md:text-2xl font-bold">{stats.totalMessages}</p>
           </div>
-          <div className="premium-card p-4">
-            <p className="text-sm text-muted-foreground">Avg Messages/Thread</p>
-            <p className="text-2xl font-bold">{stats.avgMessagesPerConversation}</p>
+          <div className="premium-card p-3 md:p-4">
+            <p className="text-xs md:text-sm text-muted-foreground">Avg Messages/Thread</p>
+            <p className="text-xl md:text-2xl font-bold">{stats.avgMessagesPerConversation}</p>
           </div>
         </div>
       )}

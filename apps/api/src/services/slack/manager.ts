@@ -319,11 +319,16 @@ class BotManager {
 
   /**
    * Perform health checks on all bots
+   * Note: We snapshot the instances before iteration to prevent race conditions
+   * when bots are added/removed during the health check cycle
    */
   private async performHealthChecks(): Promise<void> {
     const now = new Date();
 
-    for (const instance of this.instances.values()) {
+    // Snapshot instances to prevent race condition when modifying during iteration
+    const instancesSnapshot = Array.from(this.instances.values());
+
+    for (const instance of instancesSnapshot) {
       const status = this.healthStatus.get(instance.id) ?? {
         botId: instance.id,
         botName: instance.name,

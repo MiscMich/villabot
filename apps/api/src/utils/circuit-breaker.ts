@@ -169,10 +169,16 @@ export class CircuitBreaker {
     this.state = newState;
 
     if (newState === CircuitState.CLOSED) {
+      // Full reset on close - service is healthy
       this.failures = [];
       this.successCount = 0;
       this.halfOpenAttempts = 0;
     } else if (newState === CircuitState.HALF_OPEN) {
+      // Reset counters for test phase
+      this.successCount = 0;
+      this.halfOpenAttempts = 0;
+    } else if (newState === CircuitState.OPEN) {
+      // Reset test counters when opening - keeps failures for monitoring
       this.successCount = 0;
       this.halfOpenAttempts = 0;
     }

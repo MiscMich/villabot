@@ -79,20 +79,32 @@ export async function detectIntent(
   }
 
   // If this is a thread reply but we couldn't verify previous bot message,
-  // still be lenient if it looks like a question (user might be following up)
+  // be STRICT to avoid responding to unrelated team conversations.
+  // Only respond if it's clearly a question AND contains domain keywords.
   if (isThreadReply && !previousBotMessage) {
-    logger.info('Thread reply without verified bot message, checking if question-like');
-    // If it ends with ? or starts with question word, treat as follow-up
-    if (normalizedMessage.endsWith('?') || /^(how|what|when|where|why|who|can|could|would|should|does|do|is|are)\b/.test(normalizedMessage)) {
-      logger.info('Thread reply looks like a question, responding');
-      return { intent: 'question', confidence: 0.7, shouldRespond: true };
-    }
-    // Also respond if it contains domain keywords (likely about villa operations)
+    logger.debug('Thread reply without verified bot message, applying strict checks');
+
     const hasDomainKeyword = [...DOMAIN_KEYWORDS].some(kw => normalizedMessage.includes(kw));
-    if (hasDomainKeyword) {
-      logger.info('Thread reply contains domain keywords, responding');
-      return { intent: 'question', confidence: 0.65, shouldRespond: true };
+    const isQuestionFormat = normalizedMessage.endsWith('?') ||
+      /^(how|what|when|where|why|who|can|could|would|should)\b/.test(normalizedMessage);
+
+    // STRICT: Require BOTH question format AND domain keywords
+    if (isQuestionFormat && hasDomainKeyword) {
+      logger.info('Thread reply is question with domain keywords, responding');
+      return { intent: 'question', confidence: 0.75, shouldRespond: true };
     }
+
+    // If only one condition is met, don't auto-respond in threads
+    // The bot was likely not part of this conversation
+    if (isQuestionFormat || hasDomainKeyword) {
+      logger.debug('Thread reply has partial match, not responding (strict mode)', {
+        isQuestionFormat,
+        hasDomainKeyword,
+      });
+    }
+
+    // Don't respond to thread replies without verified bot context
+    return { intent: 'ignore', confidence: 0.7, shouldRespond: false };
   }
 
   // Tier 1: Quick heuristics
