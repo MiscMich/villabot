@@ -30,8 +30,15 @@ COPY . .
 # This bypasses potential copy issues with pnpm virtual store from deps stage
 RUN pnpm install --frozen-lockfile
 
-# Build the shared package
-RUN pnpm --filter @cluebase/shared build
+# Ensure typescript is available and print version for debugging
+RUN pnpm add -g typescript
+RUN tsc --version
+
+# Build the shared package with verbose output
+RUN echo "Building shared package..."
+RUN cd packages/shared && pnpm install && npm run build
+# Alternatively, force tsc execution if pnpm filter fails
+# RUN cd packages/shared && ../../node_modules/.bin/tsc
 
 # Build the API
 RUN pnpm --filter @cluebase/api build
