@@ -29,11 +29,8 @@ COPY . .
 # Install dependencies directly in builder to ensure consistency
 RUN pnpm install --frozen-lockfile
 
-# Verify tsc presence (debug)
-RUN ls -l node_modules/.bin/tsc
-
 # Build the shared package using local tsc in build mode
-# This bypasses potential pnpm filter issues and uses the typescript setup we just installed
+# Note: typescript is now a root dependency, so binary is available
 RUN ./node_modules/.bin/tsc -b packages/shared
 
 
