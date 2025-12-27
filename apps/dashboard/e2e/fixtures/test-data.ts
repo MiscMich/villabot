@@ -223,7 +223,7 @@ export const TEST_ANALYTICS = [
 ] as const;
 
 /**
- * Generate a 768-dimensional zero vector (Gemini embedding size)
+ * Generate a 768-dimensional zero vector (OpenAI text-embedding-3-small size)
  * Used as placeholder for test chunks
  */
 export function generateMockEmbedding(): number[] {

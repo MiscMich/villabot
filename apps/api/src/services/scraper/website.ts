@@ -14,6 +14,7 @@ import { generateEmbeddings } from '../rag/embeddings.js';
 import crypto from 'crypto';
 import dns from 'dns/promises';
 import net from 'net';
+import { syncProgressEmitter } from '../sync/index.js';
 
 // Configuration defaults
 const DEFAULT_MAX_PAGES = 500;
@@ -240,6 +241,28 @@ export async function scrapeWebsite(options: ScrapeOptions): Promise<{
     useSitemapDetection,
   });
 
+  // Create sync operation for progress tracking
+  let operationId: string | null = null;
+  try {
+    operationId = await syncProgressEmitter.createOperation(workspaceId, 'website_scrape');
+  } catch (opError) {
+    logger.warn('Failed to create sync operation record', { error: opError });
+  }
+
+  // Emit initial progress
+  if (operationId) {
+    syncProgressEmitter.emitProgress({
+      operationId,
+      workspaceId,
+      type: 'website_scrape',
+      status: 'running',
+      progress: 0,
+      totalItems: 0,
+      processedItems: 0,
+      currentItem: 'Initializing scraper...',
+    });
+  }
+
   const errors: string[] = [];
   const scrapedPages: ScrapedPage[] = [];
   let disallowedPaths: string[] = [];
@@ -301,6 +324,21 @@ export async function scrapeWebsite(options: ScrapeOptions): Promise<{
     // Determine starting URLs based on whether we're using sitemap
     const urlsToScrape = usingSitemap ? sitemapUrls : new Set([websiteUrl]);
     const scrapedUrls = new Set<string>();
+    const totalUrlsToScrape = usingSitemap ? sitemapUrls.size : maxPages;
+
+    // Update progress with known URL count
+    if (operationId && usingSitemap) {
+      syncProgressEmitter.emitProgress({
+        operationId,
+        workspaceId,
+        type: 'website_scrape',
+        status: 'running',
+        progress: 0,
+        totalItems: sitemapUrls.size,
+        processedItems: 0,
+        currentItem: `Found ${sitemapUrls.size} pages to scrape`,
+      });
+    }
 
     while (urlsToScrape.size > 0 && scrapedUrls.size < maxPages) {
       const currentUrl = urlsToScrape.values().next().value as string | undefined;
@@ -347,10 +385,38 @@ export async function scrapeWebsite(options: ScrapeOptions): Promise<{
         if (rateLimitMs > 0) {
           await sleep(rateLimitMs);
         }
+
+        // Emit progress after each page
+        if (operationId) {
+          const estimatedTotal = usingSitemap ? totalUrlsToScrape : Math.max(scrapedUrls.size + urlsToScrape.size, scrapedUrls.size);
+          syncProgressEmitter.emitProgress({
+            operationId,
+            workspaceId,
+            type: 'website_scrape',
+            status: 'running',
+            progress: estimatedTotal > 0 ? Math.round((scrapedUrls.size / estimatedTotal) * 50) : 0, // 50% for scraping phase
+            totalItems: estimatedTotal,
+            processedItems: scrapedUrls.size,
+            currentItem: currentUrl,
+          });
+        }
       } catch (error) {
         const message = `Failed to scrape ${currentUrl}: ${error instanceof Error ? error.message : 'Unknown error'}`;
         logger.warn(message);
         errors.push(message);
+        // Emit error progress
+        if (operationId) {
+          syncProgressEmitter.emitProgress({
+            operationId,
+            workspaceId,
+            type: 'website_scrape',
+            status: 'running',
+            progress: Math.round((scrapedUrls.size / totalUrlsToScrape) * 50),
+            totalItems: totalUrlsToScrape,
+            processedItems: scrapedUrls.size,
+            currentItem: `Error: ${currentUrl}`,
+          });
+        }
       }
 
       // Log progress periodically
@@ -368,21 +434,86 @@ export async function scrapeWebsite(options: ScrapeOptions): Promise<{
   } catch (error) {
     logger.error('Browser launch failed', { error });
     if (browser) await browser.close();
+
+    // Emit failure event
+    if (operationId) {
+      syncProgressEmitter.emitProgress({
+        operationId,
+        workspaceId,
+        type: 'website_scrape',
+        status: 'failed',
+        progress: 0,
+        totalItems: 0,
+        processedItems: 0,
+        error: error instanceof Error ? error.message : 'Browser launch failed',
+      });
+    }
+
     throw error;
   }
 
   // Process scraped content
   let totalChunks = 0;
+  let processedPages = 0;
+
+  // Emit progress for processing phase
+  if (operationId) {
+    syncProgressEmitter.emitProgress({
+      operationId,
+      workspaceId,
+      type: 'website_scrape',
+      status: 'running',
+      progress: 50,
+      totalItems: scrapedPages.length,
+      processedItems: 0,
+      currentItem: 'Processing scraped content...',
+    });
+  }
 
   for (const scrapedPage of scrapedPages) {
     try {
       const chunks = await processScrapedPage(scrapedPage, workspaceId, botId);
       totalChunks += chunks;
+      processedPages++;
+
+      // Emit progress during processing phase (50-100%)
+      if (operationId) {
+        syncProgressEmitter.emitProgress({
+          operationId,
+          workspaceId,
+          type: 'website_scrape',
+          status: 'running',
+          progress: 50 + Math.round((processedPages / scrapedPages.length) * 50),
+          totalItems: scrapedPages.length,
+          processedItems: processedPages,
+          currentItem: `Processing: ${scrapedPage.title}`,
+        });
+      }
     } catch (error) {
       const message = `Failed to process ${scrapedPage.url}: ${error instanceof Error ? error.message : 'Unknown error'}`;
       logger.error(message);
       errors.push(message);
+      processedPages++;
     }
+  }
+
+  // Emit completion event
+  if (operationId) {
+    syncProgressEmitter.emitProgress({
+      operationId,
+      workspaceId,
+      type: 'website_scrape',
+      status: 'completed',
+      progress: 100,
+      totalItems: scrapedPages.length,
+      processedItems: processedPages,
+      result: {
+        added: scrapedPages.length,
+        updated: 0,
+        removed: 0,
+        errors,
+      },
+    });
   }
 
   logger.info('Website scrape complete', {
@@ -394,16 +525,17 @@ export async function scrapeWebsite(options: ScrapeOptions): Promise<{
   });
 
   // Log to analytics with workspace context
+  // Use camelCase to match frontend expectations (lastScrapeResult.chunksCreated)
   await supabase.from('analytics').insert({
     workspace_id: workspaceId,
     event_type: 'website_scrape',
     event_data: {
-      pages_scraped: scrapedPages.length,
-      chunks_created: totalChunks,
+      pagesScraped: scrapedPages.length,
+      chunksCreated: totalChunks,
       errors: errors.length,
-      bot_id: botId,
+      botId: botId,
       mode: usingSitemap ? 'sitemap-incremental' : 'full-crawl',
-      unchanged_pages: unchangedCount,
+      unchangedPages: unchangedCount,
     },
   });
 
@@ -640,6 +772,63 @@ function shouldScrapeUrl(
 }
 
 /**
+ * Clean up a page title by removing site name suffixes
+ * Examples:
+ *   "How to Guide | Company Name" → "How to Guide"
+ *   "Getting Started - Documentation - Site" → "Getting Started"
+ *   "Page Title :: Site Name" → "Page Title"
+ */
+function cleanPageTitle(rawTitle: string, url: string): string {
+  if (!rawTitle) return url;
+
+  // Common separators used to append site names
+  const separators = [' | ', ' - ', ' · ', ' — ', ' :: ', ' » ', ' // '];
+
+  let title = rawTitle;
+
+  // Find the first separator and take everything before it
+  for (const sep of separators) {
+    const sepIndex = title.indexOf(sep);
+    if (sepIndex > 0) {
+      // Only take the part before the separator if it's meaningful (> 3 chars)
+      const beforeSep = title.substring(0, sepIndex).trim();
+      if (beforeSep.length > 3) {
+        title = beforeSep;
+        break;
+      }
+    }
+  }
+
+  // Clean up any extra whitespace
+  title = title.replace(/\s+/g, ' ').trim();
+
+  // If title is still too short or empty, use URL path as fallback
+  if (title.length < 3) {
+    try {
+      const urlPath = new URL(url).pathname;
+      // Convert path to title: /about-us → "About Us"
+      const pathTitle = urlPath
+        .split('/')
+        .pop()
+        ?.replace(/[-_]/g, ' ')
+        .replace(/\.\w+$/, '') // Remove file extension
+        .trim();
+      if (pathTitle && pathTitle.length > 0) {
+        // Capitalize first letter of each word
+        title = pathTitle
+          .split(' ')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+      }
+    } catch {
+      // Keep original title if URL parsing fails
+    }
+  }
+
+  return title || url;
+}
+
+/**
  * Scrape a single page
  */
 async function scrapePage(
@@ -657,8 +846,11 @@ async function scrapePage(
   // Remove unwanted elements
   $('script, style, nav, header, footer, aside, .sidebar, .menu, .navigation').remove();
 
-  // Get title
-  const title = $('title').text().trim() || $('h1').first().text().trim() || url;
+  // Get raw title from multiple sources
+  const rawTitle = $('title').text().trim() || $('h1').first().text().trim() || '';
+
+  // Clean up the title (remove site name suffixes)
+  const title = cleanPageTitle(rawTitle, url);
 
   // Get main content
   const mainContent = $('main, article, .content, #content, .main').first();

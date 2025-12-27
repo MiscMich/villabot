@@ -42,7 +42,7 @@ services:
       - SUPABASE_URL=${SUPABASE_URL:-https://supabase.cluebase.ai}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-test-key}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-test-key}
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-test-key}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-test-key}
       - API_URL=http://localhost:3000
       - APP_URL=http://localhost:3001
     healthcheck:

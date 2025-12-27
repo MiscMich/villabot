@@ -568,6 +568,26 @@ class BotManager {
   }
 
   /**
+   * Send notification to all bots in a workspace
+   * Used for system-level alerts like sync failures
+   */
+  async notifyWorkspace(workspaceId: string, message: string, blocks?: object[]): Promise<void> {
+    const workspaceBots = Array.from(this.instances.values())
+      .filter(instance => instance.workspaceId === workspaceId && instance.running);
+
+    if (workspaceBots.length === 0) {
+      logger.warn(`No running bots found for workspace ${workspaceId} to send notification`);
+      return;
+    }
+
+    logger.info(`Sending notification to ${workspaceBots.length} bot(s) in workspace ${workspaceId}`);
+
+    for (const bot of workspaceBots) {
+      await bot.sendNotification(message, blocks);
+    }
+  }
+
+  /**
    * Map database row to Bot type
    */
   private mapBotFromRow(row: any): Bot {

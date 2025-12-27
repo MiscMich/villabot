@@ -1,6 +1,6 @@
 /**
  * AI Response generation service
- * Uses OpenAI GPT-5 Nano with RAG context
+ * Uses OpenAI GPT-5-Nano with RAG context
  */
 
 import OpenAI from 'openai';
@@ -30,6 +30,20 @@ const LIST_DOCS_PATTERNS = [
   /all (available )?(sops?|documents?|docs?)/i,
 ];
 
+// Patterns that indicate a greeting or capability question
+const GREETING_PATTERNS = [
+  /^(hey|hi|hello|howdy|yo|sup|hiya)[\s!?.,]*$/i,
+  /^(hey|hi|hello)[,!]?\s+(there|bot|buddy|friend)[\s!?.,]*$/i,
+  /what (can|do) you do/i,
+  /what are (you|your) (capabilities|abilities|features)/i,
+  /how (can|do) you help/i,
+  /what (can|do) you help (me )?(with|do)/i,
+  /tell me (about yourself|what you do)/i,
+  /introduce yourself/i,
+  /who are you/i,
+  /what('s| is) your (purpose|function|role)/i,
+];
+
 export interface GeneratedResponse {
   content: string;
   sources: string[];
@@ -44,51 +58,137 @@ export interface BotResponseOptions {
   categories?: string[];
 }
 
-const SYSTEM_PROMPT = `You are TeamBrain, the AI assistant for your organization's operations team. You help staff quickly find answers about SOPs, policies, procedures, and documentation.
+const SYSTEM_PROMPT = `You are an AI assistant helping staff find answers quickly from your organization's documentation.
 
-*Your Knowledge Base:*
-• Google Drive documents covering: procedures, protocols, policies, guidelines, troubleshooting guides
-• Website pages with: company information, FAQs, and resources
+*CRITICAL: Slack Formatting Rules*
+You MUST use Slack's mrkdwn format. NEVER use these (they don't render in Slack):
+❌ ### Headers (use *bold text* instead)
+❌ --- horizontal rules (use blank lines instead)
+❌ **double asterisks** (use *single asterisks* for bold)
+❌ __double underscores__ (use _single underscores_ for italics)
+❌ [link text](url) (just write the text and URL separately)
 
-*Response Style:*
-1. Be CONCISE - staff need quick answers during busy operations
-2. Lead with the answer, then provide details if needed
-3. Always cite your source: "According to *[Document Name]*..."
-4. For multi-step procedures, use numbered lists
-5. Highlight critical info with > blockquotes
+*Slack Formatting You MUST Use:*
+• *bold* — document names, key terms, important values
+• _italics_ — notes, caveats, secondary info
+• \`code\` — codes, passwords, specific numbers, commands
+• 1. 2. 3. — numbered lists for sequential steps
+• • — bullet points for non-sequential items  
+• > — blockquotes for warnings, tips, important callouts
+• Blank lines — separate sections (NOT horizontal rules)
 
-*Slack Formatting (ALWAYS use):*
-• *bold* for document names, key terms, important values
-• _italics_ for notes, caveats, or secondary info
-• \`code\` for codes, passwords, specific numbers
-• Numbered lists (1. 2. 3.) for sequential steps
-• Bullet points (•) for non-sequential items
-• > for warnings, important callouts, or tips
-• Line breaks between sections for readability
+*Response Guidelines:*
+1. *Lead with the answer* — don't make people read paragraphs to find it
+2. *Be concise* — staff need quick answers during busy operations
+3. *Cite your source* — "According to *[Document Name]*..."
+4. *Use structure* — numbered lists for steps, bullets for options
+5. *Keep sections short* — 3-5 bullets max per section
 
-*Context Quality Guidance:*
-You will receive context in <document> tags. Assess the relevance:
-- HIGH quality: Multiple relevant documents → Answer confidently with citations
-- MEDIUM quality: Partial relevance → Answer what you can, acknowledge limitations
-- LOW quality: Few/irrelevant docs → Say "I don't have clear documentation on this" and suggest escalation
-- NO context: Zero relevant results → Be honest: "I couldn't find anything in our documentation about this"
+*Response Length (IMPORTANT):*
+• *Default to SHORT* (50-150 words) for simple, direct questions
+• Use *medium length* (150-400 words) for topics that need some explanation
+• Use *longer responses* (400-800 words) ONLY for multi-step procedures or complex topics
+• *NEVER pad responses* — if you can answer fully in 50 words, do that
+• When in doubt, be brief and offer: "Would you like more details on any part of this?"
 
-*How to Answer:*
-- If context contains the answer → Give a direct, helpful response with source citation
-- If context is partially relevant → Answer what you can, acknowledge gaps
-- If context doesn't help → Say: "I don't have that in my documentation. You might want to check with the relevant team or I can escalate this."
-- For follow-up questions → Reference the previous context and build on it
+*Context Assessment:*
+You'll receive context in <document> tags. Based on relevance:
+• *Strong match* → Answer confidently with citation
+• *Partial match* → Answer what you can, acknowledge limitations
+• *Weak/no match* → Say "I don't have documentation on that specific topic. Could you rephrase, or would you like me to escalate this?"
 
 *Citation Format:*
-Always cite sources as: "According to *[Document Name]*..." or "In the *[Document Name]* document..."
+"According to *[Document Name]*..." or "From the *[Document Name]*..."
 
-*Tone:* Friendly, professional, like a knowledgeable coworker who wants to help you succeed.`;
+*Tone:* Friendly, professional, helpful coworker.`;
 
 /**
  * Check if user is asking for a document inventory
  */
 function isDocumentListQuery(question: string): boolean {
   return LIST_DOCS_PATTERNS.some(pattern => pattern.test(question));
+}
+
+/**
+ * Check if user is greeting or asking about capabilities
+ */
+function isGreetingOrCapabilityQuery(question: string): boolean {
+  const cleaned = question.trim();
+  return GREETING_PATTERNS.some(pattern => pattern.test(cleaned));
+}
+
+/**
+ * Sanitize response for Slack's mrkdwn format
+ * Removes markdown that doesn't work in Slack and fixes formatting issues
+ */
+function sanitizeForSlack(text: string): string {
+  let sanitized = text;
+  
+  // Replace markdown headers (### Header) with bold text
+  sanitized = sanitized.replace(/^#{1,6}\s+(.+)$/gm, '*$1*');
+  
+  // Remove horizontal rules (---, ___, ***) - replace with empty line
+  sanitized = sanitized.replace(/^[-_*]{3,}\s*$/gm, '');
+  
+  // Fix double asterisks (**text**) to single (*text*) for Slack bold
+  sanitized = sanitized.replace(/\*\*([^*]+)\*\*/g, '*$1*');
+  
+  // Fix double underscores (__text__) to single (_text_) for Slack italics
+  sanitized = sanitized.replace(/__([^_]+)__/g, '_$1_');
+  
+  // Remove [text](url) markdown links - just keep the text and URL
+  sanitized = sanitized.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 ($2)');
+  
+  // Clean up excessive blank lines (more than 2 in a row)
+  sanitized = sanitized.replace(/\n{4,}/g, '\n\n\n');
+  
+  // Trim whitespace
+  sanitized = sanitized.trim();
+  
+  return sanitized;
+}
+
+/**
+ * Generate a friendly introduction response
+ */
+async function generateIntroductionResponse(botOptions: BotResponseOptions): Promise<GeneratedResponse> {
+  // Get document count for context
+  const { data: docCount } = await supabase
+    .from('documents')
+    .select('id', { count: 'exact', head: true })
+    .eq('workspace_id', botOptions.workspaceId)
+    .eq('is_active', true);
+
+  const count = docCount?.length ?? 0;
+  
+  const content = `👋 Hey there! I'm your AI assistant, here to help you find answers quickly.
+
+*What I can help with:*
+• Answer questions about your SOPs, policies, and procedures
+• Find information from your Google Drive documents
+• Look up details from your company website
+• Guide you through step-by-step processes
+• Cite sources so you know where info comes from
+
+*How to use me:*
+1. Just ask your question naturally — no special commands needed
+2. I'll search our knowledge base (${count > 0 ? `*${count} documents*` : 'your documents'}) and give you the most relevant answer
+3. Follow up if you need more details — I remember our conversation!
+
+*Examples of things you can ask:*
+• _"What's the checkout procedure?"_
+• _"How do I handle a guest complaint?"_
+• _"What are the pool rules?"_
+
+> 💡 _Tip: Be specific in your questions for the best answers!_
+
+What can I help you with today?`;
+
+  return {
+    content: sanitizeForSlack(content),
+    sources: [],
+    confidence: 1.0,
+  };
 }
 
 /**
@@ -141,7 +241,7 @@ ${websiteDocs.length > 15 ? `\n_...and ${websiteDocs.length - 15} more website p
 > 💡 _Ask me about any specific procedure or policy and I'll find the relevant information!_`;
 
   return {
-    content,
+    content: sanitizeForSlack(content),
     sources: [],
     confidence: 1.0,
   };
@@ -159,6 +259,12 @@ export async function generateResponse(
   const history = conversationHistory;
 
   logger.debug('Generating response', { question, botId: botOptions.botId, workspaceId: botOptions.workspaceId });
+
+  // Check if user is greeting or asking about capabilities (before RAG search)
+  if (history.length === 0 && isGreetingOrCapabilityQuery(question)) {
+    logger.debug('Detected greeting or capability query');
+    return generateIntroductionResponse(botOptions);
+  }
 
   // Check if user is asking for document inventory (no cache needed - always fresh)
   if (isDocumentListQuery(question)) {
@@ -188,7 +294,7 @@ export async function generateResponse(
 
     if (searchResults.length === 0) {
       return {
-        content: "I don't have any information about that in our documentation. Could you rephrase your question, or would you like me to escalate this to a team member?",
+        content: "I couldn't find anything in our documentation about that. Could you try rephrasing your question, or would you like me to escalate this to a team member?",
         sources: [],
         confidence: 0.2,
       };
@@ -217,7 +323,10 @@ export async function generateResponse(
       { maxRetries: 2, initialDelayMs: 1000 }
     );
 
-    const response = result.choices[0]?.message?.content?.trim() ?? '';
+    const rawResponse = result.choices[0]?.message?.content?.trim() ?? '';
+    
+    // Sanitize response for Slack's mrkdwn format
+    const response = sanitizeForSlack(rawResponse);
 
     // Calculate calibrated confidence based on search results
     // Weighted: top result (50%) + average (30%) + document diversity (20%)
@@ -282,7 +391,7 @@ ${searchResults.length > 1 ? `\n_I also found related information in: ${searchRe
 > ⚠️ _If you need more details, please try again in a moment or ask a team member._`;
 
       return {
-        content,
+        content: sanitizeForSlack(content),
         sources: searchResults.map(r => r.sourceUrl ?? r.documentTitle),
         confidence: 0.4,
       };
@@ -369,7 +478,7 @@ Keep the response friendly and concise.`;
 
     logger.info('Learned new fact from user correction', { userId, workspaceId });
 
-    return response;
+    return sanitizeForSlack(response);
   } catch (error) {
     logger.error('Failed to handle correction', { error });
     return "Thanks for the correction! I've noted this and will update my knowledge. 📝";

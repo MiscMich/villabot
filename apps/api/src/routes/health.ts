@@ -4,6 +4,8 @@ import { generateQueryEmbedding } from '../services/rag/embeddings.js';
 import { embeddingCache, searchCache, responseCache } from '../utils/cache.js';
 import { env } from '../config/env.js';
 import { logger } from '../utils/logger.js';
+import { getCircuitBreakerHealth, CircuitState } from '../utils/circuit-breaker.js';
+import { isRedisAvailable } from '../middleware/rateLimit.js';
 
 export const healthRouter = Router();
 
@@ -48,7 +50,7 @@ healthRouter.get('/', async (_req: Request, res: Response) => {
   const supabaseOk = await testSupabaseConnection();
   updateServiceStatus('supabase', supabaseOk);
 
-  // Platform health is based on core services only (Supabase + Gemini)
+  // Platform health is based on core services only (Supabase + OpenAI)
   // Slack/Drive are per-workspace integrations - they don't affect platform health
   const allHealthy = Object.values(serviceStatus).every(Boolean);
   const anyHealthy = Object.values(serviceStatus).some(Boolean);
@@ -207,6 +209,28 @@ healthRouter.get('/deep', async (_req: Request, res: Response) => {
       heapTotalMB: Math.round(memUsage.heapTotal / 1024 / 1024),
       rssMB: Math.round(memUsage.rss / 1024 / 1024),
       heapUsagePercent: Math.round((memUsage.heapUsed / memUsage.heapTotal) * 100),
+    },
+  };
+
+  // 6. Circuit breaker status
+  const cbHealth = getCircuitBreakerHealth();
+  const allCircuitsClosed = Object.values(cbHealth).every(cb => cb.state === CircuitState.CLOSED);
+  checks.circuitBreakers = {
+    status: allCircuitsClosed ? 'pass' : 'fail',
+    details: Object.fromEntries(
+      Object.entries(cbHealth).map(([name, cb]) => [
+        name,
+        { state: cb.state, failureCount: cb.failureCount, healthy: cb.healthy }
+      ])
+    ),
+  };
+
+  // 7. Rate limiter status
+  checks.rateLimiter = {
+    status: 'pass',
+    details: {
+      backend: isRedisAvailable() ? 'redis' : 'in-memory',
+      redisAvailable: isRedisAvailable(),
     },
   };
 

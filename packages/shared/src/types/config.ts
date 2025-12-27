@@ -9,7 +9,7 @@ export interface BotConfig {
   timezone: string;
 
   // AI Settings
-  geminiModel: string;
+  openaiModel: string;
   temperature: number;
   maxResponseLength: number;
   systemPrompt: string;
@@ -25,7 +25,7 @@ export interface BotConfig {
 }
 
 export interface ApiCredentials {
-  geminiApiKey: string;
+  openaiApiKey: string;
   slackBotToken: string;
   slackSigningSecret: string;
   slackAppToken: string;
@@ -55,7 +55,7 @@ export const DEFAULT_BOT_CONFIG: BotConfig = {
   botName: 'Cluebase',
   botAvatar: null,
   timezone: 'America/Los_Angeles',
-  geminiModel: 'gemini-1.5-flash',
+  openaiModel: 'gpt-5-nano',
   temperature: 0.3,
   maxResponseLength: 2000,
   systemPrompt: `You are Cluebase, a helpful AI assistant for your organization.

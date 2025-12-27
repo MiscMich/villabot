@@ -38,10 +38,11 @@ analyticsRouter.get('/overview', async (req, res) => {
       .eq('workspace_id', workspaceId)
       .eq('is_active', true);
 
+    // document_chunks doesn't have workspace_id - join through documents table
     const { count: totalChunks } = await supabase
       .from('document_chunks')
-      .select('*', { count: 'exact', head: true })
-      .eq('workspace_id', workspaceId);
+      .select('*, documents!inner(workspace_id)', { count: 'exact', head: true })
+      .eq('documents.workspace_id', workspaceId);
 
     // Get message counts for last 7 days for this workspace
     const sevenDaysAgo = new Date();

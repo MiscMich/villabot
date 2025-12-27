@@ -1,14 +1,147 @@
 /**
  * API client for Cluebase AI Dashboard
  * Handles authenticated requests with workspace context
+ *
+ * Types are imported from @cluebase/shared/api for type-safe API contracts.
+ * Response types are inferred from Zod schemas, ensuring frontend-backend alignment.
  */
 
 import { getSupabase, isSupabaseConfigured } from './supabase';
+
+// Import typed client factory for tRPC-like type safety
+import { createTypedClient, type TypedApiClient, type TypedApiError } from '@cluebase/shared/api';
+
+// Import shared API types for internal use
+import type {
+  HealthResponse,
+  OverviewResponse,
+  ActivityResponse,
+  ListBotsResponse,
+  GetBotResponse,
+} from '@cluebase/shared/api';
+
+// Re-export shared API types for type-safe contracts
+// Consumers can import types from this file or directly from @cluebase/shared/api
+export type {
+  // Bots
+  Bot,
+  BotDetail,
+  ListBotsResponse,
+  GetBotResponse,
+  CreateBotResponse,
+  BotChannel,
+  ListBotChannelsResponse,
+  BotFolder,
+  ListBotFoldersResponse,
+  SlackChannel,
+  ListSlackChannelsResponse,
+  TestSlackCredentialsResponse,
+  TriggerBotSyncResponse,
+  // Documents
+  Document,
+  DocumentDetail,
+  ListDocumentsResponse,
+  SyncStatusResponse,
+  SyncResultResponse,
+  ScrapeStatusResponse,
+  ScrapeResultResponse,
+  // Analytics
+  OverviewResponse,
+  ActivityResponse,
+  LearnedFact,
+  LearnedFactsResponse,
+  // Workspaces
+  WorkspaceListItem,
+  ListWorkspacesResponse,
+  GetWorkspaceResponse,
+  WorkspaceUsageResponse,
+  TeamMember,
+  ListTeamMembersResponse,
+  TeamInvite,
+  ListTeamInvitesResponse,
+  InviteMemberResponse,
+  BillingOverviewResponse,
+  CheckoutSessionResponse,
+  PortalSessionResponse,
+  // Conversations
+  ConversationListItem,
+  ListConversationsResponse,
+  GetConversationResponse,
+  ConversationStatsResponse,
+  // Feedback
+  ResponseFeedback,
+  ListFeedbackResponse,
+  FeedbackAnalyticsResponse,
+  FeedbackStatsResponse,
+  // Auth
+  AuthStatusResponse,
+  GoogleAuthUrlResponse,
+  DriveStatusResponse,
+  DriveFoldersResponse,
+  SetupStatusResponse,
+  // Admin
+  AdminStatsResponse,
+  AdminWorkspacesResponse,
+  AdminWorkspaceDetailResponse,
+  AdminGrowthResponse,
+  AdminUsersResponse,
+  // Platform Feedback
+  ListPlatformFeedbackResponse,
+  PlatformFeedbackDetail,
+  CreatePlatformFeedbackResponse,
+  VotePlatformFeedbackResponse,
+  PlatformFeedbackStatsResponse,
+  ListFeedbackNotesResponse,
+  AddFeedbackNoteResponse,
+  // Common
+  HealthResponse,
+} from '@cluebase/shared/api';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
 // Workspace ID storage key (synced with WorkspaceContext)
 const WORKSPACE_STORAGE_KEY = 'cluebase_current_workspace';
+
+// Session refresh lock to prevent race conditions
+// When multiple 401s occur simultaneously, only one refresh should happen
+let refreshPromise: Promise<boolean> | null = null;
+
+/**
+ * Refresh session with promise-based locking
+ * Prevents multiple simultaneous refresh attempts
+ */
+async function refreshSessionWithLock(): Promise<boolean> {
+  // If a refresh is already in progress, wait for it
+  if (refreshPromise) {
+    return refreshPromise;
+  }
+
+  // Start new refresh and store the promise
+  refreshPromise = (async () => {
+    try {
+      if (typeof window === 'undefined' || !isSupabaseConfigured()) {
+        return false;
+      }
+      const supabase = getSupabase();
+      const { error } = await supabase.auth.refreshSession();
+      if (error) {
+        console.error('Failed to refresh session:', error.message);
+        return false;
+      }
+      return true;
+    } catch (e) {
+      console.error('Session refresh error:', e);
+      return false;
+    } finally {
+      // Clear the lock after a short delay to allow concurrent requests to complete
+      setTimeout(() => {
+        refreshPromise = null;
+      }, 100);
+    }
+  })();
+
+  return refreshPromise;
+}
 
 /**
  * Get current workspace ID from localStorage
@@ -76,18 +209,8 @@ async function fetchApi<T>(
       // A hard redirect causes loops when middleware and client disagree on auth state
       console.warn('API returned 401 - session may need refresh');
 
-      // Try to refresh the session
-      if (typeof window !== 'undefined' && isSupabaseConfigured()) {
-        try {
-          const supabase = getSupabase();
-          const { error: refreshError } = await supabase.auth.refreshSession();
-          if (refreshError) {
-            console.error('Failed to refresh session:', refreshError.message);
-          }
-        } catch (e) {
-          console.error('Session refresh error:', e);
-        }
-      }
+      // Try to refresh the session (with lock to prevent multiple simultaneous refreshes)
+      await refreshSessionWithLock();
     }
 
     throw new Error(error.error || 'Request failed');
@@ -120,14 +243,10 @@ async function fetchPublic<T>(
   return res.json();
 }
 
-// Health & Status
+// Health & Status - Using shared types from @cluebase/shared/api
 export const api = {
   // Health (public)
-  getHealth: () => fetchPublic<{
-    status: string;
-    uptime: number;
-    services: Record<string, boolean>;
-  }>('/health'),
+  getHealth: () => fetchPublic<HealthResponse>('/health'),
 
   // Setup (authenticated - checks workspace-specific setup status)
   // Requires auth to verify workspace membership for accurate status
@@ -153,10 +272,10 @@ export const api = {
       body: JSON.stringify({ url, serviceKey }),
     }),
 
-  testAI: (geminiKey: string) =>
+  testAI: (openaiKey: string) =>
     fetchPublic<{ success: boolean; message?: string; error?: string }>('/api/setup/test-ai', {
       method: 'POST',
-      body: JSON.stringify({ geminiKey }),
+      body: JSON.stringify({ openaiKey }),
     }),
 
   testSlack: (botToken: string, appToken: string) =>
@@ -170,7 +289,7 @@ export const api = {
 
   completeSetup: (config: {
     database: { url: string; serviceKey: string };
-    ai: { geminiKey: string };
+    ai: { openaiKey: string };
     slack: { botToken: string; appToken: string; signingSecret?: string };
     googleDrive?: { authenticated: boolean; selectedFolders?: string[] };
     website?: { url: string; maxPages?: number };
@@ -273,18 +392,10 @@ export const api = {
     errors: string[];
   }>('/api/documents/scrape/website', { method: 'POST' }),
 
-  // Analytics
-  getOverview: () => fetchApi<{
-    documents: { total: number; active: number; chunks: number };
-    activity: { messagesThisWeek: number; responsesThisWeek: number };
-    feedback: { positive: number; negative: number; satisfactionRate: number | null };
-    knowledge: { learnedFacts: number };
-  }>('/api/analytics/overview'),
+  // Analytics - Using shared types from @cluebase/shared/api
+  getOverview: () => fetchApi<OverviewResponse>('/api/analytics/overview'),
 
-  getActivity: (days = 14) => fetchApi<{
-    data: Array<{ date: string; messages: number; responses: number }>;
-    period: { start: string; end: string; days: number };
-  }>(`/api/analytics/activity?days=${days}`),
+  getActivity: (days = 14) => fetchApi<ActivityResponse>(`/api/analytics/activity?days=${days}`),
 
   getEvents: (limit = 50) => fetchApi<{
     events: Array<{
@@ -326,14 +437,30 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
-  // Auth (Google Drive OAuth - legacy)
-  getAuthStatus: () => fetchApi<{
-    google: { connected: boolean; connectedAt: string | null };
-  }>('/auth/status'),
+  // Auth (Google Drive OAuth)
+  getAuthStatus: (workspaceId?: string) => {
+    const params = new URLSearchParams();
+    if (workspaceId) params.append('workspaceId', workspaceId);
+    const query = params.toString();
+    return fetchApi<{
+      google: { connected: boolean; connectedAt: string | null };
+    }>(`/auth/status${query ? `?${query}` : ''}`);
+  },
 
-  getGoogleAuthUrl: () => fetchApi<{ authUrl: string }>('/auth/google'),
+  getGoogleAuthUrl: (workspaceId?: string, source?: string) => {
+    const params = new URLSearchParams();
+    if (workspaceId) params.append('workspaceId', workspaceId);
+    if (source) params.append('source', source);
+    const query = params.toString();
+    return fetchApi<{ authUrl: string }>(`/auth/google${query ? `?${query}` : ''}`);
+  },
 
-  disconnectGoogle: () => fetchApi('/auth/google', { method: 'DELETE' }),
+  disconnectGoogle: (workspaceId?: string) => {
+    const params = new URLSearchParams();
+    if (workspaceId) params.append('workspaceId', workspaceId);
+    const query = params.toString();
+    return fetchApi(`/auth/google${query ? `?${query}` : ''}`, { method: 'DELETE' });
+  },
 
   // Google Drive (workspace-scoped)
   getDriveStatus: () => fetchApi<{
@@ -414,39 +541,10 @@ export const api = {
     };
   }>('/api/conversations/stats/summary'),
 
-  // Bots
-  getBots: () => fetchApi<{
-    bots: Array<{
-      id: string;
-      name: string;
-      slug: string;
-      description: string | null;
-      status: 'active' | 'inactive' | 'error';
-      is_default: boolean;
-      bot_type: 'operations' | 'marketing' | 'sales' | 'hr' | 'technical' | 'general';
-      system_prompt: string | null;
-      created_at: string;
-      updated_at: string;
-    }>;
-    total: number;
-  }>('/api/bots'),
+  // Bots - Using shared types from @cluebase/shared/api
+  getBots: () => fetchApi<ListBotsResponse>('/api/bots'),
 
-  getBot: (id: string) => fetchApi<{
-    bot: {
-      id: string;
-      name: string;
-      slug: string;
-      description: string | null;
-      status: 'active' | 'inactive' | 'error';
-      is_default: boolean;
-      bot_type: 'operations' | 'marketing' | 'sales' | 'hr' | 'technical' | 'general';
-      system_prompt: string | null;
-      slack_bot_token: string | null;
-      slack_app_token: string | null;
-      created_at: string;
-      updated_at: string;
-    };
-  }>(`/api/bots/${id}`),
+  getBot: (id: string) => fetchApi<GetBotResponse>(`/api/bots/${id}`),
 
   createBot: (data: {
     name: string;
@@ -470,6 +568,10 @@ export const api = {
     system_prompt?: string;
     categories?: string[];
     status?: 'active' | 'inactive';
+    // Slack credentials (camelCase to match backend Zod schema)
+    slackBotToken?: string | null;
+    slackAppToken?: string | null;
+    slackSigningSecret?: string | null;
   }) => fetchApi(`/api/bots/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(data),
@@ -1098,3 +1200,59 @@ export const api = {
       body: JSON.stringify({ note }),
     }),
 };
+
+// ============================================================================
+// Type-Safe API Client (tRPC-like pattern)
+// ============================================================================
+
+/**
+ * Create a type-safe API client with full end-to-end type inference.
+ *
+ * @example
+ * ```typescript
+ * // Import the typed client
+ * import { typedApi } from '@/lib/api';
+ *
+ * // Fully typed API calls - request and response types are inferred
+ * const bots = await typedApi.call('bots.list');
+ * // bots.bots is typed as Bot[]
+ *
+ * // With path parameters
+ * const bot = await typedApi.call('bots.get', { params: { id: '123' } });
+ * // bot.bot is typed as BotDetail
+ *
+ * // With request body
+ * const newBot = await typedApi.call('bots.create', {
+ *   body: { name: 'MyBot', slug: 'mybot' }
+ * });
+ * ```
+ */
+
+// Wrap fetchApi to match the BaseFetch signature
+async function baseFetch<T>(url: string, options?: RequestInit): Promise<T> {
+  return fetchApi<T>(url, options);
+}
+
+/**
+ * Type-safe API client instance.
+ * Use this for new code to get full end-to-end type safety.
+ *
+ * Benefits:
+ * - Compile-time type checking for requests and responses
+ * - Runtime validation with Zod schemas (in development)
+ * - Single source of truth from shared contracts
+ * - Auto-complete for endpoint names
+ */
+export const typedApi: TypedApiClient = createTypedClient(baseFetch, {
+  validateRequests: true,
+  validateResponses: process.env.NODE_ENV === 'development',
+  onError: (error: TypedApiError) => {
+    console.error(`[TypedAPI] ${error.code || 'ERROR'}:`, error.message);
+    if (error.validationErrors) {
+      console.error('[TypedAPI] Validation issues:', error.validationErrors);
+    }
+  },
+});
+
+// Re-export types for convenience
+export type { TypedApiClient, TypedApiError };

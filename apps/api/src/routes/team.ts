@@ -12,6 +12,7 @@ import {
   requireWorkspaceAdmin,
   checkUsageLimit,
   generalApiRateLimiter,
+  inviteAcceptRateLimiter,
 } from '../middleware/index.js';
 import { randomBytes } from 'crypto';
 import { env } from '../config/env.js';
@@ -412,9 +413,10 @@ teamRouter.delete(
 );
 
 /**
- * Accept invite (no auth required - creates membership for authenticated user)
+ * Accept invite (requires authentication - creates membership for authenticated user)
+ * Rate limited by IP to prevent brute force token guessing
  */
-teamRouter.post('/invites/:token/accept', authenticate, async (req, res) => {
+teamRouter.post('/invites/:token/accept', inviteAcceptRateLimiter, authenticate, async (req, res) => {
   try {
     const { token } = req.params;
 

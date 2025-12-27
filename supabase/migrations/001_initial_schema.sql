@@ -182,7 +182,7 @@ CREATE TRIGGER documents_updated_at
 -- Insert default bot configuration
 INSERT INTO bot_config (key, value) VALUES
   ('general', '{"botName": "VillaBot", "timezone": "America/Los_Angeles"}'),
-  ('ai', '{"model": "gemini-1.5-flash", "temperature": 0.3, "maxResponseLength": 2000}'),
+  ('ai', '{"model": "gpt-5-nano", "temperature": 0.3, "maxResponseLength": 2000}'),
   ('sync', '{"drivePollIntervalMs": 300000, "websiteScrapeSchedule": "0 0 * * 0"}'),
   ('defaults', '{"confidenceThreshold": 0.7, "responseDelay": 1000, "responseStyle": "friendly"}')
 ON CONFLICT (key) DO NOTHING;

@@ -15,6 +15,7 @@ interface HybridSearchChunk {
   content: string;
   document_id: string;
   source_title?: string;
+  source_url?: string;  // Now returned directly from RPC (eliminates N+1 query)
   similarity: number;
   rank_score: number;
   category?: string;
@@ -154,35 +155,22 @@ export async function hybridSearch(
     // Type assertion for chunks returned from RPC
     const typedChunks = chunks as HybridSearchChunk[];
 
-    // Fetch document metadata for results (source_url not returned by new function)
-    const documentIds = [...new Set(typedChunks.map(c => c.document_id))];
-    const { data: documents } = await supabase
-      .from('documents')
-      .select('id, source_url')
-      .in('id', documentIds);
-
-    const docMap = new Map(documents?.map(d => [d.id, d]) ?? []);
-
-    // Build results with document info
-    // The new hybrid_search function returns category and source_title directly
+    // Build results - hybrid_search now returns all needed fields directly (no N+1 query)
     // Filter by EITHER good vector similarity OR meaningful keyword match (rank_score > 0)
     // This allows keyword-only matches to pass through even when vector similarity is low
     const MIN_RANK_SCORE = 0.001; // Minimum RRF score to include (catches top ~50 keyword matches)
     let results: SearchResult[] = typedChunks
       .filter(chunk => chunk.similarity >= minSimilarity || chunk.rank_score >= MIN_RANK_SCORE)
-      .map(chunk => {
-        const doc = docMap.get(chunk.document_id);
-        return {
-          id: chunk.id,
-          content: chunk.content,
-          documentId: chunk.document_id,
-          documentTitle: chunk.source_title ?? 'Unknown',
-          similarity: chunk.similarity,
-          rankScore: chunk.rank_score,
-          sourceUrl: doc?.source_url,
-          category: chunk.category as DocumentCategory | undefined,
-        };
-      });
+      .map(chunk => ({
+        id: chunk.id,
+        content: chunk.content,
+        documentId: chunk.document_id,
+        documentTitle: chunk.source_title ?? 'Unknown',
+        similarity: chunk.similarity,
+        rankScore: chunk.rank_score,
+        sourceUrl: chunk.source_url,  // Now from RPC directly
+        category: chunk.category as DocumentCategory | undefined,
+      }));
 
     // Include learned facts if enabled
     if (includeLearnedFacts) {
@@ -308,7 +296,11 @@ async function searchLearnedFacts(
       rankScore: fact.similarity * 0.8, // Slightly lower weight for learned facts
       sourceUrl: undefined,
     }));
-  } catch {
+  } catch (error) {
+    // Log unexpected errors (not Supabase RPC errors which are handled above)
+    logger.warn('Unexpected error in learned facts search', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
     return [];
   }
 }

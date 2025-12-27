@@ -28,6 +28,7 @@ export {
 export {
   generalApiRateLimiter,
   documentSyncRateLimiter,
+  inviteAcceptRateLimiter,
   isPlatformAdmin,
 } from './rateLimit.js';
 

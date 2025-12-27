@@ -202,6 +202,25 @@ export function BotFormModal({ isOpen, onClose, editBot }: BotFormModalProps) {
   const [slackAppToken, setSlackAppToken] = useState('');
   const [slackSigningSecret, setSlackSigningSecret] = useState('');
 
+  // Validation helpers for Slack tokens
+  const validateBotToken = (token: string): string | null => {
+    if (!token) return null; // Empty is ok (optional field)
+    if (!token.startsWith('xoxb-')) return 'Bot token must start with "xoxb-"';
+    if (token.length < 50) return 'Bot token appears too short';
+    return null;
+  };
+
+  const validateAppToken = (token: string): string | null => {
+    if (!token) return null; // Empty is ok (optional field)
+    if (!token.startsWith('xapp-')) return 'App token must start with "xapp-"';
+    if (token.length < 50) return 'App token appears too short';
+    return null;
+  };
+
+  const botTokenError = validateBotToken(slackBotToken);
+  const appTokenError = validateAppToken(slackAppToken);
+  const hasValidationErrors = !!(botTokenError || appTokenError);
+
   // UI state
   const [showBotToken, setShowBotToken] = useState(false);
   const [showAppToken, setShowAppToken] = useState(false);
@@ -357,12 +376,21 @@ export function BotFormModal({ isOpen, onClose, editBot }: BotFormModalProps) {
     e.preventDefault();
 
     if (isEditing && editBot) {
+      // Build update data, only include credentials if they were entered
+      const updateData: Parameters<typeof api.updateBot>[1] = {
+        name,
+        bot_type: botType,
+      };
+
+      // Only include credentials if user entered new values
+      // (empty fields mean "keep existing", not "clear")
+      if (slackBotToken) updateData.slackBotToken = slackBotToken;
+      if (slackAppToken) updateData.slackAppToken = slackAppToken;
+      if (slackSigningSecret) updateData.slackSigningSecret = slackSigningSecret;
+
       updateMutation.mutate({
         id: editBot.id,
-        data: {
-          name,
-          bot_type: botType,
-        },
+        data: updateData,
       });
     } else {
       createMutation.mutate({
@@ -763,100 +791,122 @@ export function BotFormModal({ isOpen, onClose, editBot }: BotFormModalProps) {
               </div>
             )}
 
-            {/* Slack Credentials Section - Only for new bots */}
-            {!isEditing && (
-              <div className="space-y-4 pt-4 border-t border-border/50">
-                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                  <Key className="w-4 h-4" />
-                  <span>Slack Credentials</span>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
-                    Required for Slack
-                  </span>
-                </div>
+            {/* Slack Credentials Section - For both new and editing bots */}
+            <div className="space-y-4 pt-4 border-t border-border/50">
+              <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                <Key className="w-4 h-4" />
+                <span>Slack Credentials</span>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
+                  {isEditing ? 'Update Credentials' : 'Required for Slack'}
+                </span>
+              </div>
 
-                {/* Workspace-specific notice */}
-                <div className="p-3 rounded-lg bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800">
-                  <div className="flex items-start gap-2">
-                    <Slack className="w-4 h-4 text-purple-600 dark:text-purple-400 flex-shrink-0 mt-0.5" />
-                    <div className="text-xs text-purple-700 dark:text-purple-300">
-                      <p className="font-medium">Your Own Slack App Required</p>
-                      <p className="mt-1">
-                        Each workspace creates their own Slack app. Tokens cannot be shared between workspaces.
-                        You can skip this now and add Slack credentials later.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="slackBotToken">Bot Token</Label>
-                    <div className="relative">
-                      <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <Input
-                        id="slackBotToken"
-                        type={showBotToken ? 'text' : 'password'}
-                        value={slackBotToken}
-                        onChange={(e) => setSlackBotToken(e.target.value)}
-                        placeholder="xoxb-..."
-                        className="pl-10 pr-10 font-mono"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowBotToken(!showBotToken)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        {showBotToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="slackAppToken">App Token</Label>
-                    <div className="relative">
-                      <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <Input
-                        id="slackAppToken"
-                        type={showAppToken ? 'text' : 'password'}
-                        value={slackAppToken}
-                        onChange={(e) => setSlackAppToken(e.target.value)}
-                        placeholder="xapp-..."
-                        className="pl-10 pr-10 font-mono"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowAppToken(!showAppToken)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        {showAppToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="slackSigningSecret">Signing Secret</Label>
-                    <div className="relative">
-                      <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <Input
-                        id="slackSigningSecret"
-                        type={showSigningSecret ? 'text' : 'password'}
-                        value={slackSigningSecret}
-                        onChange={(e) => setSlackSigningSecret(e.target.value)}
-                        placeholder="••••••••"
-                        className="pl-10 pr-10 font-mono"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowSigningSecret(!showSigningSecret)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        {showSigningSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
+              {/* Contextual notice based on editing state */}
+              <div className="p-3 rounded-lg bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800">
+                <div className="flex items-start gap-2">
+                  <Slack className="w-4 h-4 text-purple-600 dark:text-purple-400 flex-shrink-0 mt-0.5" />
+                  <div className="text-xs text-purple-700 dark:text-purple-300">
+                    {isEditing ? (
+                      <>
+                        <p className="font-medium">Update Slack Credentials</p>
+                        <p className="mt-1">
+                          Leave fields empty to keep existing credentials. Enter new values only if you need to update them.
+                          Credentials are stored encrypted and never displayed.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="font-medium">Your Own Slack App Required</p>
+                        <p className="mt-1">
+                          Each workspace creates their own Slack app. Tokens cannot be shared between workspaces.
+                          You can skip this now and add Slack credentials later.
+                        </p>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
-            )}
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="slackBotToken">Bot Token</Label>
+                  <div className="relative">
+                    <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="slackBotToken"
+                      type={showBotToken ? 'text' : 'password'}
+                      value={slackBotToken}
+                      onChange={(e) => setSlackBotToken(e.target.value)}
+                      placeholder={isEditing ? '••••••••••••' : 'xoxb-...'}
+                      className={cn("pl-10 pr-10 font-mono", botTokenError && "border-red-500")}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowBotToken(!showBotToken)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {showBotToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  {botTokenError && (
+                    <p className="text-sm text-red-500 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      {botTokenError}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="slackAppToken">App Token</Label>
+                  <div className="relative">
+                    <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="slackAppToken"
+                      type={showAppToken ? 'text' : 'password'}
+                      value={slackAppToken}
+                      onChange={(e) => setSlackAppToken(e.target.value)}
+                      placeholder={isEditing ? '••••••••••••' : 'xapp-...'}
+                      className={cn("pl-10 pr-10 font-mono", appTokenError && "border-red-500")}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowAppToken(!showAppToken)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {showAppToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  {appTokenError && (
+                    <p className="text-sm text-red-500 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      {appTokenError}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="slackSigningSecret">Signing Secret (Optional)</Label>
+                  <div className="relative">
+                    <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="slackSigningSecret"
+                      type={showSigningSecret ? 'text' : 'password'}
+                      value={slackSigningSecret}
+                      onChange={(e) => setSlackSigningSecret(e.target.value)}
+                      placeholder="••••••••"
+                      className="pl-10 pr-10 font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSigningSecret(!showSigningSecret)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {showSigningSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
 
             {/* Error Message - Comprehensive handling */}
             {error && (() => {
@@ -904,7 +954,7 @@ export function BotFormModal({ isOpen, onClose, editBot }: BotFormModalProps) {
             </Button>
             <Button
               type="submit"
-              disabled={isPending || !name}
+              disabled={isPending || !name || hasValidationErrors}
               className="bg-gradient-to-r from-violet-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white"
             >
               {isPending ? (

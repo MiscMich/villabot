@@ -20,7 +20,7 @@ if (result.error) {
 }
 
 // Verify critical env vars are loaded
-const requiredVars = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'GEMINI_API_KEY'];
+const requiredVars = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'OPENAI_API_KEY'];
 const missing = requiredVars.filter(v => !process.env[v]);
 if (missing.length > 0) {
   console.error('Missing required env vars:', missing);

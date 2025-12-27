@@ -15,6 +15,7 @@ import { TIER_CONFIGS } from '@cluebase/shared';
 import { fullSync as syncGoogleDrive } from '../services/google-drive/sync.js';
 import { isDriveClientInitialized } from '../services/google-drive/client.js';
 import { scrapeWebsite } from '../services/scraper/website.js';
+import { migrateLegacyDriveTokens } from './auth.js';
 
 export const setupRouter = Router();
 
@@ -61,7 +62,7 @@ const setupCompleteSchema = z.object({
     bot: z.object({
       name: z.string().min(1, 'Bot name is required').max(100),
       slug: z.string().min(1, 'Bot slug is required').max(50),
-      botType: z.enum(['general', 'support', 'sales', 'hr', 'technical']).optional(),
+      botType: z.enum(['general', 'operations', 'marketing', 'sales', 'hr', 'technical']).optional(),
       personality: z.string().max(1000).optional(),
       instructions: z.string().max(5000).optional(),
     }),
@@ -405,6 +406,12 @@ setupRouter.post('/complete', setupCompleteRateLimiter, authenticate, validateBo
         workspaceId = newWorkspace.id;
         logger.info('Created workspace during setup', { workspaceId, userId, workspaceName: workspace.name });
       }
+    }
+
+    // Migrate any legacy Google Drive tokens to this workspace
+    // This handles the case where Drive was connected during setup before workspace was created
+    if (googleDrive?.authenticated) {
+      await migrateLegacyDriveTokens(workspaceId);
     }
 
     // Note: Slack and bot configuration validated by Zod middleware

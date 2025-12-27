@@ -14,9 +14,10 @@ export interface RerankableResult {
   sourceUrl?: string;
 }
 
-interface ScoredResult extends RerankableResult {
-  rerankScore: number;
-}
+/**
+ * Result with additional rerank score added by rerankResults
+ */
+export type WithRerankScore<T> = T & { rerankScore: number };
 
 /**
  * Rerank search results based on query relevance
@@ -31,7 +32,7 @@ export function rerankResults<T extends RerankableResult>(
     keywordWeight?: number;
     titleWeight?: number;
   } = {}
-): T[] {
+): WithRerankScore<T>[] {
   const {
     topK = results.length,
     similarityWeight = 0.4,
@@ -43,7 +44,7 @@ export function rerankResults<T extends RerankableResult>(
 
   const queryTerms = extractTerms(query);
 
-  const scored: ScoredResult[] = results.map(result => {
+  const scored: WithRerankScore<T>[] = results.map(result => {
     // 1. Keyword match score (how many query terms appear in content)
     const contentTerms = extractTerms(result.content);
     const keywordScore = calculateTermOverlap(queryTerms, contentTerms);
@@ -76,7 +77,7 @@ export function rerankResults<T extends RerankableResult>(
     queryTerms: Array.from(queryTerms).slice(0, 5),
   });
 
-  return scored.slice(0, topK) as unknown as T[];
+  return scored.slice(0, topK);
 }
 
 /**

@@ -14,7 +14,8 @@ Quick start guide for local development and production deployment.
 | Service | Purpose | Where to Get |
 |---------|---------|--------------|
 | **Supabase** | Database + Auth | [supabase.com](https://supabase.com) or self-host |
-| **Google Cloud** | Drive API + Gemini AI | [console.cloud.google.com](https://console.cloud.google.com) |
+| **OpenAI** | GPT-5-Nano + Embeddings | [platform.openai.com](https://platform.openai.com) |
+| **Google Cloud** | Drive API (OAuth only) | [console.cloud.google.com](https://console.cloud.google.com) |
 | **Stripe** | Billing | [stripe.com](https://stripe.com) |
 | **Slack** | Bot integration | [api.slack.com](https://api.slack.com) (per workspace) |
 
@@ -91,7 +92,7 @@ In Supabase SQL Editor (or using CLI), run each migration in order:
    - Authorized redirect URI: `http://localhost:3000/api/google-drive/callback`
 4. Copy Client ID and Secret
 
-#### Get Gemini API Key
+#### Get OpenAI API Key
 1. Go to [Google AI Studio](https://aistudio.google.com/app/apikey)
 2. Create API key
 
@@ -117,7 +118,7 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your-client-secret
 GOOGLE_REDIRECT_URI=http://localhost:3000/api/google-drive/callback
-GEMINI_API_KEY=your-gemini-key
+OPENAI_API_KEY=your-openai-key
 
 # App URLs
 API_URL=http://localhost:3000

@@ -32,7 +32,7 @@ const botSlugSchema = z.string()
 const createBotSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100, 'Name too long'),
   slug: botSlugSchema,
-  bot_type: z.enum(['general', 'support', 'sales', 'hr', 'technical']).optional(),
+  bot_type: z.enum(['general', 'operations', 'marketing', 'sales', 'hr', 'technical']).optional(),
   description: z.string().max(1000, 'Description too long').optional(),
   personality: z.string().max(100, 'Personality too long').optional(),
   systemInstructions: z.string().max(5000, 'Instructions too long').optional(),
@@ -49,7 +49,7 @@ const createBotSchema = z.object({
 
 const updateBotSchema = z.object({
   name: z.string().min(1).max(100).optional(),
-  bot_type: z.enum(['general', 'support', 'sales', 'hr', 'technical']).optional(),
+  bot_type: z.enum(['general', 'operations', 'marketing', 'sales', 'hr', 'technical']).optional(),
   description: z.string().max(1000).optional(),
   personality: z.string().max(100).optional(),
   systemInstructions: z.string().max(5000).optional(),
@@ -136,29 +136,25 @@ botsRouter.use(authenticate, resolveWorkspace, generalApiRateLimiter);
  */
 botsRouter.get('/', async (req, res) => {
   try {
-    // Use explicit column list to avoid exposing sensitive tokens
+    // Single query: select safe columns + token columns, then extract presence flags
+    // This avoids N+1 pattern (was: 2 queries + O(n) find())
     const { data: bots, error } = await supabase
       .from('bots')
-      .select(BOT_SAFE_COLUMNS)
+      .select(`${BOT_SAFE_COLUMNS}, slack_bot_token, slack_app_token, slack_signing_secret`)
       .eq('workspace_id', req.workspace!.id)
       .order('created_at', { ascending: true });
 
     if (error) throw error;
 
-    // Check token presence status separately (for UI to show connection status)
-    const { data: tokenStatus } = await supabase
-      .from('bots')
-      .select('id, slack_bot_token, slack_app_token, slack_signing_secret')
-      .eq('workspace_id', req.workspace!.id);
-
-    // Merge token presence flags into response
+    // Map to safe response: extract token presence, exclude actual token values
     const botsWithStatus = (bots ?? []).map(bot => {
-      const status = tokenStatus?.find(t => t.id === bot.id);
+      // Destructure to separate tokens from safe data
+      const { slack_bot_token, slack_app_token, slack_signing_secret, ...safeBot } = bot;
       return {
-        ...bot,
-        has_slack_bot_token: !!status?.slack_bot_token,
-        has_slack_app_token: !!status?.slack_app_token,
-        has_slack_signing_secret: !!status?.slack_signing_secret,
+        ...safeBot,
+        has_slack_bot_token: !!slack_bot_token,
+        has_slack_app_token: !!slack_app_token,
+        has_slack_signing_secret: !!slack_signing_secret,
       };
     });
 
@@ -175,9 +171,10 @@ botsRouter.get('/', async (req, res) => {
  */
 botsRouter.get('/:id', async (req, res) => {
   try {
+    // Single query with safe columns + token presence
     const { data: bot, error } = await supabase
       .from('bots')
-      .select(BOT_SAFE_COLUMNS)
+      .select(`${BOT_SAFE_COLUMNS}, slack_bot_token, slack_app_token, slack_signing_secret`)
       .eq('id', req.params.id)
       .eq('workspace_id', req.workspace!.id)
       .single();
@@ -189,20 +186,14 @@ botsRouter.get('/:id', async (req, res) => {
       throw error;
     }
 
-    // Check token presence separately
-    const { data: tokenStatus } = await supabase
-      .from('bots')
-      .select('slack_bot_token, slack_app_token, slack_signing_secret')
-      .eq('id', req.params.id)
-      .eq('workspace_id', req.workspace!.id)
-      .single();
-
+    // Extract token presence, exclude actual values
+    const { slack_bot_token, slack_app_token, slack_signing_secret, ...safeBot } = bot;
     res.json({
       bot: {
-        ...bot,
-        has_slack_bot_token: !!tokenStatus?.slack_bot_token,
-        has_slack_app_token: !!tokenStatus?.slack_app_token,
-        has_slack_signing_secret: !!tokenStatus?.slack_signing_secret,
+        ...safeBot,
+        has_slack_bot_token: !!slack_bot_token,
+        has_slack_app_token: !!slack_app_token,
+        has_slack_signing_secret: !!slack_signing_secret,
       }
     });
   } catch (error) {
@@ -837,7 +828,7 @@ botsRouter.post('/:id/activate', requireWorkspaceAdmin, async (req, res) => {
     // First check if bot exists and has required credentials
     const { data: existingBot, error: checkError } = await supabase
       .from('bots')
-      .select('id, name, slack_bot_token, slack_app_token')
+      .select('id, name, slack_bot_token, slack_app_token, slack_signing_secret')
       .eq('id', botId)
       .eq('workspace_id', workspaceId)
       .single();
@@ -900,7 +891,7 @@ botsRouter.post('/:id/activate', requireWorkspaceAdmin, async (req, res) => {
         ...bot,
         has_slack_bot_token: hasSlackBotToken,
         has_slack_app_token: hasSlackAppToken,
-        has_slack_signing_secret: !!existingBot.slack_app_token, // Use existing check
+        has_slack_signing_secret: !!existingBot.slack_signing_secret,
       },
       started,
       message: started
@@ -1285,7 +1276,14 @@ botsRouter.post('/:id/sync', requireWorkspaceAdmin, async (req, res) => {
         logger.info('Bot sync completed', { botId, workspaceId, result });
       })
       .catch((error) => {
-        logger.error('Bot sync failed', { botId, workspaceId, error });
+        // SyncError has a code property for error classification
+        const errorCode = (error as { code?: string }).code;
+        logger.error('Bot sync failed', {
+          botId,
+          workspaceId,
+          error: error instanceof Error ? error.message : String(error),
+          code: errorCode,
+        });
       });
 
     res.json({

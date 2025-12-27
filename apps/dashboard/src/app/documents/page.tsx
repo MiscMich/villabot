@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
@@ -35,6 +35,9 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useSyncProgress } from '@/hooks/useSyncProgress';
+import { SyncProgressBar, SyncStatusBadge } from '@/components/sync';
+import { syncToast } from '@/components/sync/useSyncToast';
 
 // Category configuration
 type DocumentCategory = 'shared' | 'operations' | 'marketing' | 'sales' | 'hr' | 'technical' | 'custom' | null;
@@ -174,6 +177,9 @@ export default function DocumentsPage() {
   // Wait for workspace context before making API calls
   const { workspace, isLoading: isWorkspaceLoading } = useWorkspace();
 
+  // Real-time sync progress
+  const syncProgress = useSyncProgress();
+
   const {
     data: documents,
     isLoading: isDocumentsLoading,
@@ -230,14 +236,46 @@ export default function DocumentsPage() {
   // Combined loading state
   const isLoading = isWorkspaceLoading || isDocumentsLoading;
 
-  const syncMutation = useMutation({
-    mutationFn: api.triggerSync,
-    onSuccess: () => {
+  // Auto-refresh when sync completes and show toast notifications
+  // Track which operations we've already shown notifications for
+  const notifiedOperationsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const operations = syncProgress.recentOperations;
+    if (operations.length === 0) return;
+
+    const lastOp = operations[0];
+    if (!lastOp) return;
+
+    // Skip if we've already notified for this operation
+    if (notifiedOperationsRef.current.has(lastOp.operationId)) return;
+
+    // Show toast for completed/failed operations
+    if (lastOp.status === 'completed') {
+      notifiedOperationsRef.current.add(lastOp.operationId);
+      syncToast.complete(lastOp.type, lastOp.result);
+      // Refresh document list
       queryClient.invalidateQueries({ queryKey: ['documents'] });
       queryClient.invalidateQueries({ queryKey: ['syncStatus'] });
-      toast({ title: 'Sync Complete', description: 'Documents synced from Google Drive' });
-    },
+      queryClient.invalidateQueries({ queryKey: ['scrapeStatus'] });
+    } else if (lastOp.status === 'failed') {
+      notifiedOperationsRef.current.add(lastOp.operationId);
+      syncToast.error(lastOp.type, lastOp.error);
+    }
+
+    // Clean up old operation IDs (keep last 20)
+    if (notifiedOperationsRef.current.size > 20) {
+      const arr = Array.from(notifiedOperationsRef.current);
+      notifiedOperationsRef.current = new Set(arr.slice(-20));
+    }
+  }, [syncProgress.recentOperations, queryClient]);
+
+  // Note: Success/error toasts are handled by SSE events in useEffect above
+  // Mutation only triggers the sync - SSE provides real-time progress and completion
+  const syncMutation = useMutation({
+    mutationFn: api.triggerSync,
     onError: (error: Error) => {
+      // Only show error if the API call itself fails (not sync errors from SSE)
       toast({ title: 'Sync Failed', description: error.message, variant: 'destructive' });
     },
   });
@@ -265,13 +303,9 @@ export default function DocumentsPage() {
     },
   });
 
+  // Note: Success/error toasts are handled by SSE events in useEffect above
   const scrapeMutation = useMutation({
     mutationFn: api.triggerWebsiteScrape,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['documents'] });
-      queryClient.invalidateQueries({ queryKey: ['scrapeStatus'] });
-      toast({ title: 'Scrape Complete', description: 'Website pages indexed successfully' });
-    },
     onError: (error: Error) => {
       toast({ title: 'Scrape Failed', description: error.message, variant: 'destructive' });
     },
@@ -279,6 +313,7 @@ export default function DocumentsPage() {
 
   const handleSync = async () => {
     setSyncing(true);
+    syncToast.start('drive_sync');
     try {
       await syncMutation.mutateAsync();
     } finally {
@@ -288,6 +323,7 @@ export default function DocumentsPage() {
 
   const handleScrape = async () => {
     setScraping(true);
+    syncToast.start('website_scrape');
     try {
       await scrapeMutation.mutateAsync();
     } finally {
@@ -581,24 +617,14 @@ export default function DocumentsPage() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-start justify-between opacity-0 animate-fade-in">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <FileText className="w-8 h-8 text-amber-500" />
-            <h1 className="text-4xl font-display font-bold">Documents</h1>
-          </div>
-          <p className="text-lg text-muted-foreground">
-            Manage your knowledge base documents and sync settings
-          </p>
+      <div className="opacity-0 animate-fade-in">
+        <div className="flex items-center gap-3 mb-2">
+          <FileText className="w-8 h-8 text-amber-500" />
+          <h1 className="text-4xl font-display font-bold">Documents</h1>
         </div>
-        <Button
-          onClick={handleSync}
-          disabled={syncing || !syncStatus?.driveConnected}
-          className="bg-gradient-to-r from-violet-600 to-pink-600 hover:from-violet-500 hover:to-pink-500 text-white font-medium shadow-glow-purple"
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
-          {syncing ? 'Syncing...' : 'Sync Now'}
-        </Button>
+        <p className="text-lg text-muted-foreground">
+          Manage your knowledge base documents and sync settings
+        </p>
       </div>
 
       {/* Sync Status Cards */}
@@ -619,17 +645,46 @@ export default function DocumentsPage() {
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              {syncStatus?.driveConnected ? (
-                <CheckCircle className="h-5 w-5 text-green-500" />
+            <div className="flex items-center gap-3">
+              {/* Status indicator */}
+              {syncProgress.driveSync ? (
+                <SyncStatusBadge
+                  status={syncProgress.driveSync.status}
+                  progress={syncProgress.driveSync.progress}
+                />
               ) : (
-                <XCircle className="h-5 w-5 text-red-500" />
+                <span className={`text-sm font-medium px-3 py-1 rounded-full ${syncStatus?.driveConnected ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
+                  {syncStatus?.driveConnected ? 'Connected' : 'Not Connected'}
+                </span>
               )}
-              <span className={`text-sm font-medium px-3 py-1 rounded-full ${syncStatus?.driveConnected ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
-                {syncStatus?.driveConnected ? 'Connected' : 'Disconnected'}
-              </span>
+              {/* Sync button - only show when connected and not syncing */}
+              {syncStatus?.driveConnected && !syncProgress.driveSync && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleSync}
+                  disabled={syncing}
+                  className="hover:border-blue-500/50"
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+                  {syncing ? 'Syncing...' : 'Sync Now'}
+                </Button>
+              )}
             </div>
           </div>
+
+          {/* Real-time sync progress */}
+          {syncProgress.driveSync && syncProgress.driveSync.status === 'running' && (
+            <div className="mt-4">
+              <SyncProgressBar
+                progress={syncProgress.driveSync.progress}
+                totalItems={syncProgress.driveSync.totalItems}
+                processedItems={syncProgress.driveSync.processedItems}
+                currentItem={syncProgress.driveSync.currentItem}
+                showDetails
+              />
+            </div>
+          )}
         </div>
 
         {/* Website Scraping */}
@@ -678,21 +733,45 @@ export default function DocumentsPage() {
             </div>
           </div>
 
-          {/* Scraping Progress Indicator */}
-          {scraping && (
+          {/* Real-time Scraping Progress Indicator */}
+          {(scraping || syncProgress.websiteScrape) && (
             <div className="mt-4 p-4 rounded-xl bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800">
-              <div className="flex items-center gap-3 mb-2">
-                <RefreshCw className="h-5 w-5 text-purple-600 dark:text-purple-400 animate-spin" />
-                <span className="font-medium text-purple-700 dark:text-purple-300">
-                  Scraping website...
-                </span>
-              </div>
-              <p className="text-sm text-purple-600 dark:text-purple-400">
-                This may take a few minutes depending on the website size.
-              </p>
-              <div className="mt-3 h-2 bg-purple-200 dark:bg-purple-800 rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full animate-pulse w-2/3" />
-              </div>
+              {syncProgress.websiteScrape ? (
+                <>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <RefreshCw className="h-5 w-5 text-purple-600 dark:text-purple-400 animate-spin" />
+                      <span className="font-medium text-purple-700 dark:text-purple-300">
+                        Scraping website...
+                      </span>
+                    </div>
+                    <SyncStatusBadge
+                      status={syncProgress.websiteScrape.status}
+                      progress={syncProgress.websiteScrape.progress}
+                      size="sm"
+                    />
+                  </div>
+                  <SyncProgressBar
+                    progress={syncProgress.websiteScrape.progress}
+                    totalItems={syncProgress.websiteScrape.totalItems}
+                    processedItems={syncProgress.websiteScrape.processedItems}
+                    currentItem={syncProgress.websiteScrape.currentItem}
+                    showDetails
+                  />
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-3 mb-2">
+                    <RefreshCw className="h-5 w-5 text-purple-600 dark:text-purple-400 animate-spin" />
+                    <span className="font-medium text-purple-700 dark:text-purple-300">
+                      Starting website scrape...
+                    </span>
+                  </div>
+                  <p className="text-sm text-purple-600 dark:text-purple-400">
+                    Connecting to scraper service...
+                  </p>
+                </>
+              )}
             </div>
           )}
 

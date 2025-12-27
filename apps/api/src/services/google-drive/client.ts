@@ -7,6 +7,7 @@ import { google, drive_v3 } from 'googleapis';
 import { env } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
 import { SUPPORTED_FILE_TYPES, FILE_LIMITS } from '@cluebase/shared';
+import { googleDriveCircuitBreaker } from '../../utils/circuit-breaker.js';
 
 // OAuth2 client
 const oauth2Client = new google.auth.OAuth2(
@@ -142,45 +143,48 @@ async function getSubfolderIds(parentFolderId: string, maxDepth: number = 10): P
  * List files in a single folder (non-recursive helper)
  */
 async function listFilesInSingleFolder(folderId: string): Promise<DriveFile[]> {
-  const drive = getDriveClient();
-  const files: DriveFile[] = [];
-  let pageToken: string | undefined;
+  // Wrap Drive API calls with circuit breaker for resilience
+  return googleDriveCircuitBreaker.execute(async () => {
+    const drive = getDriveClient();
+    const files: DriveFile[] = [];
+    let pageToken: string | undefined;
 
-  const supportedMimeTypes = Object.keys(SUPPORTED_FILE_TYPES);
-  const mimeTypeQuery = supportedMimeTypes.map(mt => `mimeType='${mt}'`).join(' or ');
+    const supportedMimeTypes = Object.keys(SUPPORTED_FILE_TYPES);
+    const mimeTypeQuery = supportedMimeTypes.map(mt => `mimeType='${mt}'`).join(' or ');
 
-  do {
-    const response = await drive.files.list({
-      q: `'${folderId}' in parents and trashed=false and (${mimeTypeQuery})`,
-      fields: 'nextPageToken, files(id, name, mimeType, modifiedTime, webViewLink, size)',
-      pageSize: 100,
-      pageToken,
-      orderBy: 'modifiedTime desc',
-    });
+    do {
+      const response = await drive.files.list({
+        q: `'${folderId}' in parents and trashed=false and (${mimeTypeQuery})`,
+        fields: 'nextPageToken, files(id, name, mimeType, modifiedTime, webViewLink, size)',
+        pageSize: 100,
+        pageToken,
+        orderBy: 'modifiedTime desc',
+      });
 
-    if (response.data.files) {
-      for (const file of response.data.files) {
-        // Skip files that are too large
-        if (file.size && parseInt(file.size) > FILE_LIMITS.maxFileSizeBytes) {
-          logger.warn(`Skipping large file: ${file.name} (${file.size} bytes)`);
-          continue;
+      if (response.data.files) {
+        for (const file of response.data.files) {
+          // Skip files that are too large
+          if (file.size && parseInt(file.size) > FILE_LIMITS.maxFileSizeBytes) {
+            logger.warn(`Skipping large file: ${file.name} (${file.size} bytes)`);
+            continue;
+          }
+
+          files.push({
+            id: file.id!,
+            name: file.name!,
+            mimeType: file.mimeType!,
+            modifiedTime: file.modifiedTime!,
+            webViewLink: file.webViewLink ?? undefined,
+            size: file.size ?? undefined,
+          });
         }
-
-        files.push({
-          id: file.id!,
-          name: file.name!,
-          mimeType: file.mimeType!,
-          modifiedTime: file.modifiedTime!,
-          webViewLink: file.webViewLink ?? undefined,
-          size: file.size ?? undefined,
-        });
       }
-    }
 
-    pageToken = response.data.nextPageToken ?? undefined;
-  } while (pageToken);
+      pageToken = response.data.nextPageToken ?? undefined;
+    } while (pageToken);
 
-  return files;
+    return files;
+  });
 }
 
 /**
@@ -331,44 +335,47 @@ export async function listChanges(pageToken: string): Promise<{
   }>;
   newPageToken: string;
 }> {
-  const drive = getDriveClient();
-  const changes: Array<{ fileId: string; removed: boolean; file?: DriveFile }> = [];
-  let currentToken = pageToken;
-  let newStartPageToken: string | undefined;
+  // Wrap Drive API calls with circuit breaker for resilience
+  return googleDriveCircuitBreaker.execute(async () => {
+    const drive = getDriveClient();
+    const changes: Array<{ fileId: string; removed: boolean; file?: DriveFile }> = [];
+    let currentToken = pageToken;
+    let newStartPageToken: string | undefined;
 
-  do {
-    const response = await drive.changes.list({
-      pageToken: currentToken,
-      fields: 'nextPageToken, newStartPageToken, changes(fileId, removed, file(id, name, mimeType, modifiedTime, webViewLink, size, parents))',
-      includeRemoved: true,
-      spaces: 'drive',
-    });
+    do {
+      const response = await drive.changes.list({
+        pageToken: currentToken,
+        fields: 'nextPageToken, newStartPageToken, changes(fileId, removed, file(id, name, mimeType, modifiedTime, webViewLink, size, parents))',
+        includeRemoved: true,
+        spaces: 'drive',
+      });
 
-    if (response.data.changes) {
-      for (const change of response.data.changes) {
-        // Include all changes - folder filtering is done by sync service based on bot_drive_folders
-        changes.push({
-          fileId: change.fileId!,
-          removed: change.removed ?? false,
-          file: change.file ? {
-            id: change.file.id!,
-            name: change.file.name!,
-            mimeType: change.file.mimeType!,
-            modifiedTime: change.file.modifiedTime!,
-            webViewLink: change.file.webViewLink ?? undefined,
-            size: change.file.size ?? undefined,
-            parents: change.file.parents ?? undefined,
-          } : undefined,
-        });
+      if (response.data.changes) {
+        for (const change of response.data.changes) {
+          // Include all changes - folder filtering is done by sync service based on bot_drive_folders
+          changes.push({
+            fileId: change.fileId!,
+            removed: change.removed ?? false,
+            file: change.file ? {
+              id: change.file.id!,
+              name: change.file.name!,
+              mimeType: change.file.mimeType!,
+              modifiedTime: change.file.modifiedTime!,
+              webViewLink: change.file.webViewLink ?? undefined,
+              size: change.file.size ?? undefined,
+              parents: change.file.parents ?? undefined,
+            } : undefined,
+          });
+        }
       }
-    }
 
-    currentToken = response.data.nextPageToken ?? '';
-    newStartPageToken = response.data.newStartPageToken ?? undefined;
-  } while (currentToken);
+      currentToken = response.data.nextPageToken ?? '';
+      newStartPageToken = response.data.newStartPageToken ?? undefined;
+    } while (currentToken);
 
-  return {
-    changes,
-    newPageToken: newStartPageToken ?? pageToken,
-  };
+    return {
+      changes,
+      newPageToken: newStartPageToken ?? pageToken,
+    };
+  });
 }

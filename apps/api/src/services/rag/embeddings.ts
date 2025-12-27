@@ -9,6 +9,7 @@ import { logger } from '../../utils/logger.js';
 import { EMBEDDING_CONFIG } from '@cluebase/shared';
 import { embeddingCache, generateCacheKey } from '../../utils/cache.js';
 import { withTimeout, withRetry } from '../../utils/timeout.js';
+import { openaiCircuitBreaker, CircuitBreakerError } from '../../utils/circuit-breaker.js';
 
 // Initialize OpenAI client
 const openai = new OpenAI({
@@ -99,7 +100,7 @@ const EMBEDDING_TIMEOUT_MS = 10000;
 
 /**
  * Generate embedding for a search query
- * Includes caching, timeout, and retry logic
+ * Includes caching, timeout, retry, and circuit breaker for resilience
  */
 export async function generateQueryEmbedding(query: string): Promise<number[]> {
   const cacheKey = generateCacheKey(query);
@@ -112,24 +113,26 @@ export async function generateQueryEmbedding(query: string): Promise<number[]> {
   }
 
   try {
-    // Use timeout and retry for resilience
-    const embedding = await withRetry(
-      async () => {
-        return withTimeout(
-          (async () => {
-            const response = await openai.embeddings.create({
-              model: EMBEDDING_CONFIG.model,
-              input: query,
-              dimensions: EMBEDDING_CONFIG.dimensions,
-            });
-            return response.data[0]?.embedding ?? [];
-          })(),
-          EMBEDDING_TIMEOUT_MS,
-          'generateQueryEmbedding'
-        );
-      },
-      { maxRetries: 2, initialDelayMs: 500 }
-    );
+    // Use circuit breaker + timeout + retry for resilience
+    const embedding = await openaiCircuitBreaker.execute(async () => {
+      return withRetry(
+        async () => {
+          return withTimeout(
+            (async () => {
+              const response = await openai.embeddings.create({
+                model: EMBEDDING_CONFIG.model,
+                input: query,
+                dimensions: EMBEDDING_CONFIG.dimensions,
+              });
+              return response.data[0]?.embedding ?? [];
+            })(),
+            EMBEDDING_TIMEOUT_MS,
+            'generateQueryEmbedding'
+          );
+        },
+        { maxRetries: 2, initialDelayMs: 500 }
+      );
+    });
 
     // Cache the result
     embeddingCache.set(cacheKey, embedding);
@@ -137,7 +140,15 @@ export async function generateQueryEmbedding(query: string): Promise<number[]> {
 
     return embedding;
   } catch (error) {
-    logger.error('Failed to generate query embedding', { error });
+    // Provide clearer error message for circuit breaker failures
+    if (error instanceof CircuitBreakerError) {
+      logger.error('OpenAI circuit breaker open - embedding generation blocked', {
+        query: query.substring(0, 50),
+        resetAt: error.resetAt?.toISOString(),
+      });
+    } else {
+      logger.error('Failed to generate query embedding', { error });
+    }
     throw error;
   }
 }

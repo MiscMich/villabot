@@ -23,7 +23,8 @@ Complete guide for deploying Cluebase AI on a Hetzner VPS with self-hosted Supab
 | Service | Purpose | Cost |
 |---------|---------|------|
 | **Hetzner Cloud** | VPS hosting | ~$10-20/mo |
-| **Google Cloud** | Gemini API + Drive OAuth | Pay-per-use |
+| **OpenAI** | GPT-5-Turbo + Embeddings | Pay-per-use |
+| **Google Cloud** | Drive OAuth | Free |
 | **Stripe** | Billing/subscriptions | 2.9% + $0.30/txn |
 | **Domain registrar** | DNS management | ~$12/year |
 
@@ -207,7 +208,7 @@ Access Supabase Studio and run each migration from \`supabase/migrations/\` in o
    - Authorized redirect: \`https://api.cluebase.ai/api/google-drive/callback\`
 3. Save Client ID and Secret
 
-#### Get Gemini API Key
+#### Get OpenAI API Key
 1. Go to [Google AI Studio](https://aistudio.google.com/app/apikey)
 2. Create and save API key
 
@@ -260,7 +261,7 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 # Google Cloud
 GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your_client_secret
-GEMINI_API_KEY=your_gemini_api_key
+OPENAI_API_KEY=your_openai_api_key
 
 # Stripe
 STRIPE_SECRET_KEY=sk_live_...

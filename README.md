@@ -31,7 +31,7 @@ Multi-tenant SaaS platform for deploying AI-powered Slack bots with RAG (Retriev
 |-------|------------|
 | **Backend** | Node.js/TypeScript + Express |
 | **Dashboard** | Next.js 15 + React 19 |
-| **AI** | Google Gemini (embeddings + generation) |
+| **AI** | OpenAI (gpt-5-nano + text-embedding-3-small) |
 | **Database** | PostgreSQL + pgvector (Supabase) |
 | **Auth** | Supabase Auth + RLS policies |
 | **Integration** | Slack Bolt SDK, Google Drive API |
@@ -78,7 +78,7 @@ cluebase-ai/
 - Docker & Docker Compose (for deployment)
 - Supabase account (cloud or self-hosted via Coolify)
 - Google Cloud project with OAuth configured (Drive API enabled)
-- Gemini API key
+- OpenAI API key
 - Stripe account for billing
 
 **Per-Workspace (each customer provides):**
@@ -135,9 +135,15 @@ See [docs/COOLIFY_DEPLOYMENT.md](./docs/COOLIFY_DEPLOYMENT.md) for full producti
 pnpm dev              # Start API server (port 3000)
 pnpm dev:dashboard    # Start dashboard (port 3001)
 pnpm typecheck        # TypeScript type checking
-pnpm lint             # ESLint
+pnpm lint             # ESLint (flat config)
 pnpm test             # Run tests (Vitest)
 pnpm build            # Build all packages
+
+# E2E Testing (Dashboard)
+cd apps/dashboard
+pnpm test:e2e         # Run E2E tests headless
+pnpm test:e2e:ui      # Run with Playwright UI
+pnpm test:e2e:headed  # Run in headed browser
 ```
 
 ## Architecture
@@ -161,7 +167,7 @@ pnpm build            # Build all packages
         │                        │                        │
         ▼                        ▼                        ▼
 ┌───────────────┐       ┌─────────────────┐       ┌───────────────┐
-│  Slack API    │       │  Google Gemini  │       │ Google Drive  │
+│  Slack API    │       │   OpenAI API    │       │ Google Drive  │
 │  (Bot Events) │       │  (AI + Embed)   │       │   (Docs)      │
 └───────────────┘       └─────────────────┘       └───────────────┘
 ```
@@ -182,7 +188,7 @@ See [.env.example](./.env.example) for all required configuration:
 
 **Platform-Level (set by platform operator in `.env`):**
 - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` - Database connection
-- `GEMINI_API_KEY` - AI embeddings and generation
+- `OPENAI_API_KEY` - AI embeddings and generation
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` - Platform's OAuth app for Drive
 - `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` - Billing integration
 

@@ -23,10 +23,9 @@ This security audit identified **5 CRITICAL**, **4 HIGH**, **3 MEDIUM**, and **2
 **Description:**
 The `.env` file contains live production secrets including:
 - Supabase service role key (JWT with full database access)
-- OpenAI API key (sk-proj-...)
+- OpenAI API key (sk-proj-...) for GPT-5-Turbo and embeddings
 - Google OAuth client secret
 - Slack bot tokens and signing secrets
-- Gemini API key
 
 The `.env.production` file is tracked in git (`git ls-files` confirms this).
 

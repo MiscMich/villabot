@@ -350,6 +350,13 @@ const IP_RATE_LIMIT_CONFIGS = {
     maxRequests: 3,      // 3 completions per minute (creates workspaces)
     keyPrefix: 'rl:setup-complete',
   } as IpRateLimitConfig,
+
+  // Invite accept - prevent brute force token guessing
+  inviteAccept: {
+    windowMs: 60 * 1000, // 1 minute
+    maxRequests: 10,     // 10 attempts per minute (generous for valid users, blocks brute force)
+    keyPrefix: 'rl:invite-accept',
+  } as IpRateLimitConfig,
 } as const;
 
 // ============================================
@@ -580,6 +587,12 @@ export const setupTestRateLimiter = createIpRateLimiter(IP_RATE_LIMIT_CONFIGS.se
  * Limit: 3 completions per minute per IP
  */
 export const setupCompleteRateLimiter = createIpRateLimiter(IP_RATE_LIMIT_CONFIGS.setupComplete);
+
+/**
+ * Rate limiter for invite accept (prevents brute force token guessing)
+ * Limit: 10 attempts per minute per IP
+ */
+export const inviteAcceptRateLimiter = createIpRateLimiter(IP_RATE_LIMIT_CONFIGS.inviteAccept);
 
 /**
  * Query rate limiter - based on tier monthly limits

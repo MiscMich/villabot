@@ -24,8 +24,12 @@ import {
   Shield,
   ExternalLink,
   RefreshCw,
+  Globe,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSyncProgress } from '@/hooks/useSyncProgress';
+import { SyncStatusPanel } from '@/components/sync';
+import { useSyncToast, syncToast } from '@/components/sync/useSyncToast';
 
 export default function SettingsPage() {
   const queryClient = useQueryClient();
@@ -37,6 +41,12 @@ export default function SettingsPage() {
   // User display info
   const displayName = profile?.full_name || user?.email?.split('@')[0] || 'User';
   const displayEmail = user?.email || 'No email';
+
+  // Sync progress state
+  const syncProgress = useSyncProgress();
+  const { handleSyncEvent } = useSyncToast();
+  const [triggeredDriveSync, setTriggeredDriveSync] = useState(false);
+  const [triggeredWebsiteSync, setTriggeredWebsiteSync] = useState(false);
 
   const handleSignOut = async () => {
     setSigningOut(true);
@@ -73,9 +83,24 @@ export default function SettingsPage() {
     enabled: !!workspace?.id,
   });
 
-  const { data: authStatus } = useQuery({
+  const { data: authStatus } = useQuery<{
+    google: { connected: boolean; connectedAt: string | null };
+  }>({
     queryKey: ['authStatus', workspace?.id],
-    queryFn: api.getAuthStatus,
+    queryFn: () => api.getAuthStatus(workspace?.id),
+    enabled: !!workspace?.id,
+  });
+
+  // Sync status queries
+  const { data: driveSyncStatus } = useQuery({
+    queryKey: ['syncStatus', workspace?.id],
+    queryFn: api.getSyncStatus,
+    enabled: !!workspace?.id && !!authStatus?.google.connected,
+  });
+
+  const { data: websiteScrapeStatus } = useQuery({
+    queryKey: ['scrapeStatus', workspace?.id],
+    queryFn: api.getScrapeStatus,
     enabled: !!workspace?.id,
   });
 
@@ -130,7 +155,8 @@ export default function SettingsPage() {
 
   const handleConnectGoogle = async () => {
     try {
-      const { authUrl } = await api.getGoogleAuthUrl();
+      // Pass workspace ID to associate Drive tokens with this workspace
+      const { authUrl } = await api.getGoogleAuthUrl(workspace?.id, 'settings');
       window.location.href = authUrl;
     } catch (error) {
       console.error('Failed to get auth URL', error);
@@ -139,8 +165,36 @@ export default function SettingsPage() {
 
   const handleDisconnectGoogle = async () => {
     if (confirm('Disconnect Google Drive? This will stop syncing documents.')) {
-      await api.disconnectGoogle();
+      await api.disconnectGoogle(workspace?.id);
       queryClient.invalidateQueries({ queryKey: ['authStatus'] });
+    }
+  };
+
+  // Trigger Drive sync
+  const handleTriggerDriveSync = async () => {
+    try {
+      setTriggeredDriveSync(true);
+      syncToast.start('drive_sync');
+      await api.triggerSync();
+      // The SSE will update the UI with progress - success toast is handled by useSyncToast
+    } catch (error) {
+      syncToast.error('drive_sync', error instanceof Error ? error.message : 'Sync failed');
+    } finally {
+      setTriggeredDriveSync(false);
+    }
+  };
+
+  // Trigger website scrape
+  const handleTriggerWebsiteScrape = async () => {
+    try {
+      setTriggeredWebsiteSync(true);
+      syncToast.start('website_scrape');
+      await api.triggerWebsiteScrape();
+      // The SSE will update the UI with progress
+    } catch (error) {
+      syncToast.error('website_scrape', error instanceof Error ? error.message : 'Scrape failed');
+    } finally {
+      setTriggeredWebsiteSync(false);
     }
   };
 
@@ -383,6 +437,21 @@ export default function SettingsPage() {
                       </p>
                     </div>
                   </div>
+
+                  {/* Sync Status Panel */}
+                  <div className="p-4 rounded-xl bg-secondary/30 border border-border/50">
+                    <SyncStatusPanel
+                      title="Drive Sync"
+                      icon={<Cloud className="h-4 w-4" />}
+                      operation={syncProgress.driveSync}
+                      lastSynced={driveSyncStatus?.lastSync}
+                      isLoading={triggeredDriveSync && !syncProgress.driveSync}
+                      onSync={handleTriggerDriveSync}
+                      showControls={true}
+                      syncLabel="Sync Now"
+                    />
+                  </div>
+
                   <Button
                     variant="outline"
                     onClick={handleDisconnectGoogle}
@@ -406,6 +475,44 @@ export default function SettingsPage() {
                   </Button>
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Website Scraping */}
+          <div className="glass-card">
+            <div className="p-6 border-b border-border/50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-gradient-to-br from-emerald-500/20 to-teal-500/20">
+                    <Globe className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <div>
+                    <h2 className="font-display text-xl font-semibold">Website Scraping</h2>
+                    <p className="text-sm text-muted-foreground">Sync content from your website</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="p-6">
+              <div className="space-y-4">
+                <p className="text-muted-foreground">
+                  Automatically scrape and index content from your website for AI-powered responses.
+                </p>
+
+                {/* Website Sync Status Panel */}
+                <div className="p-4 rounded-xl bg-secondary/30 border border-border/50">
+                  <SyncStatusPanel
+                    title="Website Scrape"
+                    icon={<Globe className="h-4 w-4" />}
+                    operation={syncProgress.websiteScrape}
+                    lastSynced={websiteScrapeStatus?.lastScrape}
+                    isLoading={triggeredWebsiteSync && !syncProgress.websiteScrape}
+                    onSync={handleTriggerWebsiteScrape}
+                    showControls={true}
+                    syncLabel="Scrape Now"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 

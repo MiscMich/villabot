@@ -18,6 +18,7 @@ import { driveRouter } from './routes/drive.js';
 import { feedbackRouter } from './routes/feedback.js';
 import { platformFeedbackRouter } from './routes/platform-feedback.js';
 import { setupRouter } from './routes/setup.js';
+import { syncRouter } from './routes/sync.js';
 import billingRouter from './routes/billing.js';
 import webhooksRouter from './routes/webhooks.js';
 import adminRouter from './routes/admin.js';
@@ -103,6 +104,7 @@ app.use('/api/bots', botsRouter);
 app.use('/api/drive', driveRouter);
 app.use('/api/feedback', feedbackRouter);
 app.use('/api/platform-feedback', platformFeedbackRouter);
+app.use('/api/sync', syncRouter);
 // Setup router doesn't use resolveWorkspace (used during initial setup before workspace exists)
 app.use('/api/setup', setupRouter);
 // Billing routes handle their own auth per-route (some need workspace, some don't)
@@ -170,7 +172,25 @@ async function start(): Promise<void> {
   // but connections are per-workspace - this just verifies OAuth is available
   if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) {
     logger.info('✓ Google Drive OAuth available (per-workspace integration)');
-    // Count will be updated dynamically when workspaces connect Drive
+
+    // Count workspaces with Google Drive tokens connected
+    try {
+      const { data: driveConnections, error } = await supabase
+        .from('bot_config')
+        .select('workspace_id')
+        .eq('key', 'google_drive_tokens')
+        .not('workspace_id', 'is', null);
+
+      if (!error && driveConnections) {
+        const uniqueWorkspaces = new Set(driveConnections.map(d => d.workspace_id));
+        updateIntegrationCounts({ workspacesWithGoogleDrive: uniqueWorkspaces.size });
+        if (uniqueWorkspaces.size > 0) {
+          logger.info(`✓ Google Drive connected (${uniqueWorkspaces.size} workspace${uniqueWorkspaces.size === 1 ? '' : 's'})`);
+        }
+      }
+    } catch (error) {
+      logger.warn('Failed to count Drive connections', { error });
+    }
   } else {
     logger.info('○ Google Drive OAuth credentials not configured');
   }

@@ -271,7 +271,7 @@ services:
       # Redis
       - REDIS_URL=redis://redis:6379
       # Platform credentials (shared by all tenants)
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI:-}
@@ -324,7 +324,7 @@ services:
       # Redis for job queue
       - REDIS_URL=redis://redis:6379
       # Platform credentials
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
     command: ["dumb-init", "node", "dist/worker.js"]

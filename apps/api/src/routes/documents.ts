@@ -1,13 +1,21 @@
 /**
  * Documents API routes
  * Document management and sync controls
+ *
+ * Uses shared Zod schemas from @cluebase/shared/api for type-safe validation.
+ * This ensures frontend and backend use the same type definitions.
  */
 
 import { Router } from 'express';
 import { supabase } from '../services/supabase/client.js';
 import { logger } from '../utils/logger.js';
+// Import shared schemas for end-to-end type safety
+import {
+  ToggleDocumentRequestSchema,
+  type ToggleDocumentRequest,
+} from '@cluebase/shared/api';
 import { triggerImmediateSync, triggerWebsiteScrape, getWorkspaceWebsiteUrl } from '../services/scheduler/index.js';
-import { fullSync, getSyncStatus } from '../services/google-drive/sync.js';
+import { fullSync, getSyncStatus, SyncError } from '../services/google-drive/sync.js';
 import { isDriveClientInitialized, initializeDriveClient } from '../services/google-drive/client.js';
 
 const TOKENS_KEY = 'google_drive_tokens';
@@ -87,6 +95,7 @@ import {
   requireWorkspaceAdmin,
   checkUsageLimit,
   documentSyncRateLimiter,
+  validateBody,
 } from '../middleware/index.js';
 
 export const documentsRouter = Router();
@@ -178,16 +187,18 @@ documentsRouter.get('/:id', async (req, res) => {
 
 /**
  * Toggle document active status
+ * Uses shared ToggleDocumentRequestSchema for type-safe validation
  */
-documentsRouter.patch('/:id/status', requireWorkspaceAdmin, async (req, res) => {
-  try {
-    const { is_active } = req.body;
+documentsRouter.patch(
+  '/:id/status',
+  requireWorkspaceAdmin,
+  validateBody(ToggleDocumentRequestSchema),
+  async (req, res) => {
+    try {
+      // Body is validated and typed by Zod middleware
+      const { is_active } = req.body as ToggleDocumentRequest;
 
-    if (typeof is_active !== 'boolean') {
-      return res.status(400).json({ error: 'is_active must be a boolean' });
-    }
-
-    const { data, error } = await supabase
+      const { data, error } = await supabase
       .from('documents')
       .update({ is_active })
       .eq('id', req.params.id)
@@ -298,6 +309,16 @@ documentsRouter.post('/sync/full', requireWorkspaceAdmin, checkUsageLimit('docum
     });
   } catch (error) {
     logger.error('Failed to trigger full sync', { error, workspaceId: req.workspace!.id });
+
+    // Return appropriate error based on SyncError type
+    if (error instanceof SyncError) {
+      const statusCode = error.code.includes('AUTH') ? 401 : 500;
+      return res.status(statusCode).json({
+        error: error.message,
+        code: error.code,
+      });
+    }
+
     res.status(500).json({ error: 'Failed to trigger full sync' });
   }
 });

@@ -49,7 +49,7 @@ Cluebase AI separates platform and workspace credentials:
 ### Platform Credentials (Shared by all tenants)
 | Credential | Purpose | Where |
 |------------|---------|-------|
-| `GEMINI_API_KEY` | AI embeddings & generation | .env |
+| `OPENAI_API_KEY` | AI embeddings & generation | .env |
 | `SUPABASE_*` | Self-hosted database | .env |
 | `STRIPE_*` | Billing & subscriptions | .env |
 | `SMTP_*` | Transactional emails | .env |
@@ -135,7 +135,7 @@ nano .env
 ```
 
 **Required values to fill in:**
-- `GEMINI_API_KEY` - From Google AI Studio
+- `OPENAI_API_KEY` - From OpenAI Platform
 - `POSTGRES_PASSWORD` - From generated secrets
 - `JWT_SECRET` - From generated secrets
 - `SECRET_KEY_BASE` - From generated secrets
@@ -354,7 +354,7 @@ docker compose -f docker-compose.prod.yml ps
 curl https://api.YOUR_DOMAIN/health
 
 # Expected response:
-# {"status":"healthy","services":{"supabase":true,"gemini":true}}
+# {"status":"healthy","services":{"supabase":true,"openai":true}}
 ```
 
 ---

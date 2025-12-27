@@ -64,7 +64,7 @@ jobs:
       SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
       SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       API_URL: http://localhost:3000
       APP_URL: http://localhost:3001
       NODE_ENV: test

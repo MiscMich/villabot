@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation';
 import { Sidebar, MobileSidebarProvider, MobileMenuButton } from '@/components/sidebar';
 import { SetupGuard } from '@/components/setup-guard';
+import { ErrorBoundary } from '@/components/error-boundary';
 
 interface ConditionalLayoutProps {
   children: React.ReactNode;
@@ -53,9 +54,11 @@ export function ConditionalLayout({ children }: ConditionalLayoutProps) {
               {/* Subtle background pattern */}
               <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-amber-100/20 via-background to-background dark:from-amber-900/10 pointer-events-none" />
 
-              {/* Content */}
+              {/* Content wrapped with error boundary */}
               <div className="relative px-4 py-16 md:px-8 md:py-8 max-w-7xl mx-auto">
-                {children}
+                <ErrorBoundary resetKey={pathname}>
+                  {children}
+                </ErrorBoundary>
               </div>
             </div>
           </main>

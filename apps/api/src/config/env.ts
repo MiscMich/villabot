@@ -32,9 +32,8 @@ const envSchema = z.object({
   GOOGLE_REDIRECT_URI: z.string().url().default('http://localhost:3000/auth/google/callback'),
   GOOGLE_DRIVE_FOLDER_ID: optionalString,
 
-  // AI - OpenAI (required for embeddings and response generation)
+  // AI - OpenAI GPT-5-Nano (required for embeddings and response generation)
   OPENAI_API_KEY: z.string().startsWith('sk-').min(1),
-  GEMINI_API_KEY: optionalString, // Legacy - kept for backwards compatibility
 
   // Slack (optional - bot won't start without these)
   SLACK_BOT_TOKEN: optionalStartsWith('xoxb-'),
@@ -51,6 +50,9 @@ const envSchema = z.object({
   // App URLs - handle empty DOMAIN gracefully
   APP_URL: z.string().transform(val => val === '' || val === 'https://' ? 'http://localhost:3001' : val).pipe(z.string().url()),
   API_URL: z.string().transform(val => val === '' || val === 'https://api.' ? 'http://localhost:3000' : val).pipe(z.string().url()),
+
+  // Redis (optional - falls back to in-memory rate limiting)
+  REDIS_URL: optionalUrl,
 
   // Optional
   COMPANY_WEBSITE_URL: optionalUrl,

@@ -34,15 +34,128 @@ Returns the health status of the API and connected services.
   "timestamp": "2024-12-20T10:00:00Z",
   "uptime": 86400,
   "services": {
-    "supabase": true,
-    "slack": true,
-    "openai": true,
-    "googleDrive": true
-  }
+    "supabase": "connected",
+    "openai": "connected"
+  },
+  "integrations": {
+    "activeSlackBots": 5,
+    "workspacesWithGoogleDrive": 3
+  },
+  "version": "0.1.0"
 }
 ```
 
 Possible status values: `healthy`, `degraded`, `unhealthy`
+
+**Note:** Platform health is based on core services (Supabase, OpenAI). Slack and Google Drive are per-workspace integrations shown for informational purposes only.
+
+### GET /health/ready
+
+Kubernetes readiness probe. Returns 200 when the service is ready to accept traffic.
+
+**Response (200):**
+```json
+{
+  "ready": true
+}
+```
+
+**Response (503):**
+```json
+{
+  "ready": false,
+  "reason": "Database not available"
+}
+```
+
+### GET /health/live
+
+Kubernetes liveness probe. Returns 200 if the process is alive.
+
+**Response:**
+```json
+{
+  "alive": true
+}
+```
+
+### GET /health/deep
+
+Comprehensive deep health check. Tests actual functionality of each service.
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "timestamp": "2024-12-20T10:00:00Z",
+  "totalLatencyMs": 245,
+  "uptime": 86400,
+  "version": "0.1.0",
+  "checks": {
+    "database": {
+      "status": "pass",
+      "latency": 45,
+      "details": {
+        "documents": 150,
+        "chunks": 2340,
+        "learnedFacts": 12
+      }
+    },
+    "openai": {
+      "status": "pass",
+      "latency": 120,
+      "details": {
+        "embeddingDimensions": 768
+      }
+    },
+    "vectorSearch": {
+      "status": "pass",
+      "latency": 35,
+      "details": {
+        "resultsReturned": 1
+      }
+    },
+    "cache": {
+      "status": "pass",
+      "details": {
+        "embedding": { "size": 50, "maxSize": 1000, "hitRate": "0.85" },
+        "search": { "size": 25, "maxSize": 500, "hitRate": "0.72" },
+        "response": { "size": 10, "maxSize": 200, "hitRate": "0.65" }
+      }
+    },
+    "memory": {
+      "status": "pass",
+      "details": {
+        "heapUsedMB": 128,
+        "heapTotalMB": 256,
+        "rssMB": 312,
+        "heapUsagePercent": 50
+      }
+    },
+    "circuitBreakers": {
+      "status": "pass",
+      "details": {
+        "openai": { "state": "CLOSED", "failureCount": 0, "healthy": true },
+        "googleDrive": { "state": "CLOSED", "failureCount": 0, "healthy": true }
+      }
+    },
+    "rateLimiter": {
+      "status": "pass",
+      "details": {
+        "backend": "redis",
+        "redisAvailable": true
+      }
+    }
+  }
+}
+```
+
+**Check status values:** `pass`, `fail`
+
+**Overall status logic:**
+- `healthy`: All checks pass
+- `degraded`: Non-critical checks failing
+- `unhealthy`: Database or OpenAI failing (503 status code)
 
 ---
 
@@ -263,6 +376,19 @@ All errors follow this format:
 | `RATE_LIMITED` | 429 | Too many requests |
 | `INTERNAL_ERROR` | 500 | Server error |
 
+### Google Drive Error Codes
+
+| Code | Status | Description |
+|------|--------|-------------|
+| `DRIVE_NOT_CONNECTED` | 400 | Google Drive not connected to workspace |
+| `DRIVE_AUTH_EXPIRED` | 401 | OAuth token expired - user must reconnect |
+| `DRIVE_AUTH_INVALID` | 401 | OAuth token revoked/invalid - user must reconnect |
+| `DRIVE_PERMISSION_DENIED` | 500 | Folder access denied - check sharing settings |
+| `DRIVE_FOLDER_NOT_FOUND` | 500 | Folder was deleted or moved |
+| `DRIVE_QUOTA_EXCEEDED` | 500 | Google API quota exceeded - retry later |
+| `DRIVE_NETWORK_ERROR` | 500 | Network error connecting to Google |
+| `DRIVE_SYNC_FAILED` | 500 | Generic sync failure |
+
 ---
 
 ## Rate Limits
@@ -284,45 +410,207 @@ Rate limit headers are included in all responses:
 
 ## Setup (Onboarding)
 
+Setup endpoints manage workspace onboarding flow. These guide users through configuring Slack bots and Google Drive connections.
+
 ### GET /setup/status
 
 Get the current onboarding status for a workspace.
 
-### POST /setup/slack
+**Query Parameters:**
+- `workspaceId` - Optional workspace ID (falls back to authenticated user's workspace)
 
-Configure Slack credentials during setup.
+**Response:**
+```json
+{
+  "completed": false,
+  "currentStep": 1,
+  "steps": {
+    "slackConnected": false,
+    "driveConnected": true,
+    "botConfigured": false
+  }
+}
+```
 
-### POST /setup/drive
+### POST /setup/test-slack
 
-Connect Google Drive during setup.
+Test Slack credentials before committing to setup.
+
+**Request Body:**
+```json
+{
+  "botToken": "xoxb-...",
+  "appToken": "xapp-..."
+}
+```
+
+**Response (success):**
+```json
+{
+  "success": true,
+  "teamId": "T01234567",
+  "teamName": "My Workspace",
+  "botName": "Cluebase Bot"
+}
+```
+
+**Response (error):**
+```json
+{
+  "success": false,
+  "error": "Invalid token",
+  "code": "INVALID_SLACK_TOKEN"
+}
+```
+
+**Rate Limit:** 5 requests per 5 minutes per IP
+
+### GET /setup/google-auth-url
+
+Get the OAuth authorization URL for Google Drive connection.
+
+**Response:**
+```json
+{
+  "authUrl": "https://accounts.google.com/o/oauth2/v2/auth?..."
+}
+```
+
+The returned URL includes `setup=true` parameter to redirect back to the setup wizard after OAuth.
 
 ### POST /setup/complete
 
-Mark onboarding as complete.
+Complete the onboarding process and create the workspace configuration.
+
+**Authentication Required:** Yes
+
+**Request Body:**
+```json
+{
+  "botName": "Operations Bot",
+  "botType": "operations",
+  "slackBotToken": "xoxb-...",
+  "slackAppToken": "xapp-...",
+  "slackSigningSecret": "optional-signing-secret"
+}
+```
+
+**Bot Types:** `general`, `operations`, `marketing`, `sales`, `hr`, `technical`
+
+**Response:**
+```json
+{
+  "success": true,
+  "workspaceId": "uuid",
+  "botId": "uuid",
+  "message": "Setup completed successfully"
+}
+```
+
+**Error Codes:**
+- `DUPLICATE_SLACK_TOKEN` - Token already registered to another workspace
+- `INVALID_SLACK_TOKEN` - Token format is invalid
+- `SETUP_FAILED` - General setup failure
+
+**Rate Limit:** 3 requests per hour per user
+
+### DELETE /setup/reset
+
+Reset workspace setup (development only).
+
+**Authentication Required:** Yes
+
+**Response (403 in production):**
+```json
+{
+  "success": false,
+  "error": "Setup reset is disabled in production"
+}
+```
 
 ---
 
 ## Google Drive
 
+All Drive endpoints use workspace context from the authenticated user's session.
+
 ### GET /drive/status
 
-Get Google Drive connection status.
+Get Google Drive connection status for the workspace.
 
-### POST /drive/auth
+**Response:**
+```json
+{
+  "connected": true,
+  "connectedAt": "2024-12-20T10:00:00Z"
+}
+```
 
-Initiate Google Drive OAuth flow.
+### GET /auth/google
 
-### GET /drive/callback
+Get the OAuth authorization URL. Redirects user to Google consent screen.
 
-OAuth callback handler.
+**Query Parameters:**
+- `workspaceId` - Associate OAuth tokens with this workspace
+- `source` - Origin page: `settings` or `setup` (affects redirect)
 
-### POST /drive/sync
+**Response:**
+```json
+{
+  "authUrl": "https://accounts.google.com/o/oauth2/..."
+}
+```
 
-Trigger manual Drive sync.
+### GET /auth/google/callback
 
-### DELETE /drive/disconnect
+OAuth callback handler. Stores tokens with workspace association and redirects to dashboard.
 
-Disconnect Google Drive.
+### GET /auth/status
+
+Get Google Drive auth status.
+
+**Query Parameters:**
+- `workspaceId` - Check status for specific workspace (optional)
+
+**Response:**
+```json
+{
+  "google": {
+    "connected": true,
+    "connectedAt": "2024-12-20T10:00:00Z"
+  }
+}
+```
+
+### DELETE /auth/google
+
+Disconnect Google Drive for the workspace.
+
+**Query Parameters:**
+- `workspaceId` - Disconnect for specific workspace
+
+### POST /documents/sync/full
+
+Trigger manual Drive sync for the workspace.
+
+**Response:**
+```json
+{
+  "success": true,
+  "added": 5,
+  "updated": 2,
+  "removed": 0,
+  "errors": []
+}
+```
+
+**Error Response (401):**
+```json
+{
+  "error": "Google Drive authorization expired. Please reconnect your Drive.",
+  "code": "DRIVE_AUTH_EXPIRED"
+}
+```
 
 ---
 

@@ -143,7 +143,7 @@ export async function authenticate(
           logger.error('Failed to create default workspace', { error: wsError, userId: user.id });
         } else if (newWorkspace) {
           // Create owner membership
-          await supabase
+          const { error: membershipError } = await supabase
             .from('workspace_members')
             .insert({
               workspace_id: newWorkspace.id,
@@ -152,15 +152,29 @@ export async function authenticate(
               is_active: true,
             });
 
+          if (membershipError) {
+            logger.error('Failed to create workspace membership', {
+              error: membershipError,
+              userId: user.id,
+              workspaceId: newWorkspace.id,
+            });
+          }
+
           // Update profile with default workspace
-          const { data: updatedProfile } = await supabase
+          const { data: updatedProfile, error: profileUpdateError } = await supabase
             .from('user_profiles')
             .update({ default_workspace_id: newWorkspace.id })
             .eq('id', user.id)
             .select()
             .single();
 
-          if (updatedProfile) {
+          if (profileUpdateError) {
+            logger.error('Failed to update profile with default workspace', {
+              error: profileUpdateError,
+              userId: user.id,
+              workspaceId: newWorkspace.id,
+            });
+          } else if (updatedProfile) {
             userProfile = updatedProfile;
           }
 

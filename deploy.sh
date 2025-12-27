@@ -3,10 +3,10 @@
 set -e
 
 SERVER="root@178.156.192.101"
-GEMINI_KEY="$1"
+OPENAI_KEY="$1"
 
-if [ -z "$GEMINI_KEY" ]; then
-  echo "Usage: ./deploy.sh YOUR_GEMINI_API_KEY"
+if [ -z "$OPENAI_KEY" ]; then
+  echo "Usage: ./deploy.sh YOUR_OPENAI_API_KEY"
   exit 1
 fi
 
@@ -67,8 +67,8 @@ SUPABASE_URL=http://kong:8000
 SUPABASE_ANON_KEY=$ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY=$SERVICE_KEY
 
-# AI
-GEMINI_API_KEY=$GEMINI_KEY
+# AI (OpenAI GPT-5-Nano)
+OPENAI_API_KEY=$OPENAI_KEY
 
 # Email (Resend)
 SMTP_HOST=smtp.resend.com

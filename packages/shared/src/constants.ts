@@ -162,7 +162,7 @@ export const RAG_CONFIG = {
   minSimilarity: 0.35,   // Increased threshold for higher precision
 } as const;
 
-// AI Model Configuration (OpenAI GPT-5 Nano)
+// AI Model Configuration (OpenAI GPT-5-Nano)
 export const MODEL_CONFIG = {
   chat: 'gpt-5-nano',
   intent: 'gpt-5-nano',

@@ -35,7 +35,7 @@ export function Hero() {
           <motion.div variants={fadeInUp} className="flex justify-center mb-8">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 backdrop-blur-sm">
               <Sparkles className="w-4 h-4 text-violet-400" />
-              <span className="text-sm text-white/80">Powered by Google Gemini AI</span>
+              <span className="text-sm text-white/80">Powered by OpenAI GPT-5</span>
             </div>
           </motion.div>
 

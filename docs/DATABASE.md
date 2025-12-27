@@ -486,7 +486,7 @@ CREATE TABLE platform_feedback_votes (
 
 ### admin_audit_log
 
-Platform admin action audit trail.
+Platform admin action audit trail. Has RLS policies to restrict access to platform admins only.
 
 ```sql
 CREATE TABLE admin_audit_log (
@@ -498,6 +498,21 @@ CREATE TABLE admin_audit_log (
   details JSONB,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- RLS: Only platform admins can view
+CREATE POLICY "Platform admins can view audit logs"
+  ON admin_audit_log FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_profiles up
+      WHERE up.id = auth.uid()
+      AND up.is_platform_admin = true
+    )
+  );
+
+-- Index for efficient querying by target
+CREATE INDEX idx_admin_audit_log_target
+  ON admin_audit_log(target_type, target_id);
 ```
 
 ### error_logs
@@ -544,6 +559,8 @@ CREATE TYPE document_category AS ENUM (
 
 ## Key Functions
 
+All `SECURITY DEFINER` functions use `SET search_path = public, pg_temp` to prevent schema injection attacks.
+
 ### hybrid_search
 
 Combined vector + keyword search with RRF fusion.
@@ -556,6 +573,8 @@ CREATE FUNCTION hybrid_search(
   p_top_k INTEGER DEFAULT 15,
   p_category_filter document_category[] DEFAULT NULL
 ) RETURNS TABLE (...)
+SECURITY DEFINER
+SET search_path = public, pg_temp
 ```
 
 ### get_satisfaction_rate
@@ -585,6 +604,10 @@ CREATE POLICY "Users can view documents in their workspaces"
     )
   );
 ```
+
+**Special RLS policies:**
+- `admin_audit_log`: Only platform admins can view (protects audit trail)
+- Service role has full access to all tables for backend operations
 
 ## Migrations
 

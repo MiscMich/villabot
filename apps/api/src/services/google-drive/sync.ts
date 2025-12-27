@@ -16,13 +16,168 @@ import {
 import { parseFile } from './parsers/index.js';
 import { chunkDocument } from '../rag/chunking.js';
 import { generateEmbeddings } from '../rag/embeddings.js';
-// Types imported from shared package if needed
+import { botManager } from '../slack/manager.js';
+import { syncProgressEmitter } from '../sync/index.js';
 
 interface SyncResult {
   added: number;
   updated: number;
   removed: number;
   errors: string[];
+}
+
+/**
+ * Error codes for Drive sync operations
+ */
+export type SyncErrorCode =
+  | 'DRIVE_AUTH_EXPIRED'
+  | 'DRIVE_AUTH_REVOKED'
+  | 'DRIVE_AUTH_INVALID'
+  | 'DRIVE_PERMISSION_DENIED'
+  | 'DRIVE_FOLDER_NOT_FOUND'
+  | 'DRIVE_QUOTA_EXCEEDED'
+  | 'DRIVE_NETWORK_ERROR'
+  | 'DRIVE_SYNC_FAILED';
+
+/**
+ * Custom error class for Drive sync operations with error codes
+ */
+export class SyncError extends Error {
+  code: SyncErrorCode;
+
+  constructor(message: string, code: SyncErrorCode) {
+    super(message);
+    this.name = 'SyncError';
+    this.code = code;
+  }
+}
+
+/**
+ * Detect OAuth/auth errors from Google API responses
+ */
+function classifyDriveError(error: unknown): SyncError {
+  const message = error instanceof Error ? error.message : String(error);
+  const lowerMessage = message.toLowerCase();
+
+  // OAuth token errors
+  if (lowerMessage.includes('invalid_grant') ||
+      lowerMessage.includes('token has been expired') ||
+      lowerMessage.includes('token has been revoked')) {
+    return new SyncError(
+      'Google Drive authorization expired. Please reconnect your Drive.',
+      'DRIVE_AUTH_EXPIRED'
+    );
+  }
+
+  // Token revoked/invalid
+  if (lowerMessage.includes('invalid_token') ||
+      lowerMessage.includes('unauthorized') ||
+      lowerMessage.includes('unauthenticated')) {
+    return new SyncError(
+      'Google Drive authorization is invalid. Please reconnect.',
+      'DRIVE_AUTH_INVALID'
+    );
+  }
+
+  // Permission errors
+  if (lowerMessage.includes('permission denied') ||
+      lowerMessage.includes('access denied') ||
+      lowerMessage.includes('forbidden') ||
+      lowerMessage.includes('403')) {
+    return new SyncError(
+      'Permission denied. Check folder sharing settings.',
+      'DRIVE_PERMISSION_DENIED'
+    );
+  }
+
+  // Folder not found
+  if (lowerMessage.includes('not found') ||
+      lowerMessage.includes('404') ||
+      lowerMessage.includes('file not found')) {
+    return new SyncError(
+      'Drive folder not found. It may have been deleted or moved.',
+      'DRIVE_FOLDER_NOT_FOUND'
+    );
+  }
+
+  // Quota exceeded
+  if (lowerMessage.includes('quota') ||
+      lowerMessage.includes('rate limit') ||
+      lowerMessage.includes('too many requests') ||
+      lowerMessage.includes('429')) {
+    return new SyncError(
+      'Google API quota exceeded. Please try again later.',
+      'DRIVE_QUOTA_EXCEEDED'
+    );
+  }
+
+  // Network errors
+  if (lowerMessage.includes('network') ||
+      lowerMessage.includes('econnrefused') ||
+      lowerMessage.includes('timeout') ||
+      lowerMessage.includes('socket')) {
+    return new SyncError(
+      'Network error connecting to Google Drive.',
+      'DRIVE_NETWORK_ERROR'
+    );
+  }
+
+  // Generic sync failure
+  return new SyncError(
+    message || 'Drive sync failed',
+    'DRIVE_SYNC_FAILED'
+  );
+}
+
+/**
+ * Auth-related error codes that should trigger Slack notifications
+ */
+const AUTH_ERROR_CODES: SyncErrorCode[] = [
+  'DRIVE_AUTH_EXPIRED',
+  'DRIVE_AUTH_REVOKED',
+  'DRIVE_AUTH_INVALID',
+];
+
+/**
+ * Send Slack notification to workspace when Drive sync fails due to auth issues
+ */
+async function notifyAuthFailure(workspaceId: string, error: SyncError): Promise<void> {
+  if (!AUTH_ERROR_CODES.includes(error.code)) {
+    return;
+  }
+
+  const message = `⚠️ *Google Drive Sync Failed*\n\n${error.message}\n\nPlease visit the <https://cluebase.ai/settings|dashboard> to reconnect your Google Drive.`;
+
+  const blocks = [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: '⚠️ *Google Drive Sync Failed*',
+      },
+    },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: error.message,
+      },
+    },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: '👉 Please visit the <https://cluebase.ai/settings|dashboard> to reconnect your Google Drive.',
+      },
+    },
+  ];
+
+  try {
+    await botManager.notifyWorkspace(workspaceId, message, blocks);
+    logger.info('Sent Drive auth failure notification to workspace', { workspaceId, errorCode: error.code });
+  } catch (notifyError) {
+    logger.error('Failed to send auth failure notification', { workspaceId, error: notifyError });
+  }
 }
 
 interface SyncOptions {
@@ -43,11 +198,12 @@ interface BotFolder {
  * Get stored page token for workspace
  */
 async function getStoredPageToken(workspaceId: string): Promise<string | null> {
-  const pageTokenKey = `drive_page_token:${workspaceId}`;
+  const pageTokenKey = `drive_page_token`;
   const { data } = await supabase
     .from('bot_config')
     .select('value')
     .eq('key', pageTokenKey)
+    .eq('workspace_id', workspaceId)
     .single();
 
   return data?.value?.token ?? null;
@@ -57,13 +213,19 @@ async function getStoredPageToken(workspaceId: string): Promise<string | null> {
  * Store page token for workspace
  */
 async function storePageToken(workspaceId: string, token: string): Promise<void> {
-  const pageTokenKey = `drive_page_token:${workspaceId}`;
+  const pageTokenKey = `drive_page_token`;
   await supabase
     .from('bot_config')
-    .upsert({
-      key: pageTokenKey,
-      value: { token, updatedAt: new Date().toISOString() },
-    });
+    .upsert(
+      {
+        key: pageTokenKey,
+        value: { token, updatedAt: new Date().toISOString() },
+        workspace_id: workspaceId,
+      },
+      {
+        onConflict: 'workspace_id,key',
+      }
+    );
 }
 
 /**
@@ -82,7 +244,30 @@ export async function fullSync(options: SyncOptions): Promise<SyncResult> {
   logger.info('Starting full document sync', { workspaceId, botId, folderId });
   const result: SyncResult = { added: 0, updated: 0, removed: 0, errors: [] };
 
+  // Create sync operation for progress tracking
+  let operationId: string | null = null;
   try {
+    operationId = await syncProgressEmitter.createOperation(workspaceId, 'drive_full_sync');
+  } catch (opError) {
+    logger.warn('Failed to create sync operation record', { error: opError });
+    // Continue without progress tracking
+  }
+
+  try {
+    // Emit initial progress
+    if (operationId) {
+      syncProgressEmitter.emitProgress({
+        operationId,
+        workspaceId,
+        type: 'drive_full_sync',
+        status: 'running',
+        progress: 0,
+        totalItems: 0,
+        processedItems: 0,
+        currentItem: 'Discovering folders...',
+      });
+    }
+
     // Determine which folders to sync
     let foldersToSync: BotFolder[] = [];
 
@@ -140,7 +325,14 @@ export async function fullSync(options: SyncOptions): Promise<SyncResult> {
         return { added: 0, updated: 0, removed: 0, errors: ['Failed to fetch workspace folders'] };
       }
 
-      foldersToSync = (workspaceFolders ?? []) as unknown as BotFolder[];
+      // Map query results to BotFolder shape (join returns nested bots object)
+      foldersToSync = (workspaceFolders ?? []).map(folder => ({
+        id: folder.id,
+        bot_id: folder.bot_id,
+        drive_folder_id: folder.drive_folder_id,
+        folder_name: folder.folder_name,
+        is_active: folder.is_active,
+      }));
       logger.info(`Found ${foldersToSync.length} folders for workspace`, { workspaceId });
     }
 
@@ -161,14 +353,45 @@ export async function fullSync(options: SyncOptions): Promise<SyncResult> {
     );
     const processedIds = new Set<string>();
 
+    // First pass: collect all files to get total count
+    let totalFiles = 0;
+    let processedFiles = 0;
+    const folderFiles: Map<string, DriveFile[]> = new Map();
+
+    for (const folder of foldersToSync) {
+      try {
+        const driveFiles = await listFilesInFolder(folder.drive_folder_id);
+        folderFiles.set(folder.drive_folder_id, driveFiles);
+        totalFiles += driveFiles.length;
+      } catch (error) {
+        const message = `Failed to list folder ${folder.folder_name}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+        logger.error(message);
+        result.errors.push(message);
+      }
+    }
+
+    // Update progress with total count
+    if (operationId) {
+      syncProgressEmitter.emitProgress({
+        operationId,
+        workspaceId,
+        type: 'drive_full_sync',
+        status: 'running',
+        progress: 0,
+        totalItems: totalFiles,
+        processedItems: 0,
+        currentItem: `Found ${totalFiles} files to sync`,
+      });
+    }
+
     // Sync each folder
     for (const folder of foldersToSync) {
       try {
         logger.info(`Syncing folder: ${folder.folder_name}`, { driveFolderId: folder.drive_folder_id });
 
-        // Get all files from this Drive folder
-        const driveFiles = await listFilesInFolder(folder.drive_folder_id);
-        logger.info(`Found ${driveFiles.length} files in folder`, { folder: folder.folder_name });
+        // Use cached files from first pass
+        const driveFiles = folderFiles.get(folder.drive_folder_id) ?? [];
+        logger.info(`Processing ${driveFiles.length} files in folder`, { folder: folder.folder_name });
 
         // Process each file in this folder
         for (const file of driveFiles) {
@@ -210,10 +433,38 @@ export async function fullSync(options: SyncOptions): Promise<SyncResult> {
               await addDocument(file, parsed.content, contentHash, workspaceId, effectiveBotId, folder.drive_folder_id);
               result.added++;
             }
+            // Update progress after each file
+            processedFiles++;
+            if (operationId) {
+              syncProgressEmitter.emitProgress({
+                operationId,
+                workspaceId,
+                type: 'drive_full_sync',
+                status: 'running',
+                progress: totalFiles > 0 ? Math.round((processedFiles / totalFiles) * 100) : 0,
+                totalItems: totalFiles,
+                processedItems: processedFiles,
+                currentItem: file.name,
+              });
+            }
           } catch (error) {
             const message = `Failed to process ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`;
             logger.error(message);
             result.errors.push(message);
+            // Still count as processed for progress
+            processedFiles++;
+            if (operationId) {
+              syncProgressEmitter.emitProgress({
+                operationId,
+                workspaceId,
+                type: 'drive_full_sync',
+                status: 'running',
+                progress: totalFiles > 0 ? Math.round((processedFiles / totalFiles) * 100) : 0,
+                totalItems: totalFiles,
+                processedItems: processedFiles,
+                currentItem: `Error: ${file.name}`,
+              });
+            }
           }
         }
         // Update last_synced timestamp on the folder
@@ -242,11 +493,49 @@ export async function fullSync(options: SyncOptions): Promise<SyncResult> {
     const pageToken = await getStartPageToken();
     await storePageToken(workspaceId, pageToken);
 
+    // Emit completion event
+    if (operationId) {
+      syncProgressEmitter.emitProgress({
+        operationId,
+        workspaceId,
+        type: 'drive_full_sync',
+        status: 'completed',
+        progress: 100,
+        totalItems: totalFiles,
+        processedItems: processedFiles,
+        result,
+      });
+    }
+
     logger.info('Full sync completed', { ...result, workspaceId, botId });
     return result;
   } catch (error) {
-    logger.error('Full sync failed', { error, workspaceId });
-    throw error;
+    const syncError = classifyDriveError(error);
+    logger.error('Full sync failed', {
+      error: syncError.message,
+      code: syncError.code,
+      workspaceId,
+      originalError: error instanceof Error ? error.message : String(error),
+    });
+
+    // Emit failure event
+    if (operationId) {
+      syncProgressEmitter.emitProgress({
+        operationId,
+        workspaceId,
+        type: 'drive_full_sync',
+        status: 'failed',
+        progress: 0,
+        totalItems: 0,
+        processedItems: 0,
+        error: syncError.message,
+      });
+    }
+
+    // Notify workspace via Slack if auth-related error
+    await notifyAuthFailure(workspaceId, syncError);
+
+    throw syncError;
   }
 }
 
@@ -264,15 +553,24 @@ export async function incrementalSync(options: SyncOptions): Promise<SyncResult>
 
   const result: SyncResult = { added: 0, updated: 0, removed: 0, errors: [] };
 
+  // Check for page token BEFORE creating operation record
+  // This prevents orphan "pending" operations when delegating to fullSync
+  const pageToken = await getStoredPageToken(workspaceId);
+
+  if (!pageToken) {
+    logger.info('No page token found, performing full sync', { workspaceId });
+    return fullSync(options);
+  }
+
+  // Create sync operation for progress tracking AFTER confirming we'll handle the sync
+  let operationId: string | null = null;
   try {
-    // Get stored page token for this workspace
-    const pageToken = await getStoredPageToken(workspaceId);
+    operationId = await syncProgressEmitter.createOperation(workspaceId, 'drive_sync');
+  } catch (opError) {
+    logger.warn('Failed to create sync operation record', { error: opError });
+  }
 
-    if (!pageToken) {
-      logger.info('No page token found, performing full sync', { workspaceId });
-      return fullSync(options);
-    }
-
+  try {
     logger.info('Starting incremental sync', { workspaceId, botId });
 
     // Get folders assigned to this bot/workspace for filtering changes
@@ -308,10 +606,39 @@ export async function incrementalSync(options: SyncOptions): Promise<SyncResult>
     if (changes.length === 0) {
       logger.debug('No changes detected');
       await storePageToken(workspaceId, newPageToken);
+      // Emit completion for empty sync
+      if (operationId) {
+        syncProgressEmitter.emitProgress({
+          operationId,
+          workspaceId,
+          type: 'drive_sync',
+          status: 'completed',
+          progress: 100,
+          totalItems: 0,
+          processedItems: 0,
+          result,
+        });
+      }
       return result;
     }
 
     logger.info(`Processing ${changes.length} changes`, { workspaceId });
+
+    // Emit initial progress with total count
+    const totalChanges = changes.length;
+    let processedChanges = 0;
+    if (operationId) {
+      syncProgressEmitter.emitProgress({
+        operationId,
+        workspaceId,
+        type: 'drive_sync',
+        status: 'running',
+        progress: 0,
+        totalItems: totalChanges,
+        processedItems: 0,
+        currentItem: `Processing ${totalChanges} changes...`,
+      });
+    }
 
     for (const change of changes) {
       try {
@@ -371,21 +698,87 @@ export async function incrementalSync(options: SyncOptions): Promise<SyncResult>
             result.added++;
           }
         }
+        // Update progress after each change
+        processedChanges++;
+        if (operationId) {
+          syncProgressEmitter.emitProgress({
+            operationId,
+            workspaceId,
+            type: 'drive_sync',
+            status: 'running',
+            progress: totalChanges > 0 ? Math.round((processedChanges / totalChanges) * 100) : 0,
+            totalItems: totalChanges,
+            processedItems: processedChanges,
+            currentItem: change.file?.name ?? change.fileId,
+          });
+        }
       } catch (error) {
         const message = `Failed to process change for ${change.fileId}: ${error instanceof Error ? error.message : 'Unknown error'}`;
         logger.error(message);
         result.errors.push(message);
+        // Still count as processed
+        processedChanges++;
+        if (operationId) {
+          syncProgressEmitter.emitProgress({
+            operationId,
+            workspaceId,
+            type: 'drive_sync',
+            status: 'running',
+            progress: totalChanges > 0 ? Math.round((processedChanges / totalChanges) * 100) : 0,
+            totalItems: totalChanges,
+            processedItems: processedChanges,
+            currentItem: `Error: ${change.fileId}`,
+          });
+        }
       }
     }
 
     // Store new page token for this workspace
     await storePageToken(workspaceId, newPageToken);
 
+    // Emit completion event
+    if (operationId) {
+      syncProgressEmitter.emitProgress({
+        operationId,
+        workspaceId,
+        type: 'drive_sync',
+        status: 'completed',
+        progress: 100,
+        totalItems: totalChanges,
+        processedItems: processedChanges,
+        result,
+      });
+    }
+
     logger.info('Incremental sync completed', { ...result, workspaceId, botId });
     return result;
   } catch (error) {
-    logger.error('Incremental sync failed', { error, workspaceId });
-    throw error;
+    const syncError = classifyDriveError(error);
+    logger.error('Incremental sync failed', {
+      error: syncError.message,
+      code: syncError.code,
+      workspaceId,
+      originalError: error instanceof Error ? error.message : String(error),
+    });
+
+    // Emit failure event
+    if (operationId) {
+      syncProgressEmitter.emitProgress({
+        operationId,
+        workspaceId,
+        type: 'drive_sync',
+        status: 'failed',
+        progress: 0,
+        totalItems: 0,
+        processedItems: 0,
+        error: syncError.message,
+      });
+    }
+
+    // Notify workspace via Slack if auth-related error
+    await notifyAuthFailure(workspaceId, syncError);
+
+    throw syncError;
   }
 }
 
@@ -526,11 +919,12 @@ export async function getSyncStatus(workspaceId: string): Promise<{
   documentCount: number;
   chunkCount: number;
 }> {
-  const pageTokenKey = `drive_page_token:${workspaceId}`;
+  const pageTokenKey = `drive_page_token`;
   const { data: tokenData } = await supabase
     .from('bot_config')
     .select('value')
     .eq('key', pageTokenKey)
+    .eq('workspace_id', workspaceId)
     .single();
 
   const { count: docCount } = await supabase

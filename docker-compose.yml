@@ -59,8 +59,8 @@ services:
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
       - GOOGLE_REDIRECT_URI=https://api.${DOMAIN}/api/google-drive/callback
-      # Gemini AI
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      # OpenAI (GPT-5-Nano)
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
       # Stripe Billing (optional)
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}

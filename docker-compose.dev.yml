@@ -26,8 +26,8 @@ services:
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
       - GOOGLE_REDIRECT_URI=http://localhost:3000/api/google-drive/callback
-      # Gemini AI
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      # OpenAI (GPT-5-Nano)
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
       # Stripe Billing
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}

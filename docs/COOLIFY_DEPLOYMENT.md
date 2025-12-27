@@ -143,7 +143,7 @@ SUPABASE_ANON_KEY=your-anon-key-from-supabase-dashboard
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-from-supabase-dashboard
 
 # AI
-GEMINI_API_KEY=your-gemini-api-key
+OPENAI_API_KEY=your-openai-api-key
 
 # URLs
 API_URL=https://api.cluebase.ai
@@ -198,7 +198,7 @@ API_URL=http://api:3000
 ```bash
 # API health
 curl https://api.cluebase.ai/health
-# Expected: {"status":"healthy","services":{"supabase":true,"gemini":true}}
+# Expected: {"status":"healthy","services":{"supabase":true,"openai":true}}
 
 # Dashboard
 curl -I https://cluebase.ai
@@ -222,7 +222,7 @@ curl -I https://cluebase.ai
 | `SUPABASE_URL` | Yes | Supabase API URL |
 | `SUPABASE_ANON_KEY` | Yes | Supabase anonymous key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes | Supabase service role key |
-| `GEMINI_API_KEY` | Yes | Google Gemini API key |
+| `OPENAI_API_KEY` | Yes | OpenAI API key (gpt-5-nano, text-embedding-3-small) |
 | `API_URL` | Yes | Public API URL |
 | `APP_URL` | Yes | Public dashboard URL |
 | `GOOGLE_CLIENT_ID` | No | Google OAuth client ID |

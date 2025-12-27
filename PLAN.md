@@ -15,15 +15,15 @@ A multi-tenant SaaS platform for AI-powered knowledge management that:
 
 | Component | Technology | Purpose |
 |-----------|------------|---------|
-| **AI/LLM** | Google Gemini API | Natural language understanding and response generation |
+| **AI/LLM** | OpenAI API (gpt-5-nano, text-embedding-3-small) | Natural language understanding and response generation |
 | **Vector Database/RAG** | Supabase (pgvector) | Knowledge base storage, semantic search, embeddings |
 | **Document Source** | Google Drive API | Fetch SOPs, policies, and documentation |
 | **Chat Interface** | Slack Bolt SDK | Bot integration, message handling, channel presence |
-| **Backend** | Node.js/TypeScript or Python (FastAPI) | API server, orchestration, business logic |
+| **Backend** | Node.js/TypeScript + Express | API server, orchestration, business logic |
 | **Dashboard UI** | Next.js / React | Admin interface for settings and analytics |
 | **Web Scraping** | Puppeteer / Cheerio | Extract content from company website |
 | **Task Scheduling** | Node-cron / Celery | Polling Drive, weekly scraping jobs |
-| **Hosting** | Vercel / Railway / Fly.io | Application deployment |
+| **Hosting** | Coolify + Docker + Hetzner VPS | Application deployment |
 
 ---
 
@@ -43,7 +43,7 @@ A multi-tenant SaaS platform for AI-powered knowledge management that:
        │                    │                    │                    │
        ▼                    ▼                    ▼                    ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                           BACKEND SERVER (Node.js/Python)                   │
+│                           BACKEND SERVER (Node.js/TypeScript)               │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐        │
 │  │   Slack     │  │  Document   │  │   Web       │  │  Dashboard  │        │
 │  │   Handler   │  │  Processor  │  │   Scraper   │  │   API       │        │
@@ -58,7 +58,7 @@ A multi-tenant SaaS platform for AI-powered knowledge management that:
             ┌───────────────────────┼───────────────────────┐
             ▼                       ▼                       ▼
 ┌───────────────────┐   ┌───────────────────┐   ┌───────────────────┐
-│    SUPABASE       │   │   GEMINI API      │   │   REDIS/CACHE     │
+│    SUPABASE       │   │   OPENAI API      │   │   REDIS/CACHE     │
 │   (PostgreSQL +   │   │   (LLM)           │   │   (Optional)      │
 │    pgvector)      │   │                   │   │                   │
 └───────────────────┘   └───────────────────┘   └───────────────────┘
@@ -158,7 +158,7 @@ CREATE TABLE document_chunks (
   document_id UUID REFERENCES documents(id) ON DELETE CASCADE,
   chunk_index INTEGER NOT NULL,
   content TEXT NOT NULL,
-  embedding VECTOR(768), -- Gemini text-embedding-004 dimension
+  embedding VECTOR(768), -- OpenAI text-embedding-3-small dimension
   -- Auto-generated full-text search column for BM25/hybrid search
   fts tsvector GENERATED ALWAYS AS (to_tsvector('english', content)) STORED,
   metadata JSONB DEFAULT '{}',
@@ -261,7 +261,7 @@ Message Posted in Channel
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  TIER 3: Gemini Classifier (~500ms, only ~10% reach here)   │
+│  TIER 3: OpenAI Classifier (~500ms, only ~10% reach here)   │
 │  • "Is this a question about company operations?"           │
 │  • Returns: { shouldRespond: boolean, confidence: 0-1 }     │
 │  • Only respond if confidence > threshold (default: 0.7)    │
@@ -272,7 +272,7 @@ Message Posted in Channel
 ```
 
 **Why Tiered?**
-- Gemini API calls cost money and add latency
+- OpenAI API calls cost money and add latency
 - Most Slack messages are casual chat, not questions
 - Heuristics filter 90%+ of messages for free
 - Only complex/ambiguous cases need AI classification
@@ -499,16 +499,16 @@ $$;
 
 #### 4.4 Embedding Model Choice
 
-**Recommended: Gemini text-embedding-004**
+**Current: OpenAI text-embedding-3-small**
 
 | Model | Dimensions | Cost | Notes |
 |-------|------------|------|-------|
-| **Gemini text-embedding-004** | 768 (default) | FREE | Best value, multilingual |
-| Gemini (full) | 3072 | FREE | Higher quality, more storage |
+| **OpenAI text-embedding-3-small** | 768 (default) | ~$0.02/1M tokens | Production-grade, multilingual |
+| OpenAI text-embedding-3-large | 3072 | ~$0.13/1M tokens | Higher quality, more storage |
 | OpenAI text-embedding-3-small | 1536 | $0.02/1M tokens | Reliable, well-documented |
 | OpenAI text-embedding-3-large | 3072 | $0.13/1M tokens | Highest quality |
 
-Per [Google's benchmarks](https://developers.googleblog.com/en/gemini-embedding-available-gemini-api/), Gemini outperforms OpenAI's embedding-3-large by ~6% while being free.
+OpenAI embeddings provide production-grade quality with excellent multilingual support and reliable uptime.
 
 **Critical Rule:** Always use the SAME embedding model for:
 - Document chunks
@@ -527,7 +527,7 @@ User Question: "What's the pool cleaning schedule for Casa Luna?"
      ▼
 ┌─────────────────────────────────────────────────────────────┐
 │ 1. QUERY PROCESSING                                         │
-│    • Embed query with Gemini                                │
+│    • Embed query with OpenAI                                │
 │    • Extract keywords for BM25                              │
 └──────────────────────────┬──────────────────────────────────┘
                            │
@@ -551,7 +551,7 @@ User Question: "What's the pool cleaning schedule for Casa Luna?"
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ 4. GENERATION (Gemini)                                      │
+│ 4. GENERATION (OpenAI GPT-5-Turbo)                          │
 │    • Generate response with citations                       │
 │    • Include source document names                          │
 │    • Format for Slack                                       │
@@ -619,8 +619,8 @@ async function embedAndStore(chunks: { text: string; metadata: ChunkMetadata }[]
     const batch = chunks.slice(i, i + BATCH_SIZE);
     const texts = batch.map(c => c.text);
 
-    // Gemini embedding API
-    const embeddings = await gemini.embedContent({
+    // OpenAI embedding API
+    const embeddings = await openai.embeddings.create({
       model: 'text-embedding-004',
       content: texts,
     });
@@ -780,7 +780,7 @@ Every 5 minutes:
 5. **Settings (API & Configuration)**
    - **API Keys Management:**
      - Google Drive credentials (OAuth flow via UI)
-     - Gemini API key (with test button)
+     - OpenAI API key (with test button)
      - Slack tokens (with validation)
      - Supabase connection (auto-configured)
    - **Sync Settings:**
@@ -788,7 +788,7 @@ Every 5 minutes:
      - Website scrape schedule (cron builder UI)
      - Website URLs to scrape (add/remove list)
    - **AI Settings:**
-     - Gemini model selection
+     - OpenAI model selection
      - Temperature slider (0.0 - 1.0)
      - Max response length
      - System prompt customization
@@ -841,7 +841,7 @@ cluebase-ai/
 │   │   │   │   │   ├── crawler.ts    # Website crawler
 │   │   │   │   │   └── extractor.ts  # Content extraction
 │   │   │   │   ├── rag/
-│   │   │   │   │   ├── embeddings.ts # Gemini embeddings
+│   │   │   │   │   ├── embeddings.ts # OpenAI embeddings
 │   │   │   │   │   ├── chunker.ts    # Text chunking
 │   │   │   │   │   ├── retriever.ts  # Vector search
 │   │   │   │   │   └── generator.ts  # Response generation
@@ -953,7 +953,7 @@ Basic error handling                Graceful degradation tiers
 - [ ] Create Supabase project and run initial migrations
 - [ ] Set up Google Cloud project and enable Drive API
 - [ ] Create Slack app and configure OAuth/Bot tokens
-- [ ] Set up Gemini API access
+- [x] Set up OpenAI API access
 - [ ] Configure environment variables
 - [ ] Create basic Express/Fastify server
 
@@ -984,7 +984,7 @@ Basic error handling                Graceful degradation tiers
 **Goal:** Store documents and enable semantic search
 
 **Tasks:**
-- [ ] Integrate Gemini embeddings API
+- [x] Integrate OpenAI embeddings API (text-embedding-3-small)
 - [ ] Create embedding generation for document chunks
 - [ ] Store chunks with embeddings in Supabase
 - [ ] Implement vector similarity search function
@@ -993,7 +993,7 @@ Basic error handling                Graceful degradation tiers
   - [ ] Top-k retrieval
   - [ ] Context assembly
   - [ ] Prompt template
-- [ ] Integrate Gemini for response generation
+- [x] Integrate OpenAI GPT-5-Turbo for response generation
 - [ ] Add source citation in responses
 
 **Deliverable:** Working RAG system that answers questions using documents
@@ -1006,7 +1006,7 @@ Basic error handling                Graceful degradation tiers
 **Tasks:**
 - [ ] Set up Slack Bolt SDK with Socket Mode
 - [ ] Configure event subscriptions (message.channels, message.groups)
-- [ ] Build intent classifier using Gemini:
+- [x] Build intent classifier using OpenAI GPT-5-Turbo:
   - [ ] Detect if message is a question
   - [ ] Determine if question is relevant to knowledge base
   - [ ] Calculate confidence score
@@ -1110,7 +1110,7 @@ Basic error handling                Graceful degradation tiers
 |---------|---------------|-----------------|
 | **Google Cloud** | OAuth 2.0 credentials, API key | [Google Cloud Console](https://console.cloud.google.com) |
 | **Google Drive API** | Enable in Google Cloud project | [API Library](https://console.cloud.google.com/apis/library/drive.googleapis.com) |
-| **Google Gemini** | API key | [Google AI Studio](https://aistudio.google.com/app/apikey) |
+| **OpenAI** | API key | [OpenAI Platform](https://platform.openai.com/api-keys) |
 | **Supabase** | Project URL, Anon key, Service role key | [Supabase Dashboard](https://supabase.com/dashboard) |
 | **Slack** | Bot token, Signing secret, App-level token | [Slack API Apps](https://api.slack.com/apps) |
 
@@ -1125,8 +1125,8 @@ GOOGLE_CLIENT_SECRET=
 GOOGLE_REDIRECT_URI=
 GOOGLE_DRIVE_FOLDER_ID=
 
-# Gemini AI
-GEMINI_API_KEY=
+# OpenAI (GPT-5-Turbo + Embeddings)
+OPENAI_API_KEY=sk-...
 
 # Supabase
 SUPABASE_URL=
@@ -1330,8 +1330,8 @@ Carlos: What time should we arrive for setup tomorrow?
 
 | Service | Failure Mode | Handling Strategy |
 |---------|--------------|-------------------|
-| **Gemini API** | Rate limit / 503 | Retry 3x with exponential backoff (1s, 2s, 4s). If still fails, respond: "I'm having trouble thinking right now. Please try again in a moment." |
-| **Gemini API** | Token limit exceeded | Truncate context, keep most recent thread messages + top 3 KB chunks |
+| **OpenAI API** | Rate limit / 503 | Retry 3x with exponential backoff (1s, 2s, 4s). If still fails, respond: "I'm having trouble thinking right now. Please try again in a moment." |
+| **OpenAI API** | Token limit exceeded | Truncate context, keep most recent thread messages + top 3 KB chunks |
 | **Supabase** | Connection failed | Retry 3x. If fails, log error, respond: "I can't access my knowledge base right now." |
 | **Google Drive** | Auth expired | Auto-refresh token. If fails, alert admin via dashboard + Slack DM |
 | **Google Drive** | Rate limited | Queue sync jobs, process with delay. Never block bot responses. |
@@ -1367,18 +1367,18 @@ async function processDocument(file: DriveFile) {
 
 ```
 Tier 1 (Full Service):
-  ✓ Gemini available
+  ✓ OpenAI available
   ✓ Supabase available
   ✓ Full RAG pipeline
   → Normal operation
 
 Tier 2 (Degraded - No AI):
-  ✗ Gemini unavailable
+  ✗ OpenAI unavailable
   ✓ Supabase available
   → Keyword search fallback, return raw document excerpts
 
 Tier 3 (Degraded - Cache Only):
-  ✗ Gemini unavailable
+  ✗ OpenAI unavailable
   ✗ Supabase unavailable
   → Return cached responses for common questions (Redis)
 
@@ -1397,7 +1397,7 @@ Tier 4 (Offline):
 |-----------|---------------|
 | Very long message (>4000 chars) | Truncate, focus on first paragraph |
 | Multiple questions in one message | Answer the first clear question, offer to address others |
-| Message in non-English | Detect language, respond in same language (Gemini supports this) |
+| Message in non-English | Detect language, respond in same language (GPT-5-Turbo supports this) |
 | User replies in thread bot didn't start | Check if question is relevant, respond if yes |
 | Rapid-fire questions from same user | Rate limit: max 5 questions/minute per user |
 | Empty or whitespace-only message | Ignore silently |
@@ -1468,7 +1468,7 @@ tests/
 ├── integration/
 │   ├── drive-sync.test.ts    # Drive API integration
 │   ├── supabase.test.ts      # DB operations + vector search
-│   ├── gemini.test.ts        # Embeddings + generation
+│   ├── openai.test.ts        # Embeddings + generation
 │   ├── slack.test.ts         # Message handling
 │   └── rag-pipeline.test.ts  # End-to-end RAG
 ```
@@ -2236,7 +2236,7 @@ When user clicks 👎:
 |------|------|-------------|--------|
 | 1 | **Welcome** | Introduction, overview of what will be configured | ✅ |
 | 2 | **Database** | Supabase connection (URL + Service Role Key) | ✅ |
-| 3 | **AI Provider** | Gemini API key configuration | ✅ |
+| 3 | **AI Provider** | OpenAI API key configuration | ✅ |
 | 4 | **Slack App** | Bot Token + App Token + Signing Secret | ✅ |
 | 5 | **Google Drive** | OAuth setup for document access | ✅ |
 | 6 | **Knowledge Source** | Select Drive folder(s) + website URL to scrape | ✅ |
@@ -2324,8 +2324,8 @@ When user clicks 👎:
 - [x] Remove 50-page hard limit (now configurable, default 500)
 - [x] Add configurable scraping options
 - [x] Implement rate limiting and robots.txt support
-- [ ] Add progress tracking UI
-- [ ] Category assignment for scraped pages
+- [x] Add progress tracking UI (SSE real-time sync events)
+- [x] Tags for scraped pages (replaced category with tags system)
 
 ### Phase 3: Multi-Bot Foundation ✅ COMPLETE
 
@@ -2410,7 +2410,7 @@ The Google Drive sync was ignoring the `bot_drive_folders` table and syncing fro
 - [x] Pagination support
 - [x] Update sidebar with Feedback navigation link
 
-### Phase 5: Integration & Polish ✅ MOSTLY COMPLETE
+### Phase 5: Integration & Polish ✅ COMPLETE
 
 - [x] Register `botsRouter` and `feedbackRouter` in main app
 - [x] Migrate main app to use `BotManager` instead of legacy single-bot
@@ -2418,8 +2418,8 @@ The Google Drive sync was ignoring the `bot_drive_folders` table and syncing fro
 - [x] Add Geist font throughout dashboard
 - [x] Implement consistent modal system for all forms
 - [x] Add loading states and skeleton loaders
-- [ ] Error boundaries and toast notifications
-- [ ] Mobile-responsive improvements
+- [x] Toast notifications (useSyncToast, shadcn/ui toast)
+- [x] Mobile-responsive improvements (responsive design in components)
 
 ### Phase 6: Multi-Bot Deployment ✅ COMPLETE
 
@@ -2502,7 +2502,7 @@ The Google Drive sync was ignoring the `bot_drive_folders` table and syncing fro
 
 **Changes:**
 - Removed Supabase URL/Service Key configuration (platform-managed)
-- Removed Gemini API key configuration (platform-managed)
+- Removed OpenAI API key configuration (platform-managed)
 - Streamlined to focus on:
   - Slack app credentials
   - Google Drive OAuth
@@ -2566,4 +2566,29 @@ const folderCategoryMap = {
 
 ---
 
-*Cluebase AI Enhancement Plan v2.0 - Last Updated: December 2024*
+*Cluebase AI Enhancement Plan v3.0 - Last Updated: December 2024*
+
+---
+
+## Recent Additions (December 2024)
+
+### Type-Safe API Layer
+- Zod schemas for all API contracts (`packages/shared/src/api/contracts.ts`)
+- Type-safe API client factory (`apps/dashboard/src/lib/api.ts`)
+- Inferred request/response types from Zod schemas
+
+### Real-Time Sync Progress (SSE)
+- `sync_operations` table for tracking sync/scrape progress
+- Server-Sent Events endpoint (`/api/sync/events`)
+- Frontend components: `SyncStatusBadge`, `SyncProgressBar`, `useSyncToast`
+
+### ESLint 9 Configuration
+- Flat config format (`eslint.config.mjs`)
+- TypeScript-ESLint integration
+- Strict type checking with `noUncheckedIndexedAccess`
+
+### Database Enhancements
+- 30+ tables with comprehensive RLS policies
+- 130+ indexes for performance
+- 20 migrations in production
+- `pgvector` extension for 768-dim embeddings

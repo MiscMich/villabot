@@ -11,6 +11,7 @@ import { closeInactiveSessions } from '../slack/threads.js';
 import { isDriveClientInitialized } from '../google-drive/client.js';
 import { supabase } from '../supabase/client.js';
 import { scrapeWebsite } from '../scraper/website.js';
+import { cleanupExpiredOAuthStateTokens } from '../../routes/auth.js';
 
 interface ScheduledJob {
   name: string;
@@ -63,6 +64,9 @@ export function initializeScheduler(): void {
   // Website scraping - runs weekly on Sunday at 3 AM (or configured schedule)
   const scrapeSchedule = env.SCRAPE_SCHEDULE ?? '0 3 * * 0';
   scheduleJob('website-scrape', scrapeSchedule, runWebsiteScrape);
+
+  // OAuth state token cleanup - runs hourly (security: remove expired tokens)
+  scheduleJob('oauth-cleanup', '0 * * * *', runOAuthCleanup);
 
   logger.info(`Scheduler initialized with ${jobs.size} jobs`);
 }
@@ -286,6 +290,21 @@ async function runDailyAnalytics(): Promise<void> {
     logger.info('Daily analytics aggregation complete');
   } catch (error) {
     logger.error('Daily analytics failed', { error });
+  }
+}
+
+/**
+ * Run OAuth state token cleanup
+ * Removes expired tokens to prevent database bloat and security issues
+ */
+async function runOAuthCleanup(): Promise<void> {
+  try {
+    const cleaned = await cleanupExpiredOAuthStateTokens();
+    if (cleaned > 0) {
+      logger.info('OAuth state token cleanup completed', { cleaned });
+    }
+  } catch (error) {
+    logger.error('OAuth cleanup failed', { error });
   }
 }
 

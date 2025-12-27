@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS error_logs (
   message TEXT NOT NULL,
   stack TEXT,
   context JSONB DEFAULT '{}',
-  service TEXT NOT NULL CHECK (service IN ('slack', 'rag', 'google_drive', 'gemini', 'supabase', 'api')),
+  service TEXT NOT NULL CHECK (service IN ('slack', 'rag', 'google_drive', 'openai', 'supabase', 'api')),
   severity TEXT NOT NULL CHECK (severity IN ('low', 'medium', 'high', 'critical')),
   user_id TEXT,
   resolved BOOLEAN DEFAULT FALSE,

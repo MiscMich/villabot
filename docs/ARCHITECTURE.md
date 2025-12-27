@@ -151,12 +151,13 @@ bots.slack_bot_token      -- OAuth bot token (xoxb-...)
 bots.slack_app_token      -- Socket Mode app token (xapp-...)
 bots.slack_team_id        -- Slack workspace ID
 
--- Google Drive tokens (stored in bot_config JSONB column)
-bot_config.google_drive_tokens
--- Contains: access_token, refresh_token, expiry_date
+-- Google Drive tokens (stored in bot_config with workspace isolation)
+bot_config.key            -- 'google_drive_tokens'
+bot_config.workspace_id   -- Associates tokens with workspace
+bot_config.value          -- JSONB: { access_token, refresh_token, expiry_date, connected_at }
 ```
 
-**Note**: Google Drive OAuth tokens are stored per-bot in `bot_config.google_drive_tokens` (JSONB), not at the workspace level. This allows different bots to connect to different Google accounts if needed.
+**Note**: Google Drive OAuth tokens are stored per-workspace in `bot_config` with `workspace_id` foreign key. The OAuth flow encodes workspace context in the state parameter, ensuring tokens are associated with the correct workspace on callback. Legacy tokens (with `workspace_id = null`) are automatically migrated during setup completion.
 
 ## User Roles
 
@@ -228,15 +229,175 @@ Limits are enforced per-workspace:
 
 Billing is managed via Stripe with `workspace.stripe_customer_id` and `workspace.stripe_subscription_id`.
 
+## Resilience Patterns
+
+### Circuit Breakers
+
+The platform implements the circuit breaker pattern to prevent cascading failures when external services experience issues:
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                        Circuit Breaker State Machine                          │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   ┌─────────┐         failures >= threshold        ┌─────────┐              │
+│   │ CLOSED  │ ────────────────────────────────────▶│  OPEN   │              │
+│   │(normal) │                                      │(fail    │              │
+│   └────▲────┘                                      │ fast)   │              │
+│        │                                           └────┬────┘              │
+│        │                                                │                   │
+│        │      success >= threshold                      │ reset timeout     │
+│        │      ┌────────────┐                            │                   │
+│        └──────│ HALF_OPEN  │◀───────────────────────────┘                   │
+│               │ (testing)  │                                                │
+│               └──────┬─────┘                                                │
+│                      │ failure                                              │
+│                      └────────▶ back to OPEN                                │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Configured Circuit Breakers:**
+
+| Service | Failure Threshold | Reset Timeout | Success Threshold |
+|---------|-------------------|---------------|-------------------|
+| OpenAI | 5 failures | 30 seconds | 2 successes |
+| Google Drive | 5 failures | 60 seconds | 2 successes |
+| Slack (per-bot) | 3 failures | 60 seconds | 1 success |
+
+**Files:**
+- `apps/api/src/utils/circuit-breaker.ts` - Implementation
+- `apps/api/src/services/rag/embeddings.ts` - OpenAI integration
+- `apps/api/src/services/google-drive/client.ts` - Drive integration
+
+### Rate Limiting
+
+Dual-mode rate limiting with automatic failover:
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│                         Rate Limiting Architecture                          │
+├────────────────────────────────────────────────────────────────────────────┤
+│                                                                            │
+│   Request → ┌─────────────────┐    ┌─────────────┐                        │
+│             │  Redis Check    │───▶│ Rate Limit  │──▶ Allow/Reject        │
+│             │  (if available) │    │   Logic     │                        │
+│             └────────┬────────┘    └─────────────┘                        │
+│                      │                    ▲                                │
+│              Redis   │                    │                                │
+│            unavailable                    │                                │
+│                      ▼                    │                                │
+│             ┌─────────────────┐           │                                │
+│             │ In-Memory LRU   │───────────┘                                │
+│             │ (fallback)      │                                            │
+│             └─────────────────┘                                            │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Features:**
+- Atomic Redis operations (INCR + PEXPIRE pipeline)
+- Automatic fallback to in-memory when Redis unavailable
+- LRU eviction prevents memory bloat in fallback mode
+
+**File:** `apps/api/src/middleware/rateLimit.ts`
+
+### Error Boundaries (Dashboard)
+
+React error boundaries prevent full-page crashes:
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│                             Error Boundary Tree                             │
+├────────────────────────────────────────────────────────────────────────────┤
+│                                                                            │
+│   <App>                                                                    │
+│     └── <ErrorBoundary resetKey={pathname}>                               │
+│           └── <DashboardLayout>                                           │
+│                 ├── <Sidebar />                                           │
+│                 └── <MainContent>                                         │
+│                       ├── <Page A /> ← error caught here                 │
+│                       └── <Page B />   doesn't affect Page B             │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Components:**
+- `ErrorBoundary` - Full-page error UI with retry button
+- `InlineErrorBoundary` - Minimal inline error state
+- `withErrorBoundary` - HOC for wrapping components
+
+**File:** `apps/dashboard/src/components/error-boundary.tsx`
+
+### SSE Reconnection
+
+EventSource client with robust reconnection:
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│                         SSE Reconnection Strategy                           │
+├────────────────────────────────────────────────────────────────────────────┤
+│                                                                            │
+│   Connection lost                                                          │
+│        │                                                                   │
+│        ▼                                                                   │
+│   ┌─────────────────────────────────────────────────────────────────────┐ │
+│   │              Exponential Backoff with Jitter                         │ │
+│   │                                                                      │ │
+│   │  Attempt 1: 1s + jitter(0-30%)  ≈ 1.0-1.3s                         │ │
+│   │  Attempt 2: 2s + jitter(0-30%)  ≈ 2.0-2.6s                         │ │
+│   │  Attempt 3: 4s + jitter(0-30%)  ≈ 4.0-5.2s                         │ │
+│   │  Attempt 4: 8s + jitter(0-30%)  ≈ 8.0-10.4s                        │ │
+│   │  ...                                                                 │ │
+│   │  Max delay capped at 30 seconds                                     │ │
+│   │  Max 10 reconnection attempts                                       │ │
+│   └─────────────────────────────────────────────────────────────────────┘ │
+│                                                                            │
+│   Heartbeat Monitoring:                                                    │
+│   - Server sends heartbeat every 30 seconds                               │
+│   - Client timeout: 45 seconds                                            │
+│   - Stale connection detected → force reconnect                           │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+**File:** `apps/dashboard/src/lib/sync-events.ts`
+
 ## Security Considerations
 
 ### Defense in Depth
 
 1. **Authentication**: Supabase Auth with JWT tokens
-2. **Authorization**: RLS policies on all tables
+2. **Authorization**: RLS policies on all tables (including `admin_audit_log`)
 3. **API Validation**: Workspace middleware on all routes
 4. **Credential Isolation**: Per-workspace token storage
-5. **Rate Limiting**: Per-workspace, tier-based limits
+5. **Rate Limiting**: Per-workspace, tier-based limits + IP-based for auth endpoints
+6. **CSRF Protection**: Cryptographic state tokens for OAuth flows
+7. **Circuit Breakers**: Fail-fast on external service outages
+
+### OAuth Security
+
+Google OAuth flow includes multiple security layers:
+- **CSRF State Tokens**: 256-bit cryptographic tokens stored in database
+- **Token Expiry**: 10-minute window prevents stale attacks
+- **One-Time Use**: Tokens consumed on validation (replay attack prevention)
+- **Workspace Validation**: Admin/owner role required to connect Drive
+- **Cleanup**: Automatic purging of expired tokens
+
+### Rate Limiting
+
+| Endpoint Type | Limit | Purpose |
+|--------------|-------|---------|
+| Login | 5/min per IP | Brute force prevention |
+| Signup | 3/min per IP | Spam account prevention |
+| Password Reset | 3/min per IP | Email bombing prevention |
+| Invite Accept | 10/min per IP | Token guessing prevention |
+| General API | 100/min per workspace | Fair usage |
+| Document Sync | 10/min per workspace | Resource protection |
+
+### Database Security
+
+- **RLS on all tables**: Including `admin_audit_log` for audit trail protection
+- **SECURITY DEFINER functions**: All use `SET search_path = public, pg_temp` to prevent schema injection
+- **Service role isolation**: Backend uses service role for trusted operations only
 
 ### Sensitive Data Handling
 
@@ -244,6 +405,7 @@ Billing is managed via Stripe with `workspace.stripe_customer_id` and `workspace
 - Slack tokens never exposed to frontend
 - API keys stored in environment variables only
 - No cross-workspace data access possible
+- Audit logging for all admin actions
 
 ## Infrastructure
 
