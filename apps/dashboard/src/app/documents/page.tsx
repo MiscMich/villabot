@@ -14,7 +14,6 @@ import {
   Trash2,
   Cloud,
   Globe,
-  CheckCircle,
   XCircle,
   Search,
   Filter,

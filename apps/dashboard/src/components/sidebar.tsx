@@ -20,7 +20,6 @@ import {
   Menu,
   X,
   LogOut,
-  User,
   Users,
   CreditCard,
   Lightbulb,
@@ -34,7 +33,7 @@ import { fadeInUp, staggerContainer } from '@/lib/motion';
 const MobileSidebarContext = createContext<{
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
-}>({ isOpen: false, setIsOpen: () => {} });
+}>({ isOpen: false, setIsOpen: () => { } });
 
 export function useMobileSidebar() {
   return useContext(MobileSidebarContext);

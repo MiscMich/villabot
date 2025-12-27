@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getSupabase } from '@/lib/supabase';
-import { Loader2, AlertCircle, CheckCircle2, Brain } from 'lucide-react';
+import { Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 
@@ -66,8 +66,7 @@ function AuthCallbackContent() {
           setError('No session found. Please try signing in again.');
           setStatus('error');
         }
-      } catch (err) {
-        console.error('Auth callback error:', err);
+      } catch {
         setError('An unexpected error occurred. Please try again.');
         setStatus('error');
       }

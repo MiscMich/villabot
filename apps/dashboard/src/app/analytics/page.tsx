@@ -125,9 +125,6 @@ export default function AnalyticsPage() {
             <div className="icon-container">
               <MessageSquare className="w-6 h-6" />
             </div>
-            <span className="text-xs font-medium px-2 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-              This Week
-            </span>
           </div>
           <div className="mt-4">
             <p className="text-sm text-muted-foreground">Messages Received</p>

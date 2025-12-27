@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAuth, useRequireAuth } from '@/contexts/AuthContext';
+import { useRequireAuth } from '@/contexts/AuthContext';
 
 // API Base URL
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
@@ -710,7 +710,7 @@ function SlackStep({
 
 function GoogleDriveStep({
   config,
-  onUpdate,
+  onUpdate: _onUpdate,
   fullConfig,
   currentStep,
 }: {
@@ -1255,7 +1255,7 @@ function CompleteStep({
 
 function SetupWizardContent() {
   // Enforce authentication - redirects to signin if not authenticated
-  const { session, isLoading: authLoading, user } = useRequireAuth();
+  const { session, isLoading: authLoading } = useRequireAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [currentStep, setCurrentStep] = useState(0);
@@ -1376,9 +1376,9 @@ function SetupWizardContent() {
             googleDrive: config.googleDrive,
             website: config.knowledgeSources.websiteEnabled
               ? {
-                  url: config.knowledgeSources.websiteUrl,
-                  maxPages: config.knowledgeSources.maxPages,
-                }
+                url: config.knowledgeSources.websiteUrl,
+                maxPages: config.knowledgeSources.maxPages,
+              }
               : null,
             bot: config.bot,
           },

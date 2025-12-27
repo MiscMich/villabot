@@ -3,7 +3,7 @@
 import { type ReactNode } from 'react';
 import { motion, type Variants } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { floatingAnimation, floatingAnimationSlow } from '@/lib/motion';
+
 
 export interface FloatingElementProps {
   children: ReactNode;

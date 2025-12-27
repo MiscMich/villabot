@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { BotFormModal } from '@/components/bot-form-modal';
 import { BotSetupWizard } from '@/components/bot-setup-wizard';
 import { useToast } from '@/components/ui/use-toast';
-import { GlassCardStatic } from '@/components/design-system/glass-card';
+
 import {
   Bot,
   Plus,
@@ -389,188 +389,188 @@ export default function BotsPage() {
           filteredBots?.map((bot, index) => {
             const typeConfig = BOT_TYPE_CONFIG[bot.bot_type || 'general'];
             return (
-            <div
-              key={bot.id}
-              className="glass-card p-6 group opacity-0 animate-fade-in-up hover:border-violet-500/30 transition-all"
-              style={{ animationDelay: `${300 + index * 50}ms` }}
-            >
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <div className={cn(
-                      'w-12 h-12 rounded-xl flex items-center justify-center',
-                      bot.status === 'active'
-                        ? 'bg-gradient-to-br from-violet-400 to-purple-600 shadow-glow'
-                        : !hasValidCredentials(bot)
-                          ? 'bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700'
-                          : 'bg-secondary'
-                    )}>
-                      <Bot className={cn(
-                        'h-6 w-6',
+              <div
+                key={bot.id}
+                className="glass-card p-6 group opacity-0 animate-fade-in-up hover:border-violet-500/30 transition-all"
+                style={{ animationDelay: `${300 + index * 50}ms` }}
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <div className={cn(
+                        'w-12 h-12 rounded-xl flex items-center justify-center',
                         bot.status === 'active'
-                          ? 'text-white'
+                          ? 'bg-gradient-to-br from-violet-400 to-purple-600 shadow-glow'
                           : !hasValidCredentials(bot)
-                            ? 'text-amber-600 dark:text-amber-400'
-                            : 'text-muted-foreground'
-                      )} />
-                    </div>
-                    {/* Warning badge when credentials are missing */}
-                    {!hasValidCredentials(bot) && (
-                      <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center shadow-sm">
-                        <AlertTriangle className="w-3 h-3 text-white" />
+                            ? 'bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700'
+                            : 'bg-secondary'
+                      )}>
+                        <Bot className={cn(
+                          'h-6 w-6',
+                          bot.status === 'active'
+                            ? 'text-white'
+                            : !hasValidCredentials(bot)
+                              ? 'text-amber-600 dark:text-amber-400'
+                              : 'text-muted-foreground'
+                        )} />
                       </div>
-                    )}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-display font-semibold">{bot.name}</h3>
-                      {bot.is_default && (
-                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-violet-100 text-purple-700 dark:bg-violet-900/30 dark:text-violet-400">
-                          Default
-                        </span>
+                      {/* Warning badge when credentials are missing */}
+                      {!hasValidCredentials(bot) && (
+                        <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center shadow-sm">
+                          <AlertTriangle className="w-3 h-3 text-white" />
+                        </div>
                       )}
                     </div>
-                    <p className="text-sm text-muted-foreground font-mono">/{bot.slug}</p>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-display font-semibold">{bot.name}</h3>
+                        {bot.is_default && (
+                          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-violet-100 text-purple-700 dark:bg-violet-900/30 dark:text-violet-400">
+                            Default
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground font-mono">/{bot.slug}</p>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 hover:text-purple-600"
-                    onClick={() => {
-                      setEditingBot(bot);
-                      setShowFormModal(true);
-                    }}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  {!bot.is_default && (
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                      className="h-8 w-8 hover:text-purple-600"
                       onClick={() => {
-                        if (confirm('Delete this bot? This cannot be undone.')) {
-                          deleteMutation.mutate(bot.id);
-                        }
+                        setEditingBot(bot);
+                        setShowFormModal(true);
                       }}
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Edit className="h-4 w-4" />
                     </Button>
-                  )}
-                </div>
-              </div>
-
-              {/* Bot Type Badge */}
-              <div className="flex items-center gap-2 mb-3">
-                <span className={cn(
-                  'inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full',
-                  typeConfig.bgClass,
-                  typeConfig.textClass
-                )}>
-                  {typeConfig.icon}
-                  {typeConfig.label}
-                </span>
-              </div>
-
-              {bot.description && (
-                <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
-                  {bot.description}
-                </p>
-              )}
-
-              {/* Channel and Knowledge Info */}
-              <div className="flex items-center gap-3 mb-4 text-xs text-muted-foreground">
-                <div className="flex items-center gap-1">
-                  <Globe className="w-3.5 h-3.5" />
-                  <span>All channels</span>
-                </div>
-                <div className="w-px h-3 bg-border" />
-                <div className="flex items-center gap-1">
-                  <Hash className="w-3.5 h-3.5" />
-                  <span>{typeConfig.categories.length} categories</span>
-                </div>
-              </div>
-
-              {/* Credential Warning Banner */}
-              {!hasValidCredentials(bot) && (
-                <div className="flex items-center gap-2 p-2.5 mb-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50">
-                  <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
-                      Missing Slack Credentials
-                    </p>
-                    <p className="text-xs text-amber-600 dark:text-amber-400 truncate">
-                      {getMissingCredentials(bot).join(', ')} required
-                    </p>
+                    {!bot.is_default && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                        onClick={() => {
+                          if (confirm('Delete this bot? This cannot be undone.')) {
+                            deleteMutation.mutate(bot.id);
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-2 text-xs text-amber-700 hover:text-amber-900 dark:text-amber-400 dark:hover:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/40"
-                    onClick={() => {
-                      setEditingBot(bot);
-                      setShowFormModal(true);
-                    }}
-                  >
-                    <KeyRound className="h-3 w-3 mr-1" />
-                    Configure
-                  </Button>
                 </div>
-              )}
 
-              <div className="flex items-center justify-between pt-4 border-t border-border/50">
-                <div className="flex items-center gap-2">
-                  {getStatusIcon(bot.status)}
+                {/* Bot Type Badge */}
+                <div className="flex items-center gap-2 mb-3">
                   <span className={cn(
-                    'text-xs font-medium px-2 py-1 rounded-full',
-                    getStatusColor(bot.status)
+                    'inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full',
+                    typeConfig.bgClass,
+                    typeConfig.textClass
                   )}>
-                    {bot.status.charAt(0).toUpperCase() + bot.status.slice(1)}
+                    {typeConfig.icon}
+                    {typeConfig.label}
                   </span>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  {/* Show disabled reason when credentials are missing */}
-                  {!hasValidCredentials(bot) && bot.status !== 'active' && (
-                    <span className="text-xs text-muted-foreground">
-                      Configure to activate
+                {bot.description && (
+                  <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
+                    {bot.description}
+                  </p>
+                )}
+
+                {/* Channel and Knowledge Info */}
+                <div className="flex items-center gap-3 mb-4 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-1">
+                    <Globe className="w-3.5 h-3.5" />
+                    <span>All channels</span>
+                  </div>
+                  <div className="w-px h-3 bg-border" />
+                  <div className="flex items-center gap-1">
+                    <Hash className="w-3.5 h-3.5" />
+                    <span>{typeConfig.categories.length} categories</span>
+                  </div>
+                </div>
+
+                {/* Credential Warning Banner */}
+                {!hasValidCredentials(bot) && (
+                  <div className="flex items-center gap-2 p-2.5 mb-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
+                        Missing Slack Credentials
+                      </p>
+                      <p className="text-xs text-amber-600 dark:text-amber-400 truncate">
+                        {getMissingCredentials(bot).join(', ')} required
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs text-amber-700 hover:text-amber-900 dark:text-amber-400 dark:hover:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/40"
+                      onClick={() => {
+                        setEditingBot(bot);
+                        setShowFormModal(true);
+                      }}
+                    >
+                      <KeyRound className="h-3 w-3 mr-1" />
+                      Configure
+                    </Button>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between pt-4 border-t border-border/50">
+                  <div className="flex items-center gap-2">
+                    {getStatusIcon(bot.status)}
+                    <span className={cn(
+                      'text-xs font-medium px-2 py-1 rounded-full',
+                      getStatusColor(bot.status)
+                    )}>
+                      {bot.status.charAt(0).toUpperCase() + bot.status.slice(1)}
                     </span>
-                  )}
-                  <Switch
-                    checked={bot.status === 'active'}
-                    onCheckedChange={(checked) => {
-                      if (checked) {
-                        // Double-check credentials before attempting activation
-                        if (!hasValidCredentials(bot)) {
-                          toast({
-                            title: 'Cannot Activate Bot',
-                            description: `Missing ${getMissingCredentials(bot).join(' and ')}. Configure Slack credentials first.`,
-                            variant: 'destructive',
-                          });
-                          return;
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {/* Show disabled reason when credentials are missing */}
+                    {!hasValidCredentials(bot) && bot.status !== 'active' && (
+                      <span className="text-xs text-muted-foreground">
+                        Configure to activate
+                      </span>
+                    )}
+                    <Switch
+                      checked={bot.status === 'active'}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          // Double-check credentials before attempting activation
+                          if (!hasValidCredentials(bot)) {
+                            toast({
+                              title: 'Cannot Activate Bot',
+                              description: `Missing ${getMissingCredentials(bot).join(' and ')}. Configure Slack credentials first.`,
+                              variant: 'destructive',
+                            });
+                            return;
+                          }
+                          activateMutation.mutate(bot.id);
+                        } else {
+                          deactivateMutation.mutate(bot.id);
                         }
-                        activateMutation.mutate(bot.id);
-                      } else {
-                        deactivateMutation.mutate(bot.id);
+                      }}
+                      disabled={
+                        activateMutation.isPending ||
+                        deactivateMutation.isPending ||
+                        // Disable activation (not deactivation) if credentials are missing
+                        (!hasValidCredentials(bot) && bot.status !== 'active')
                       }
-                    }}
-                    disabled={
-                      activateMutation.isPending ||
-                      deactivateMutation.isPending ||
-                      // Disable activation (not deactivation) if credentials are missing
-                      (!hasValidCredentials(bot) && bot.status !== 'active')
-                    }
-                  />
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-4 text-xs text-muted-foreground">
+                  Created {new Date(bot.created_at).toLocaleDateString()}
                 </div>
               </div>
-
-              <div className="mt-4 text-xs text-muted-foreground">
-                Created {new Date(bot.created_at).toLocaleDateString()}
-              </div>
-            </div>
-          );
+            );
           })
         )}
       </div>

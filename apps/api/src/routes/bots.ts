@@ -1136,7 +1136,7 @@ botsRouter.post('/:id/restart', requireWorkspaceAdmin, async (req, res) => {
  */
 botsRouter.post('/test-slack', async (req, res) => {
   try {
-    const { botToken, appToken, signingSecret: _signingSecret } = req.body;
+    const { botToken, appToken } = req.body;
 
     if (!botToken || !appToken) {
       return res.status(400).json({

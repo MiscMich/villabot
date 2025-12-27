@@ -425,7 +425,7 @@ class BotManager {
       // Update database status to disabled (not just error)
       await supabase
         .from('bots')
-        .update({ 
+        .update({
           status: 'inactive',
           updated_at: new Date().toISOString(),
         })
@@ -439,9 +439,9 @@ class BotManager {
         new Error(`CIRCUIT BREAKER: Bot ${status.botName} permanently disabled - requires manual intervention`),
         'slack',
         'critical',
-        { 
-          botId, 
-          action: 'circuit_breaker_tripped', 
+        {
+          botId,
+          action: 'circuit_breaker_tripped',
           totalRestartAttempts: status.totalRestartAttempts,
           reason: 'Max restart attempts exceeded',
         }
@@ -500,7 +500,7 @@ class BotManager {
         status.lastRestartAt = now;
         status.errorMessage = `Auto-restart failed (attempt ${status.totalRestartAttempts}/${MAX_RESTART_ATTEMPTS})`;
 
-        logger.error(`Failed to auto-restart bot ${status.botName}`, { 
+        logger.error(`Failed to auto-restart bot ${status.botName}`, {
           botId,
           attempt: status.totalRestartAttempts,
           maxAttempts: MAX_RESTART_ATTEMPTS,
@@ -590,6 +590,7 @@ class BotManager {
   /**
    * Map database row to Bot type
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private mapBotFromRow(row: any): Bot {
     return {
       id: row.id,

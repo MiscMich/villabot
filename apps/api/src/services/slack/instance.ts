@@ -165,6 +165,7 @@ export class BotInstance {
         await this.app.client.chat.postMessage({
           channel: channelId,
           text: message,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           blocks: blocks as any,
         });
         logger.info(`Notification sent to channel ${channelId}`, { botId: this.id });
@@ -183,6 +184,7 @@ export class BotInstance {
   private registerMentionHandler(): void {
     if (!this.app) return;
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.app.event('app_mention', async ({ event, say }: { event: any; say: any }) => {
       const messageText = event.text.replace(/<@[A-Z0-9]+>/g, '').trim();
       const channelId = event.channel;
@@ -303,6 +305,7 @@ export class BotInstance {
   private registerMessageHandler(): void {
     if (!this.app) return;
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.app.message(async ({ message, say, client: _client }: { message: any; say: any; client: any }) => {
       if (message.subtype || !('text' in message) || !message.text) return;
       if (message.user === this.botUserId) return;
@@ -475,6 +478,7 @@ export class BotInstance {
   private registerReactionHandlers(): void {
     if (!this.app) return;
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.app.event('reaction_added', async ({ event }: { event: any }) => {
       if (event.reaction === '+1' || event.reaction === 'thumbsup') {
         await this.handleFeedbackReaction(event.item.ts, 1);
@@ -536,6 +540,7 @@ export class BotInstance {
   /**
    * Handle feedback action from button click
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private async handleFeedbackAction(body: any, isHelpful: boolean, client: any): Promise<void> {
     try {
       const action = body.actions?.[0];
@@ -601,6 +606,7 @@ export class BotInstance {
       if (messageTs && channelId) {
         try {
           const originalBlocks = body.message?.blocks ?? [];
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const updatedBlocks = originalBlocks.filter((block: any) => block.type !== 'actions');
 
           updatedBlocks.push({
@@ -636,7 +642,9 @@ export class BotInstance {
     sources: string[],
     confidence: number,
     feedbackMetadata?: { threadTs: string; queryText: string }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): any[] {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const blocks: any[] = [];
     const MAX_BLOCK_LENGTH = 2900;
 

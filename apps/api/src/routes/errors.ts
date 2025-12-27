@@ -55,7 +55,7 @@ router.get('/', async (req: Request, res: Response) => {
       limit: Number(limit),
       offset: Number(offset),
     });
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: 'Failed to fetch error logs' });
   }
 });
@@ -68,7 +68,7 @@ router.get('/stats', async (req: Request, res: Response) => {
     const { hours = '24' } = req.query;
     const stats = await errorTracker.getStats(Number(hours));
     res.json(stats);
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: 'Failed to fetch error stats' });
   }
 });
@@ -85,7 +85,7 @@ router.patch('/:id/resolve', async (req: Request, res: Response) => {
     }
     await errorTracker.resolve(id);
     res.json({ success: true });
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: 'Failed to resolve error' });
   }
 });
@@ -107,7 +107,7 @@ router.delete('/resolved', async (req: Request, res: Response) => {
     if (error) throw error;
 
     res.json({ deleted: count });
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: 'Failed to clear resolved errors' });
   }
 });

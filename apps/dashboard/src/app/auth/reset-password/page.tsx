@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -86,7 +85,6 @@ export default function ResetPasswordPage() {
   const [isValidLink, setIsValidLink] = useState<boolean | null>(null);
 
   const { updatePassword } = useAuth();
-  const router = useRouter();
 
   useEffect(() => {
     // Check if we have the recovery tokens in the URL hash
@@ -134,7 +132,7 @@ export default function ResetPasswordPage() {
       }
 
       setSuccess(true);
-    } catch (err) {
+    } catch {
       setError('An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);

@@ -301,7 +301,7 @@ authRouter.get('/status', optionalAuth, async (req, res) => {
         connectedAt,
       },
     });
-  } catch (error) {
+  } catch {
     res.json({
       google: {
         connected: false,

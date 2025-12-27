@@ -156,7 +156,7 @@ export class InlineErrorBoundary extends Component<
  */
 export function withErrorBoundary<P extends object>(
   WrappedComponent: React.ComponentType<P>,
-  fallbackMessage?: string
+  _fallbackMessage?: string
 ): React.FC<P> {
   const WithErrorBoundary: React.FC<P> = (props) => (
     <ErrorBoundary>

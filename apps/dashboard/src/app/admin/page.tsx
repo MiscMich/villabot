@@ -227,7 +227,7 @@ export default function AdminDashboardPage() {
           </div>
           {growthData?.data && (
             <div className="mt-4 h-48 flex items-end justify-between gap-1">
-              {growthData.data.map((day, index) => (
+              {growthData.data.map((day) => (
                 <div
                   key={day.date}
                   className="flex-1 bg-purple-500/20 hover:bg-purple-500/30 transition-colors rounded-t relative group"

@@ -239,7 +239,6 @@ export function BotSetupWizard({ isOpen, onClose }: BotSetupWizardProps) {
   });
 
   // Creation state
-  const [createdBotId, setCreatedBotId] = useState<string | null>(null);
   const [isAddingFolders, setIsAddingFolders] = useState(false);
 
   // Reset form when modal opens/closes
@@ -257,7 +256,6 @@ export function BotSetupWizard({ isOpen, onClose }: BotSetupWizardProps) {
       setFolders([]);
       setNewFolderId('');
       setNewFolderName('');
-      setCreatedBotId(null);
       setIsAddingFolders(false);
     }
   }, [isOpen]);
@@ -273,8 +271,8 @@ export function BotSetupWizard({ isOpen, onClose }: BotSetupWizardProps) {
   // Create bot mutation
   const createMutation = useMutation({
     mutationFn: api.createBot,
-    onSuccess: (data) => {
-      setCreatedBotId(data.bot.id);
+    onSuccess: (_data) => {
+      // Bot created successfully
     },
   });
 
@@ -468,8 +466,8 @@ export function BotSetupWizard({ isOpen, onClose }: BotSetupWizardProps) {
                   index === stepIndex
                     ? 'bg-violet-500 text-white'
                     : index < stepIndex
-                    ? 'bg-violet-500/20 text-violet-600 dark:text-violet-400 hover:bg-violet-500/30'
-                    : 'bg-secondary text-muted-foreground'
+                      ? 'bg-violet-500/20 text-violet-600 dark:text-violet-400 hover:bg-violet-500/30'
+                      : 'bg-secondary text-muted-foreground'
                 )}
               >
                 {index < stepIndex ? (

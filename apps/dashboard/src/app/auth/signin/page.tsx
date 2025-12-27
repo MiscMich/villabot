@@ -63,7 +63,7 @@ function SignInForm() {
       }
 
       router.push(returnTo);
-    } catch (err) {
+    } catch {
       setError('An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);
@@ -84,7 +84,7 @@ function SignInForm() {
       }
 
       setMagicLinkSent(true);
-    } catch (err) {
+    } catch {
       setError('An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);
@@ -116,11 +116,10 @@ function SignInForm() {
         <button
           type="button"
           onClick={() => { setMode('password'); setError(null); }}
-          className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-sm font-medium transition-all ${
-            mode === 'password'
+          className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-sm font-medium transition-all ${mode === 'password'
               ? 'bg-white/10 text-white'
               : 'text-white/60 hover:text-white/80'
-          }`}
+            }`}
         >
           <Lock className="h-4 w-4" />
           Password
@@ -128,11 +127,10 @@ function SignInForm() {
         <button
           type="button"
           onClick={() => { setMode('magiclink'); setError(null); }}
-          className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-sm font-medium transition-all ${
-            mode === 'magiclink'
+          className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-sm font-medium transition-all ${mode === 'magiclink'
               ? 'bg-white/10 text-white'
               : 'text-white/60 hover:text-white/80'
-          }`}
+            }`}
         >
           <Mail className="h-4 w-4" />
           Magic Link

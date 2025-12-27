@@ -17,7 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   Building2,
   Search,
-  Filter,
+
   Plus,
   Loader2,
   ExternalLink,

@@ -1,6 +1,6 @@
 'use client';
 
-import { forwardRef, type ReactNode, type ButtonHTMLAttributes } from 'react';
+import { forwardRef, type ReactNode } from 'react';
 import { motion, type HTMLMotionProps } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { hoverScale, tapScale, springTransition } from '@/lib/motion';
@@ -54,7 +54,7 @@ export const GlowButton = forwardRef<HTMLButtonElement, GlowButtonProps>(
       className,
       variant = 'primary',
       size = 'md',
-      glow = true,
+      glow: _glow = true,
       fullWidth = false,
       loading = false,
       disabled,

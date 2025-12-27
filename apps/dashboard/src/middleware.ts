@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { logger } from '@/lib/logger';
 
 // Use internal API URL for server-side calls (runtime), fallback to public URL (build-time)
 const API_BASE = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
@@ -109,11 +110,11 @@ export async function middleware(request: NextRequest) {
       .single();
 
     if (profileError) {
-      console.error('[Middleware] Failed to get user profile:', profileError.message, 'userId:', session.user.id);
+      logger.error('[Middleware] Failed to get user profile:', profileError.message, 'userId:', session.user.id);
     }
 
     const workspaceId = profile?.default_workspace_id;
-    console.log('[Middleware] Setup check:', { userId: session.user.id, workspaceId, hasProfile: !!profile });
+    logger.info('[Middleware] Setup check:', { userId: session.user.id, workspaceId, hasProfile: !!profile });
 
     // Check setup status directly via Supabase (faster and doesn't require API auth)
     return await checkSetupStatusViaSupabase(request, supabase, workspaceId);
@@ -154,13 +155,13 @@ async function checkSetupStatusViaSupabase(
 ) {
   // Bypass setup check in E2E test mode
   if (isE2ETestMode(request)) {
-    console.log('E2E test mode - bypassing setup check in middleware');
+    logger.info('E2E test mode - bypassing setup check in middleware');
     return NextResponse.next();
   }
 
   if (!workspaceId) {
     // No workspace - redirect to setup
-    console.log('[Middleware] No workspace ID, redirecting to /setup');
+    logger.info('[Middleware] No workspace ID, redirecting to /setup');
     const setupUrl = new URL('/setup', request.url);
     return NextResponse.redirect(setupUrl);
   }
@@ -174,22 +175,22 @@ async function checkSetupStatusViaSupabase(
       .limit(1);
 
     if (error) {
-      console.error('[Middleware] Failed to check bots:', error.message);
+      logger.error('[Middleware] Failed to check bots:', error.message);
       // On error, allow through to avoid blocking users
       return NextResponse.next();
     }
 
     const hasBot = bots && bots.length > 0;
-    console.log('[Middleware] Setup status via Supabase:', { workspaceId, hasBot });
+    logger.info('[Middleware] Setup status via Supabase:', { workspaceId, hasBot });
 
     if (!hasBot) {
-      console.log('[Middleware] Setup not complete, redirecting to /setup');
+      logger.info('[Middleware] Setup not complete, redirecting to /setup');
       const setupUrl = new URL('/setup', request.url);
       return NextResponse.redirect(setupUrl);
     }
   } catch (error) {
     // On error, allow through
-    console.warn('[Middleware] Setup status check error:', error);
+    logger.warn('[Middleware] Setup status check error:', error);
   }
 
   return NextResponse.next();
@@ -201,7 +202,7 @@ async function checkSetupStatusViaSupabase(
 async function checkSetupStatus(request: NextRequest, workspaceId?: string) {
   // Bypass setup check in E2E test mode
   if (isE2ETestMode(request)) {
-    console.log('E2E test mode - bypassing setup check in middleware');
+    logger.info('E2E test mode - bypassing setup check in middleware');
     return NextResponse.next();
   }
 
@@ -211,7 +212,7 @@ async function checkSetupStatus(request: NextRequest, workspaceId?: string) {
       ? `${API_BASE}/api/setup/status?workspaceId=${encodeURIComponent(workspaceId)}`
       : `${API_BASE}/api/setup/status`;
 
-    console.log('[Middleware] Checking setup status via API:', { url, workspaceId, API_BASE });
+    logger.info('[Middleware] Checking setup status via API:', { url, workspaceId, API_BASE });
 
     const response = await fetch(url, {
       method: 'GET',
@@ -223,19 +224,19 @@ async function checkSetupStatus(request: NextRequest, workspaceId?: string) {
 
     if (response.ok) {
       const status = await response.json();
-      console.log('[Middleware] Setup status response:', status);
+      logger.info('[Middleware] Setup status response:', status);
 
       if (!status.completed) {
-        console.log('[Middleware] Setup not complete, redirecting to /setup');
+        logger.info('[Middleware] Setup not complete, redirecting to /setup');
         const setupUrl = new URL('/setup', request.url);
         return NextResponse.redirect(setupUrl);
       }
     } else {
-      console.error('[Middleware] Setup status check failed:', response.status, response.statusText);
+      logger.error('[Middleware] Setup status check failed:', response.status, response.statusText);
     }
   } catch (error) {
     // If API is unavailable, allow through
-    console.warn('[Middleware] Setup status check error:', error);
+    logger.warn('[Middleware] Setup status check error:', error);
   }
 
   return NextResponse.next();

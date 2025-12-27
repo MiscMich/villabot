@@ -44,7 +44,8 @@ export default function SettingsPage() {
 
   // Sync progress state
   const syncProgress = useSyncProgress();
-  const { handleSyncEvent } = useSyncToast();
+  // const { handleSyncEvent } = useSyncToast();
+  useSyncToast();
   const [triggeredDriveSync, setTriggeredDriveSync] = useState(false);
   const [triggeredWebsiteSync, setTriggeredWebsiteSync] = useState(false);
 
