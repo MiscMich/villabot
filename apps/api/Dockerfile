@@ -13,6 +13,7 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 # Copy package files
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/package.json ./apps/api/
+COPY apps/dashboard/package.json ./apps/dashboard/
 COPY packages/shared/package.json ./packages/shared/
 
 # Install dependencies
@@ -25,11 +26,12 @@ WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
+COPY --from=deps /app/apps/dashboard/node_modules ./apps/dashboard/node_modules
 COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
 COPY . .
 
-# Build the shared package (only if .d.ts files don't exist)
-RUN if [ ! -f packages/shared/dist/index.d.ts ]; then pnpm --filter @cluebase/shared build; fi
+# Build the shared package
+RUN pnpm --filter @cluebase/shared build
 
 # Build the API
 RUN pnpm --filter @cluebase/api build
