@@ -24,11 +24,11 @@ FROM mirror.gcr.io/library/node:20-alpine AS builder
 RUN corepack enable && corepack prepare pnpm@latest --activate
 WORKDIR /app
 
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
-COPY --from=deps /app/apps/dashboard/node_modules ./apps/dashboard/node_modules
-COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
 COPY . .
+
+# Install dependencies directly in builder to ensure consistency
+# This bypasses potential copy issues with pnpm virtual store from deps stage
+RUN pnpm install --frozen-lockfile
 
 # Build the shared package
 RUN pnpm --filter @cluebase/shared build
