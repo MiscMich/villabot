@@ -27,18 +27,15 @@ WORKDIR /app
 COPY . .
 
 # Install dependencies directly in builder to ensure consistency
-# This bypasses potential copy issues with pnpm virtual store from deps stage
 RUN pnpm install --frozen-lockfile
 
-# Ensure typescript is available and print version for debugging
-RUN pnpm add -g typescript
-RUN tsc --version
+# Verify tsc presence (debug)
+RUN ls -l node_modules/.bin/tsc
 
-# Build the shared package with verbose output
-RUN echo "Building shared package..."
-RUN cd packages/shared && pnpm install && npm run build
-# Alternatively, force tsc execution if pnpm filter fails
-# RUN cd packages/shared && ../../node_modules/.bin/tsc
+# Build the shared package using local tsc in build mode
+# This bypasses potential pnpm filter issues and uses the typescript setup we just installed
+RUN ./node_modules/.bin/tsc -b packages/shared
+
 
 # Build the API
 RUN pnpm --filter @cluebase/api build
