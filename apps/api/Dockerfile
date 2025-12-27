@@ -29,9 +29,11 @@ COPY . .
 # Install dependencies directly in builder to ensure consistency
 RUN pnpm install --frozen-lockfile
 
-# Build the shared package using local tsc in build mode
-# Note: typescript is now a root dependency, so binary is available
-RUN ./node_modules/.bin/tsc -b packages/shared
+# Debug: Verify workspace structure
+RUN pnpm ls -r --depth -1
+
+# Build the shared package
+RUN pnpm --filter @cluebase/shared build
 
 
 # Build the API
