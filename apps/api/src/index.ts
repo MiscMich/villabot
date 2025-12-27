@@ -1,8 +1,13 @@
 import 'dotenv/config';
+// Initialize Sentry FIRST (before other imports for proper instrumentation)
+import { initSentry, setupSentryMiddleware, flushSentry } from './config/sentry.js';
+initSentry();
+
 import express from 'express';
 import cors from 'cors';
 import { env } from './config/env.js';
 import { logger } from './utils/logger.js';
+import { errorTracker } from './utils/error-tracker.js';
 import { healthRouter, updateServiceStatus, updateIntegrationCounts } from './routes/health.js';
 import { configRouter } from './routes/config.js';
 import { documentsRouter } from './routes/documents.js';
@@ -148,15 +153,35 @@ app.get('/', (_req, res) => {
   });
 });
 
-// Error handling
+// Sentry error handler (captures all Express errors to Sentry)
+setupSentryMiddleware(app);
+
+// Error handling - runs after Sentry captures the error
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   logger.error('Unhandled error', { error: err.message, stack: err.stack });
+
+  // Track in our error logging system
+  errorTracker.track(err, 'api', 'high', {
+    operation: 'express_error_handler',
+  });
+
   res.status(500).json({ error: 'Internal server error' });
 });
 
 // Start server
 async function start(): Promise<void> {
   logger.info('Starting Cluebase AI API...');
+
+  // Initialize error tracker (batched database logging)
+  await errorTracker.initialize();
+  logger.info('✓ Error tracker initialized');
+
+  // Check Sentry configuration
+  if (env.SENTRY_DSN) {
+    logger.info('✓ Sentry error tracking enabled');
+  } else {
+    logger.info('○ Sentry not configured (error tracking via database only)');
+  }
 
   // Test database connection
   const dbOk = await testSupabaseConnection();
@@ -326,6 +351,12 @@ async function shutdown(): Promise<void> {
     await shutdownSlackBots();
   }
 
+  // Destroy error tracker (flushes pending errors to Supabase)
+  errorTracker.destroy();
+
+  // Flush Sentry events before exit
+  await flushSentry(2000);
+
   process.exit(0);
 }
 
@@ -333,13 +364,17 @@ process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
 // Handle unhandled rejections (prevents Slack socket mode errors from crashing the server)
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason, _promise) => {
   const error = reason instanceof Error ? reason : new Error(String(reason));
 
   // Check if this is a Slack socket mode issue (too_many_websockets)
   if (error.message.includes('server explicit disconnect') || error.message.includes('websocket')) {
     logger.warn('Slack socket mode disconnected (likely too many connections)', {
       message: error.message,
+    });
+    // Track as medium severity - not critical but notable
+    errorTracker.track(error, 'slack', 'medium', {
+      operation: 'socket_mode_disconnect',
     });
     // Don't crash - the HTTP server can still serve requests
     return;
@@ -348,7 +383,11 @@ process.on('unhandledRejection', (reason, promise) => {
   logger.error('Unhandled promise rejection', {
     error: error.message,
     stack: error.stack,
-    promise,
+  });
+
+  // Track unhandled rejections as high severity
+  errorTracker.track(error, 'api', 'high', {
+    operation: 'unhandled_rejection',
   });
 });
 
@@ -359,6 +398,10 @@ process.on('uncaughtException', (error) => {
     logger.warn('Slack socket mode error caught (non-fatal)', {
       message: error.message,
     });
+    // Track as medium severity
+    errorTracker.track(error, 'slack', 'medium', {
+      operation: 'socket_mode_exception',
+    });
     // Don't crash - the HTTP server can still serve requests
     return;
   }
@@ -367,6 +410,12 @@ process.on('uncaughtException', (error) => {
     error: error.message,
     stack: error.stack,
   });
+
+  // Track uncaught exceptions as critical
+  errorTracker.track(error, 'api', 'critical', {
+    operation: 'uncaught_exception',
+  });
+
   // For truly fatal errors, exit
   process.exit(1);
 });

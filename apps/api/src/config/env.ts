@@ -59,6 +59,13 @@ const envSchema = z.object({
   DRIVE_POLL_INTERVAL_MS: z.string().transform(Number).default('300000'),
   SCRAPE_SCHEDULE: z.string().default('0 3 * * *'), // Cron: daily at 3 AM (sitemap-based detection makes this efficient)
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+
+  // Sentry Error Tracking (optional - error tracking disabled without DSN)
+  SENTRY_DSN: optionalUrl,
+  APP_VERSION: optionalString,
+
+  // Critical Error Alerts (optional - Slack webhook for critical errors)
+  ALERT_SLACK_WEBHOOK_URL: optionalUrl,
 });
 
 export type Env = z.infer<typeof envSchema>;

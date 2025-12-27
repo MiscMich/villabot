@@ -18,8 +18,8 @@
   "dependencies": {
     "@cluebase/shared": "workspace:*",
     "@google/generative-ai": "^0.21.0",
+    "@sentry/node": "^10.32.1",
     "@slack/bolt": "^3.22.0",
-    "openai": "^4.77.0",
     "@slack/web-api": "^7.13.0",
     "@supabase/supabase-js": "^2.47.10",
     "cheerio": "^1.0.0",
@@ -31,6 +31,7 @@
     "langchain": "^0.3.11",
     "mammoth": "^1.8.0",
     "node-cron": "^3.0.3",
+    "openai": "^4.77.0",
     "pdf-parse": "^1.1.1",
     "puppeteer": "^23.11.1",
     "stripe": "^20.1.0",
@@ -49,6 +50,7 @@
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.0.0",
-    "vitest": "^2.1.8"
+    "vitest": "^2.1.8",
+    "winston-transport": "^4.9.0"
   }
 }

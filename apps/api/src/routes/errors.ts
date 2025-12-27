@@ -66,7 +66,7 @@ router.get('/', async (req: Request, res: Response) => {
 router.get('/stats', async (req: Request, res: Response) => {
   try {
     const { hours = '24' } = req.query;
-    const stats = await errorTracker.getStats(Number(hours));
+    const stats = await errorTracker.getStats(undefined, Number(hours));
     res.json(stats);
   } catch {
     res.status(500).json({ error: 'Failed to fetch error stats' });
